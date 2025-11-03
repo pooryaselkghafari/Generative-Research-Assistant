@@ -1,0 +1,879 @@
+{% extends "engine/base.html" %}
+{% block title %}Visualize — Generative Research Assistant{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+{% endblock %}
+
+{% block header_actions %}
+  <a class="btn btn-ghost" href="/app/">Back to Analysis</a>
+{% endblock %}
+
+{% block sidebar %}
+  <!-- Plot Generation Form -->
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Create Plot</h3>
+    </div>
+    
+    <form id="plotGenerationForm">
+      {% csrf_token %}
+      <input type="hidden" name="dataset_id" value="{{dataset.id}}">
+      <input type="hidden" name="action" value="generate_plot">
+      
+      <!-- Plot Type Selection -->
+      <div style="margin-bottom: 16px;">
+        <label class="field-label">Plot Type</label>
+        <select class="input" name="plot_type" id="plotType" onchange="updatePlotOptions()">
+          <option value="">Select plot type...</option>
+          <option value="scatter">Scatter Plot</option>
+          <option value="histogram">Histogram</option>
+          <option value="bar">Bar Chart</option>
+          <option value="line">Line Chart</option>
+          <option value="pie">Pie Chart</option>
+        </select>
+      </div>
+      
+      <!-- X-Axis Variable -->
+      <div style="margin-bottom: 16px;">
+        <label class="field-label">X-Axis Variable</label>
+        <select class="input" name="x_var" id="xVar">
+          <option value="">Select variable...</option>
+          {% for col in all_columns %}
+            <option value="{{col}}">{{col}}</option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <!-- Y-Axis Variable (for scatter, bar, line charts) -->
+      <div style="margin-bottom: 16px;" id="yVarContainer" style="display: none;">
+        <label class="field-label">Y-Axis Variable</label>
+        <select class="input" name="y_var" id="yVar">
+          <option value="">Select variable...</option>
+          {% for col in numeric_columns %}
+            <option value="{{col}}">{{col}}</option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <!-- Group Variable -->
+      <div style="margin-bottom: 16px;">
+        <label class="field-label">Group By (Optional)</label>
+        <select class="input" name="group_var" id="groupVar">
+          <option value="">No grouping</option>
+          {% for col in categorical_columns %}
+            <option value="{{col}}">{{col}}</option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <!-- Additional Options -->
+      <div id="additionalOptions" style="display: none;">
+        <!-- Trendline option for scatter plots -->
+        <div style="margin-bottom: 16px;" id="trendlineOption" style="display: none;">
+          <label class="switch">
+            <input type="checkbox" name="trendline" id="trendline">
+            <span></span>
+            <em>Add trendline</em>
+          </label>
+        </div>
+        
+        <!-- Bins option for histograms -->
+        <div style="margin-bottom: 16px;" id="binsOption" style="display: none;">
+          <label class="field-label">Number of Bins</label>
+          <input class="input" type="number" name="bins" id="bins" value="30" min="5" max="100">
+        </div>
+      </div>
+      
+      <!-- Generate Plot Button -->
+      <button type="button" class="btn btn-primary" onclick="generatePlot()" style="width: 100%;">
+        Generate Plot
+      </button>
+    </form>
+  </div>
+  
+
+{% endblock %}
+
+{% block content %}
+  <!-- Visualization Header -->
+  <div class="modern-results-header">
+    <div class="header-main">
+      <div class="regression-type-badge">
+        <span class="regression-type">Data Visualization</span>
+      </div>
+      <div class="header-actions">
+        <a class="modern-edit-btn" href="{% url 'dataprep_open' dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+          Edit Dataset
+        </a>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <span class="meta-label">Dataset:</span>
+        <span class="meta-value">{{dataset.name}}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span class="meta-label">Variables:</span>
+        <span class="meta-value">{{all_columns|length}} total</span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Plots Container -->
+  <div id="plots-container" class="plots-container">
+    <!-- Welcome message when no plots are present -->
+    <div id="welcome-message" class="welcome-message" style="text-align: center; padding: 60px 20px; color: #6b7280;">
+      <div style="font-size: 48px; margin-bottom: 20px;">📊</div>
+      <h3 style="margin: 0 0 12px 0; color: #374151;">Create Your First Plot</h3>
+      <p style="margin: 0; font-size: 16px;">Select a plot type and variables from the sidebar to get started with data visualization.</p>
+    </div>
+  </div>
+
+
+  <script>
+    // Plot generation and management
+    let plotCounter = 0;
+    
+    // Update plot options based on selected plot type
+    function updatePlotOptions() {
+      const plotType = document.getElementById('plotType').value;
+      const yVarContainer = document.getElementById('yVarContainer');
+      const additionalOptions = document.getElementById('additionalOptions');
+      const trendlineOption = document.getElementById('trendlineOption');
+      const binsOption = document.getElementById('binsOption');
+      
+      // Show/hide Y variable for plots that need it
+      if (plotType === 'scatter' || plotType === 'bar' || plotType === 'line') {
+        yVarContainer.style.display = 'block';
+      } else {
+        yVarContainer.style.display = 'none';
+      }
+      
+      // Show additional options
+      if (plotType === 'scatter' || plotType === 'histogram') {
+        additionalOptions.style.display = 'block';
+        
+        // Show trendline option for scatter plots
+        if (plotType === 'scatter') {
+          trendlineOption.style.display = 'block';
+          binsOption.style.display = 'none';
+        } else if (plotType === 'histogram') {
+          trendlineOption.style.display = 'none';
+          binsOption.style.display = 'block';
+        }
+      } else {
+        additionalOptions.style.display = 'none';
+      }
+    }
+    
+    // Generate plot
+    function generatePlot() {
+      const form = document.getElementById('plotGenerationForm');
+      const formData = new FormData(form);
+      
+      // Validate required fields
+      const plotType = formData.get('plot_type');
+      const xVar = formData.get('x_var');
+      
+      if (!plotType) {
+        alert('Please select a plot type');
+        return;
+      }
+      
+      if (!xVar) {
+        alert('Please select an X-axis variable');
+        return;
+      }
+      
+      // For plots that require Y variable
+      if ((plotType === 'scatter' || plotType === 'bar' || plotType === 'line') && !formData.get('y_var')) {
+        alert('Please select a Y-axis variable for this plot type');
+        return;
+      }
+      
+      // Show loading state
+      const button = document.querySelector('button[onclick="generatePlot()"]');
+      const originalText = button.textContent;
+      button.textContent = 'Generating...';
+      button.disabled = true;
+      
+      // Make AJAX request
+      fetch('/visualize/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          addPlotToContainer(data.plot_data, plotType, xVar, formData.get('y_var'));
+          hideWelcomeMessage();
+        } else {
+          alert('Error generating plot: ' + data.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error generating plot. Please try again.');
+      })
+      .finally(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+      });
+    }
+    
+    // Add plot to the container
+    function addPlotToContainer(plotData, plotType, xVar, yVar) {
+      plotCounter++;
+      const plotId = `plot-${plotCounter}`;
+      
+      // Create plot container
+      const plotContainer = document.createElement('div');
+      plotContainer.className = 'card plot-card';
+      plotContainer.style.marginBottom = '16px';
+      plotContainer.id = `plot-container-${plotId}`;
+      
+      // Create plot title
+      const plotTitle = getPlotTitle(plotType, xVar, yVar);
+      
+              plotContainer.innerHTML = `
+                <div class="card-head">
+                  <h3 class="card-title">${plotTitle}</h3>
+                  <div style="margin-left: auto; display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-ghost" onclick="editPlot('${plotId}', '${plotType}', '${xVar}', '${yVar}')" style="font-size: 14px;">✏️ Edit</button>
+                    <button type="button" class="btn btn-ghost" onclick="exportPlot('${plotId}')" style="font-size: 14px;">📤 Export</button>
+                    <button type="button" class="btn btn-ghost" onclick="removePlot('${plotId}')" style="font-size: 14px;">×</button>
+                  </div>
+                </div>
+                <div class="plot-container" id="${plotId}"></div>
+              `;
+      
+      // Add to plots container
+      const plotsContainer = document.getElementById('plots-container');
+      plotsContainer.appendChild(plotContainer);
+      
+      // Render the plot
+      const plotElement = document.getElementById(plotId);
+      const plotJson = JSON.parse(plotData);
+      Plotly.newPlot(plotElement, plotJson.data, plotJson.layout, {responsive: true});
+    }
+    
+    // Get plot title based on type and variables
+    function getPlotTitle(plotType, xVar, yVar) {
+      const titles = {
+        'scatter': `Scatter Plot: ${yVar} vs ${xVar}`,
+        'histogram': `Histogram: ${xVar}`,
+        'bar': `Bar Chart: ${xVar}${yVar ? ' vs ' + yVar : ''}`,
+        'line': `Line Chart: ${yVar} vs ${xVar}`,
+        'pie': `Pie Chart: ${xVar}`
+      };
+      return titles[plotType] || 'Plot';
+    }
+    
+    // Remove plot
+    function removePlot(plotId) {
+      const plotContainer = document.getElementById(`plot-container-${plotId}`);
+      if (plotContainer) {
+        plotContainer.remove();
+        
+        // Show welcome message if no plots left
+        const plotsContainer = document.getElementById('plots-container');
+        const plotCards = plotsContainer.querySelectorAll('.plot-card');
+        if (plotCards.length === 0) {
+          showWelcomeMessage();
+        }
+      }
+    }
+    
+    // Export individual plot with resolution options
+    function exportPlot(plotId) {
+      const plotElement = document.getElementById(plotId);
+      if (plotElement) {
+        // Show resolution selection modal
+        showExportModal(plotId);
+      } else {
+        alert('Plot not found. Please try again.');
+      }
+    }
+    
+    // Show export resolution modal
+    function showExportModal(plotId) {
+      // Create modal if it doesn't exist
+      let modal = document.getElementById('exportModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'exportModal';
+        modal.className = 'modal';
+        modal.style.cssText = 'display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);';
+        document.body.appendChild(modal);
+      }
+      
+      // Create modal content
+      modal.innerHTML = `
+        <div class="modal-content" style="background-color: white; margin: 15% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 400px;">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3>Export Plot</h3>
+            <button type="button" onclick="closeExportModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+          </div>
+          <div class="modal-body">
+            <div style="margin-bottom: 15px;">
+              <label class="field-label">Resolution</label>
+              <select class="input" id="exportResolution">
+                <option value="800x600">Standard (800×600)</option>
+                <option value="1200x900">High (1200×900)</option>
+                <option value="1600x1200">Very High (1600×1200)</option>
+                <option value="2400x1800">Ultra High (2400×1800)</option>
+                <option value="3200x2400">Maximum (3200×2400)</option>
+              </select>
+            </div>
+            <div style="margin-bottom: 15px;">
+              <label class="field-label">Format</label>
+              <select class="input" id="exportFormat">
+                <option value="png">PNG (Recommended)</option>
+                <option value="svg">SVG (Vector)</option>
+                <option value="jpeg">JPEG</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+              <button type="button" onclick="closeExportModal()" class="btn btn-ghost">Cancel</button>
+              <button type="button" onclick="performExport('${plotId}')" class="btn btn-primary">Export</button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      modal.style.display = 'block';
+    }
+    
+    // Close export modal
+    function closeExportModal() {
+      const modal = document.getElementById('exportModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+    
+    // Perform the actual export
+    function performExport(plotId) {
+      const plotElement = document.getElementById(plotId);
+      if (!plotElement) {
+        alert('Plot not found. Please try again.');
+        return;
+      }
+      
+      const resolution = document.getElementById('exportResolution').value;
+      const format = document.getElementById('exportFormat').value;
+      const [width, height] = resolution.split('x').map(Number);
+      
+      try {
+        // Export with selected settings
+        Plotly.downloadImage(plotElement, {
+          format: format,
+          width: width,
+          height: height,
+          filename: `plot-${plotId}-${resolution}`
+        });
+        
+        // Close modal on success
+        closeExportModal();
+        
+      } catch (error) {
+        console.error('Export error:', error);
+        
+        // Fallback: try with lower resolution
+        try {
+          Plotly.downloadImage(plotElement, {
+            format: 'png',
+            width: 800,
+            height: 600,
+            filename: `plot-${plotId}-fallback`
+          });
+          closeExportModal();
+        } catch (fallbackError) {
+          console.error('Fallback export error:', fallbackError);
+          alert('Export failed. Please try right-clicking on the plot and selecting "Save image as..."');
+        }
+      }
+    }
+    
+    
+    // Show/hide welcome message
+    function showWelcomeMessage() {
+      const welcomeMessage = document.getElementById('welcome-message');
+      if (welcomeMessage) {
+        welcomeMessage.style.display = 'block';
+      }
+    }
+    
+    function hideWelcomeMessage() {
+      const welcomeMessage = document.getElementById('welcome-message');
+      if (welcomeMessage) {
+        welcomeMessage.style.display = 'none';
+      }
+    }
+    
+    // Plot editing functionality
+    let currentEditPlot = null;
+    let currentEditType = null;
+    let currentEditXVar = null;
+    let currentEditYVar = null;
+    
+    // Store plot settings for persistence
+    let plotSettings = {};
+    
+    // Edit plot function
+    function editPlot(plotId, plotType, xVar, yVar) {
+      currentEditPlot = plotId;
+      currentEditType = plotType;
+      currentEditXVar = xVar;
+      currentEditYVar = yVar;
+      
+      const modal = document.getElementById('plotEditModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const optionsDiv = document.getElementById('plotEditOptions');
+      
+      modalTitle.textContent = `Edit ${plotType.charAt(0).toUpperCase() + plotType.slice(1)} Plot`;
+      
+      // Get existing settings for this plot
+      const settingsKey = `${plotType}_${plotId}`;
+      const currentSettings = plotSettings[settingsKey] || {};
+      
+      // Generate options based on plot type
+      let optionsHTML = '';
+      
+      if (plotType === 'scatter') {
+        optionsHTML = `
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X-Axis Variable</label>
+            <select class="input" id="editXVar">
+              {% for col in all_columns %}
+                <option value="{{col}}" ${xVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y-Axis Variable</label>
+            <select class="input" id="editYVar">
+              {% for col in numeric_columns %}
+                <option value="{{col}}" ${yVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X-Axis Label</label>
+            <input class="input" type="text" id="editXLabel" placeholder="X Variable" value="${currentSettings.xLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y-Axis Label</label>
+            <input class="input" type="text" id="editYLabel" placeholder="Y Variable" value="${currentSettings.yLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Group Variable (Optional)</label>
+            <select class="input" id="editGroupVar">
+              <option value="">No grouping</option>
+              {% for col in categorical_columns %}
+                <option value="{{col}}" ${currentSettings.groupVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Line Style</label>
+            <select class="input" id="editLineStyle">
+              <option value="solid" ${currentSettings.lineStyle === 'solid' ? 'selected' : ''}>Solid</option>
+              <option value="dashed" ${currentSettings.lineStyle === 'dashed' ? 'selected' : ''}>Dashed</option>
+              <option value="dotted" ${currentSettings.lineStyle === 'dotted' ? 'selected' : ''}>Dotted</option>
+              <option value="dashdot" ${currentSettings.lineStyle === 'dashdot' ? 'selected' : ''}>Dash-Dot</option>
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Point Color</label>
+            <input class="input" type="color" id="editPointColor" value="${currentSettings.pointColor || '#1f77b4'}" style="width: 60px;">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Background Color</label>
+            <input class="input" type="color" id="editBackgroundColor" value="${currentSettings.backgroundColor || '#ffffff'}" style="width: 60px;">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Add Trendline</label>
+            <input type="checkbox" id="editTrendline" ${currentSettings.trendline ? 'checked' : ''}>
+            <span style="margin-left: 8px;">Show trendline</span>
+          </div>
+        `;
+      } else if (plotType === 'histogram') {
+        optionsHTML = `
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Variable</label>
+            <select class="input" id="editXVar">
+              {% for col in all_columns %}
+                <option value="{{col}}" ${xVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X-Axis Label</label>
+            <input class="input" type="text" id="editXLabel" placeholder="X Variable" value="${currentSettings.xLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y-Axis Label</label>
+            <input class="input" type="text" id="editYLabel" placeholder="Frequency" value="${currentSettings.yLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Group Variable (Optional)</label>
+            <select class="input" id="editGroupVar">
+              <option value="">No grouping</option>
+              {% for col in categorical_columns %}
+                <option value="{{col}}" ${currentSettings.groupVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Number of Bins</label>
+            <input class="input" type="number" id="editBins" value="${currentSettings.bins || 30}" min="5" max="100">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Bar Color</label>
+            <input class="input" type="color" id="editBarColor" value="${currentSettings.barColor || '#1f77b4'}" style="width: 60px;">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Background Color</label>
+            <input class="input" type="color" id="editBackgroundColor" value="${currentSettings.backgroundColor || '#ffffff'}" style="width: 60px;">
+          </div>
+        `;
+      } else if (plotType === 'bar') {
+        optionsHTML = `
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X-Axis Variable</label>
+            <select class="input" id="editXVar">
+              {% for col in all_columns %}
+                <option value="{{col}}" ${xVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y-Axis Variable (Optional)</label>
+            <select class="input" id="editYVar">
+              <option value="">Count</option>
+              {% for col in numeric_columns %}
+                <option value="{{col}}" ${yVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X-Axis Label</label>
+            <input class="input" type="text" id="editXLabel" placeholder="X Variable" value="${currentSettings.xLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y-Axis Label</label>
+            <input class="input" type="text" id="editYLabel" placeholder="Y Variable" value="${currentSettings.yLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Group Variable (Optional)</label>
+            <select class="input" id="editGroupVar">
+              <option value="">No grouping</option>
+              {% for col in categorical_columns %}
+                <option value="{{col}}" ${currentSettings.groupVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Bar Color</label>
+            <input class="input" type="color" id="editBarColor" value="${currentSettings.barColor || '#1f77b4'}" style="width: 60px;">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Background Color</label>
+            <input class="input" type="color" id="editBackgroundColor" value="${currentSettings.backgroundColor || '#ffffff'}" style="width: 60px;">
+          </div>
+        `;
+      } else if (plotType === 'line') {
+        optionsHTML = `
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X-Axis Variable</label>
+            <select class="input" id="editXVar">
+              {% for col in all_columns %}
+                <option value="{{col}}" ${xVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y-Axis Variable</label>
+            <select class="input" id="editYVar">
+              {% for col in numeric_columns %}
+                <option value="{{col}}" ${yVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X-Axis Label</label>
+            <input class="input" type="text" id="editXLabel" placeholder="X Variable" value="${currentSettings.xLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y-Axis Label</label>
+            <input class="input" type="text" id="editYLabel" placeholder="Y Variable" value="${currentSettings.yLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Group Variable (Optional)</label>
+            <select class="input" id="editGroupVar">
+              <option value="">No grouping</option>
+              {% for col in categorical_columns %}
+                <option value="{{col}}" ${currentSettings.groupVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Line Style</label>
+            <select class="input" id="editLineStyle">
+              <option value="solid" ${currentSettings.lineStyle === 'solid' ? 'selected' : ''}>Solid</option>
+              <option value="dashed" ${currentSettings.lineStyle === 'dashed' ? 'selected' : ''}>Dashed</option>
+              <option value="dotted" ${currentSettings.lineStyle === 'dotted' ? 'selected' : ''}>Dotted</option>
+              <option value="dashdot" ${currentSettings.lineStyle === 'dashdot' ? 'selected' : ''}>Dash-Dot</option>
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Line Color</label>
+            <input class="input" type="color" id="editLineColor" value="${currentSettings.lineColor || '#1f77b4'}" style="width: 60px;">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Background Color</label>
+            <input class="input" type="color" id="editBackgroundColor" value="${currentSettings.backgroundColor || '#ffffff'}" style="width: 60px;">
+          </div>
+        `;
+      } else if (plotType === 'pie') {
+        optionsHTML = `
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Variable</label>
+            <select class="input" id="editXVar">
+              {% for col in all_columns %}
+                <option value="{{col}}" ${xVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Group Variable (Optional)</label>
+            <select class="input" id="editGroupVar">
+              <option value="">No grouping</option>
+              {% for col in categorical_columns %}
+                <option value="{{col}}" ${currentSettings.groupVar === '{{col}}' ? 'selected' : ''}>{{col}}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Color Scheme</label>
+            <select class="input" id="editColorScheme">
+              <option value="default" ${currentSettings.colorScheme === 'default' ? 'selected' : ''}>Default</option>
+              <option value="viridis" ${currentSettings.colorScheme === 'viridis' ? 'selected' : ''}>Viridis</option>
+              <option value="plasma" ${currentSettings.colorScheme === 'plasma' ? 'selected' : ''}>Plasma</option>
+              <option value="inferno" ${currentSettings.colorScheme === 'inferno' ? 'selected' : ''}>Inferno</option>
+              <option value="magma" ${currentSettings.colorScheme === 'magma' ? 'selected' : ''}>Magma</option>
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Background Color</label>
+            <input class="input" type="color" id="editBackgroundColor" value="${currentSettings.backgroundColor || '#ffffff'}" style="width: 60px;">
+          </div>
+        `;
+      }
+      
+      optionsDiv.innerHTML = optionsHTML;
+      modal.style.display = 'block';
+    }
+    
+    // Close plot edit modal
+    function closePlotEditModal() {
+      document.getElementById('plotEditModal').style.display = 'none';
+      currentEditPlot = null;
+      currentEditType = null;
+      currentEditXVar = null;
+      currentEditYVar = null;
+    }
+    
+    // Apply plot changes
+    function applyPlotChanges() {
+      if (!currentEditPlot || !currentEditType) {
+        return;
+      }
+      
+      // Get form values
+      const newXVar = document.getElementById('editXVar').value;
+      const newYVar = document.getElementById('editYVar') ? document.getElementById('editYVar').value : null;
+      const newGroupVar = document.getElementById('editGroupVar') ? document.getElementById('editGroupVar').value : null;
+      const xLabel = document.getElementById('editXLabel') ? document.getElementById('editXLabel').value : '';
+      const yLabel = document.getElementById('editYLabel') ? document.getElementById('editYLabel').value : '';
+      const lineStyle = document.getElementById('editLineStyle') ? document.getElementById('editLineStyle').value : 'solid';
+      const pointColor = document.getElementById('editPointColor') ? document.getElementById('editPointColor').value : '#1f77b4';
+      const barColor = document.getElementById('editBarColor') ? document.getElementById('editBarColor').value : '#1f77b4';
+      const lineColor = document.getElementById('editLineColor') ? document.getElementById('editLineColor').value : '#1f77b4';
+      const backgroundColor = document.getElementById('editBackgroundColor') ? document.getElementById('editBackgroundColor').value : '#ffffff';
+      const trendline = document.getElementById('editTrendline') ? document.getElementById('editTrendline').checked : false;
+      const bins = document.getElementById('editBins') ? parseInt(document.getElementById('editBins').value) : 30;
+      const colorScheme = document.getElementById('editColorScheme') ? document.getElementById('editColorScheme').value : 'default';
+      
+      // Save settings
+      const settingsKey = `${currentEditType}_${currentEditPlot}`;
+      plotSettings[settingsKey] = {
+        xVar: newXVar,
+        yVar: newYVar,
+        groupVar: newGroupVar,
+        xLabel: xLabel,
+        yLabel: yLabel,
+        lineStyle: lineStyle,
+        pointColor: pointColor,
+        barColor: barColor,
+        lineColor: lineColor,
+        backgroundColor: backgroundColor,
+        trendline: trendline,
+        bins: bins,
+        colorScheme: colorScheme
+      };
+      
+      // Regenerate the plot with new settings
+      regeneratePlot(currentEditPlot, currentEditType, newXVar, newYVar, newGroupVar, plotSettings[settingsKey]);
+      
+      closePlotEditModal();
+    }
+    
+    // Regenerate plot with new settings
+    function regeneratePlot(plotId, plotType, xVar, yVar, groupVar, settings) {
+      const form = document.getElementById('plotGenerationForm');
+      const formData = new FormData(form);
+      
+      // Update form data with new values
+      formData.set('plot_type', plotType);
+      formData.set('x_var', xVar);
+      if (yVar) formData.set('y_var', yVar);
+      if (groupVar) formData.set('group_var', groupVar);
+      if (settings.trendline) formData.set('trendline', 'true');
+      if (settings.bins) formData.set('bins', settings.bins.toString());
+      
+      // Add color and styling settings
+      if (settings.xLabel) formData.set('x_label', settings.xLabel);
+      if (settings.yLabel) formData.set('y_label', settings.yLabel);
+      if (settings.pointColor) formData.set('point_color', settings.pointColor);
+      if (settings.barColor) formData.set('bar_color', settings.barColor);
+      if (settings.lineColor) formData.set('line_color', settings.lineColor);
+      if (settings.lineStyle) formData.set('line_style', settings.lineStyle);
+      if (settings.backgroundColor) formData.set('background_color', settings.backgroundColor);
+      if (settings.colorScheme) formData.set('color_scheme', settings.colorScheme);
+      
+      // Make AJAX request
+      fetch('/visualize/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Update the existing plot
+          const plotElement = document.getElementById(plotId);
+          if (plotElement) {
+            const plotJson = JSON.parse(data.plot_data);
+            
+            // Apply custom settings to the plot
+            if (settings.xLabel) plotJson.layout.xaxis.title = settings.xLabel;
+            if (settings.yLabel) plotJson.layout.yaxis.title = settings.yLabel;
+            if (settings.backgroundColor) plotJson.layout.plot_bgcolor = settings.backgroundColor;
+            if (settings.backgroundColor) plotJson.layout.paper_bgcolor = settings.backgroundColor;
+            
+            // Apply color and style settings to traces
+            const isGrouped = plotJson.data.length > 1 && plotJson.data.some(trace => trace.name && trace.name !== 'Data');
+            
+            plotJson.data.forEach(trace => {
+              // For scatter plots and line charts, only apply colors if not grouped
+              if ((plotType === 'scatter' || plotType === 'line') && !isGrouped) {
+                if (settings.pointColor && trace.mode && trace.mode.includes('markers')) {
+                  trace.marker.color = settings.pointColor;
+                }
+                if (settings.lineColor && trace.type === 'scatter' && trace.mode && trace.mode.includes('lines')) {
+                  trace.line.color = settings.lineColor;
+                }
+                if (settings.lineStyle && trace.line) {
+                  trace.line.dash = settings.lineStyle;
+                }
+              }
+              
+              // For bar charts and histograms
+              if (plotType === 'bar' || plotType === 'histogram') {
+                if (settings.barColor) {
+                  // For non-grouped plots, apply the color to all traces
+                  // For grouped plots, only apply if there's a single trace (fallback case)
+                  if (!isGrouped || plotJson.data.length === 1) {
+                    if (trace.type === 'bar' || trace.type === 'histogram') {
+                      trace.marker.color = settings.barColor;
+                    }
+                  }
+                }
+              }
+            });
+            
+            Plotly.newPlot(plotElement, plotJson.data, plotJson.layout, {responsive: true});
+            
+            // Update plot title
+            const plotContainer = document.getElementById(`plot-container-${plotId}`);
+            if (plotContainer) {
+              const titleElement = plotContainer.querySelector('.card-title');
+              if (titleElement) {
+                titleElement.textContent = getPlotTitle(plotType, xVar, yVar);
+              }
+            }
+          }
+        } else {
+          alert('Error updating plot: ' + data.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating plot. Please try again.');
+      });
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      // Set up form validation
+      const form = document.getElementById('plotGenerationForm');
+      if (form) {
+        form.addEventListener('submit', function(e) {
+          e.preventDefault();
+          generatePlot();
+        });
+      }
+    });
+  </script>
+  
+  <!-- Plot Edit Modal -->
+  <div id="plotEditModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-content" style="background-color: white; margin: 5% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 500px; max-height: 80vh; overflow-y: auto;">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 id="modalTitle">Edit Plot</h3>
+        <button type="button" onclick="closePlotEditModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="plotEditForm">
+          <div id="plotEditOptions">
+            <!-- Options will be populated dynamically -->
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+            <button type="button" onclick="closePlotEditModal()" class="btn btn-ghost">Cancel</button>
+            <button type="button" onclick="applyPlotChanges()" class="btn btn-primary">Apply Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    </div>
+{% endblock %}
+

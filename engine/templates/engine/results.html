@@ -1,0 +1,2855 @@
+{% extends "engine/base.html" %}
+{% block title %}Results — Generative Research Assistant{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+  // Set AI chat context when page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof aiChatContext !== 'undefined') {
+      aiChatContext = {
+        session_name: '{{ session.name|escapejs }}',
+        formula: '{{ session.formula|escapejs }}',
+        module: 'regression',
+        dataset_name: '{{ dataset.name|escapejs }}'
+      };
+    }
+  });
+</script>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="/session/{{session.id}}/" class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">Modify</a>
+  <a href="{% url 'download_session_history' session.id %}?format=text" class="btn btn-ghost" style="margin-left: 8px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+    </svg>
+    Download History
+  </a>
+  <button class="btn" type="button" onclick="toggleAIChatbox()" 
+          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
+          title="Ask AI Assistant">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    Ask AI
+  </button>
+{% endblock %}
+
+{% block sidebar %}
+  <!-- Regression options form -->
+  <form method="post" action="{% url 'run' %}" id="regressionOptionsForm" onsubmit="console.log('Form submission started'); return updateFormulaBeforeSubmit()">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="update">
+    <input type="hidden" name="session_id" value="{{session.id}}">
+    <input type="hidden" name="module" value="regression">
+    <input type="hidden" name="formula" value="{{session.formula}}">
+    <input type="hidden" name="dataset_id" value="{{dataset.id}}">
+    <input type="hidden" name="session_name" value="{{session.name}}">
+
+    <!-- Regression options -->
+    <div class="card" style="margin-bottom: 16px;">
+      <div class="card-head">
+      </div>
+
+
+      <!-- Result table toggles -->
+      <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+      <div class="grid-2">
+        <div class="switch-col">
+            <label class="field-label">t / z statistic</label>
+          <label class="switch">
+              <input type="checkbox" name="show_t" {% if session.options.show_t %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+            <label class="field-label">p-value</label>
+          <label class="switch">
+              <input type="checkbox" name="show_p" {% if session.options.show_p %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="switch-col">
+            <label class="field-label">Std. Errors</label>
+          <label class="switch">
+              <input type="checkbox" name="show_se" {% if session.options.show_se %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+            <label class="field-label">95% CIs</label>
+          <label class="switch">
+              <input type="checkbox" name="show_ci" {% if session.options.show_ci %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="switch-col">
+          <label class="field-label">R² / Pseudo-R²</label>
+          <label class="switch">
+            <input type="checkbox" name="show_r2" {% if session.options.show_r2 %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+          <label class="field-label">AIC</label>
+          <label class="switch">
+            <input type="checkbox" name="show_aic" {% if session.options.show_aic %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+      </div>
+
+        <div class="grid-2">
+        <div class="switch-col">
+          <label class="field-label">BIC</label>
+          <label class="switch">
+            <input type="checkbox" name="show_bic" {% if session.options.show_bic %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary tables toggles -->
+      <div style="margin-bottom: 20px;">
+        <h4 style="margin: 0 0 12px 0; color: var(--text); font-size: 14px; font-weight: 600;">Summary table columns</h4>
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">Min</label>
+            <label class="switch">
+              <input type="checkbox" name="show_min" {% if session.options.show_min|default:True %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">Max</label>
+            <label class="switch">
+              <input type="checkbox" name="show_max" {% if session.options.show_max|default:True %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">Range</label>
+            <label class="switch">
+              <input type="checkbox" name="show_range" {% if session.options.show_range %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">Variance</label>
+            <label class="switch">
+              <input type="checkbox" name="show_variance" {% if session.options.show_variance %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">VIF</label>
+            <label class="switch">
+              <input type="checkbox" name="show_vif" {% if session.options.show_vif %}checked{% endif %}>
+              <span></span>
+          </label>
+          </div>
+        </div>
+      </div>
+
+
+      <div style="margin-top: 20px;">
+        <button type="submit" class="btn" style="padding: 12px 24px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">Update Analysis</button>
+      </div>
+
+    </div>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <!-- Modern Results Header -->
+  <div class="modern-results-header">
+    <div class="header-main">
+      <div class="regression-type-badge">
+        <span class="regression-type">{{regression_type|default:"Results"}}</span>
+      </div>
+      <div class="header-actions" style="display: flex; flex-direction: column; gap: 8px;">
+        <a class="modern-edit-btn" href="{% url 'dataprep_open' dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+          Edit Dataset
+        </a>
+        <button id="addErrorsBtn" class="modern-edit-btn" onclick="addModelErrorsToDataset()" title="Add model residuals/errors to dataset">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+          Add Model Errors to Dataset
+        </button>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span class="meta-label">Session:</span>
+        <span class="meta-value">{{session.name}}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <span class="meta-label">Dataset:</span>
+        <span class="meta-value">{{dataset.name}}</span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Results table at the top -->
+  {% if model_cols and model_matrix %}
+  <section class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Regression table</h3>
+      <div class="muted small" style="color: var(--muted);">Signif.: <strong>***</strong> 0.001 · <strong>**</strong> 0.01 · <strong>*</strong> 0.05 · <strong>.</strong> 0.10</div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table" id="regTable">
+        <thead>
+          <tr>{% for col in model_cols %}<th>{{ col }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for row in model_matrix %}
+          <tr>
+            {% for cell in row %}
+              {% if forloop.counter0 == estimate_col_index %}
+                <td class="mono">{{ cell|safe }}</td>
+              {% else %}
+                <td class="mono">{{ cell }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+          {% if model_stats %}
+          <tr class="table-stats-row" style="border-top: 2px solid var(--table-stats-border); background-color: var(--table-stats-bg);">
+            <td><strong>N</strong></td>
+            <td class="mono"><strong>{{ model_stats.N }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% if model_stats.R² is not None %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>R²</strong></td>
+            <td class="mono"><strong>{{ model_stats.R²|floatformat:3 }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% if model_stats.Adj_R² is not None %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>Adj. R²</strong></td>
+            <td class="mono"><strong>{{ model_stats.Adj_R²|floatformat:3 }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% if model_stats.Pseudo_R²__McFadden_ is not None %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>Pseudo R² (McFadden)</strong></td>
+            <td class="mono"><strong>{{ model_stats.Pseudo_R²__McFadden_|floatformat:3 }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% if model_stats.Pseudo_R²__Cox_Snell_ is not None %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>Pseudo R² (Cox-Snell)</strong></td>
+            <td class="mono"><strong>{{ model_stats.Pseudo_R²__Cox_Snell_|floatformat:3 }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% if model_stats.Pseudo_R²__Nagelkerke_ is not None %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>Pseudo R² (Nagelkerke)</strong></td>
+            <td class="mono"><strong>{{ model_stats.Pseudo_R²__Nagelkerke_|floatformat:3 }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% if model_stats.AIC is not None %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>AIC</strong></td>
+            <td class="mono"><strong>{{ model_stats.AIC|floatformat:1 }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% if model_stats.BIC is not None %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>BIC</strong></td>
+            <td class="mono"><strong>{{ model_stats.BIC|floatformat:1 }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Summary Statistics -->
+  {% if summary_stats %}
+  <section class="card" id="summary-table-section" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Summary Statistics</h3>
+      <div style="margin-left: auto; display: flex; gap: 8px;">
+        <button type="button" class="btn btn-ghost" onclick="editSummaryTable()" style="font-size: 14px;">✏️ Edit Variables</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            {% if show_min %}<th>Min</th>{% endif %}
+            {% if show_max %}<th>Max</th>{% endif %}
+            {% if show_range %}<th>Range</th>{% endif %}
+            {% if show_variance %}<th>Variance</th>{% endif %}
+            {% if show_vif %}<th>VIF</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for var, stats in summary_stats.items %}
+          <tr>
+            <td><strong>{{ var }}</strong></td>
+            {% if show_min %}<td class="mono">{{ stats.min|floatformat:3 }}</td>{% endif %}
+            {% if show_max %}<td class="mono">{{ stats.max|floatformat:3 }}</td>{% endif %}
+            {% if show_range %}<td class="mono">{{ stats.range|floatformat:3 }}</td>{% endif %}
+            {% if show_variance %}<td class="mono">{{ stats.variance|floatformat:3 }}</td>{% endif %}
+            {% if show_vif %}<td class="mono">{% if stats.vif|floatformat:2 != "nan" %}{{ stats.vif|floatformat:2 }}{% else %}—{% endif %}</td>{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Plot Addition Controls -->
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Add Plots</h3>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+      
+        {% if interactions %}
+        {% if model_matrix and model_matrix|length > 0 and "Variable Error" not in model_matrix.0.0 %}
+          {% if regression_type == "Ordinal regression" %}
+            <!-- For ordinal regression, show interaction/level combinations -->
+            <div class="dropdown" style="position: relative;">
+              <button type="button" class="btn btn-ghost dropdown-toggle" onclick="checkThreeWayInteraction('ordinal')" style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">+</span> Spotlight Plot
+                <span style="font-size: 12px;">▼</span>
+              </button>
+              <div class="dropdown-menu" id="spotlight-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; min-width: 250px; max-height: 400px; overflow-y: auto;">
+                {% for interaction in interactions %}
+                  <div class="dropdown-section" style="border-bottom: 1px solid #e5e7eb; padding: 8px 0;">
+                    <div style="font-weight: 600; color: #374151; padding: 4px 12px; font-size: 12px; text-transform: uppercase;">{{ interaction }}</div>
+                    {% for category in dv_categories %}
+                      <button type="button" class="dropdown-item ordinal-plot-item" 
+                              data-interaction="{{ interaction }}" 
+                              data-category="{{ category }}"
+                              onclick="checkThreeWayInteraction('ordinal-item', '{{ interaction }}', '{{ category }}')" 
+                              style="display: block; width: 100%; padding: 8px 12px 8px 24px; text-align: left; border: none; background: none; cursor: pointer; font-size: 14px; color: #6b7280; transition: background-color 0.2s;"
+                              onmouseover="this.style.backgroundColor='#f3f4f6'"
+                              onmouseout="this.style.backgroundColor='transparent'">
+                        {{ category }}
+                      </button>
+                    {% endfor %}
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% elif regression_type == "Multinomial regression" %}
+            <!-- For multinomial regression, show interaction/level combinations -->
+            <div class="dropdown" style="position: relative;">
+              <button type="button" class="btn btn-ghost dropdown-toggle" onclick="checkThreeWayInteraction('multinomial')" style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">+</span> Spotlight Plot
+                <span style="font-size: 12px;">▼</span>
+              </button>
+              <div class="dropdown-menu" id="spotlight-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; min-width: 250px; max-height: 400px; overflow-y: auto;">
+                {% for interaction in interactions %}
+                  <div class="dropdown-section" style="border-bottom: 1px solid #e5e7eb; padding: 8px 0;">
+                    <div style="font-weight: 600; color: #374151; padding: 4px 12px; font-size: 12px; text-transform: uppercase;">{{ interaction }}</div>
+                    {% for category in multinomial_categories %}
+                      <button type="button" class="dropdown-item multinomial-plot-item" 
+                              data-interaction="{{ interaction }}" 
+                              data-category="{{ category }}"
+                              onclick="checkThreeWayInteraction('multinomial-item', '{{ interaction }}', '{{ category }}')" 
+                              style="display: block; width: 100%; padding: 8px 12px 8px 24px; text-align: left; border: none; background: none; cursor: pointer; font-size: 14px; color: #6b7280; transition: background-color 0.2s;"
+                              onmouseover="this.style.backgroundColor='#f3f4f6'"
+                              onmouseout="this.style.backgroundColor='transparent'">
+                        {{ category }}
+                      </button>
+                    {% endfor %}
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% elif interactions|length == 1 %}
+            <button type="button" class="btn btn-ghost" onclick="checkThreeWayInteraction('single', '{{ interactions.0 }}')" style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">+</span> Spotlight Plot
+            </button>
+          {% else %}
+            <div class="dropdown" style="position: relative;">
+              <button type="button" class="btn btn-ghost dropdown-toggle" onclick="checkThreeWayInteraction('multiple')" style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">+</span> Spotlight Plot
+                <span style="font-size: 12px;">▼</span>
+              </button>
+              <div class="dropdown-menu" id="spotlight-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; min-width: 200px;">
+                {% for interaction in interactions %}
+                  <button type="button" class="dropdown-item" onclick="checkThreeWayInteraction('dropdown-item', '{{ interaction }}')" style="display: block; width: 100%; padding: 8px 12px; text-align: left; border: none; background: none; cursor: pointer; font-size: 14px;">
+                    {{ interaction }}
+                  </button>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+        {% else %}
+          <div style="padding: 8px 12px; color: #666; font-size: 14px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
+            Spotlight plots unavailable due to model errors. Please fix variable names in the formula.
+          </div>
+        {% endif %}
+      {% endif %}
+      
+      {% if continuous_vars %}
+        <button type="button" class="btn btn-ghost" onclick="addCorrelationHeatmap()" style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px;">+</span> Correlation Heatmap
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Dynamic Plots Container -->
+  <div id="dynamic-plots-container">
+    <!-- Plots will be added here dynamically -->
+  </div>
+
+
+  {% comment %} Interactive Spotlight Plot {% endcomment %}
+  {% if spotlight_json %}
+  <section class="card plot-card" id="spotlight-section" style="display: none;">
+    <div class="card-head">
+      <h3 class="card-title">Spotlight plot</h3>
+      <div class="muted small">Moderator lines with optional 95% band</div>
+      <div style="margin-left: auto; display: flex; gap: 8px;">
+        <button type="button" class="btn btn-secondary" onclick="editPlot('spotlight', 'spotlight')" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 8px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+          Customize
+        </button>
+        <button id="spotlightDownloadBtn" class="btn" style="padding: 6px 12px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;" onclick="showSpotlightExportModal('plot-spotlight')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7,10 12,15 17,10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Download
+        </button>
+        <button type="button" class="btn btn-ghost" onclick="removePlot('spotlight')">×</button>
+      </div>
+    </div>
+    <div id="plot-spotlight" class="plot-container"></div>
+    <script type="application/json" id="plot-spotlight-data">{{ spotlight_json|safe }}</script>
+  </section>
+  {% endif %}
+
+
+  <script>
+    // Function to detect three-way interactions
+    function isThreeWayInteraction(interaction) {
+      if (!interaction) return false;
+      
+      // Check for three-way interactions using * notation (e.g., "A*B*C")
+      if (interaction.includes('*')) {
+        const parts = interaction.split('*');
+        return parts.length >= 3;
+      }
+      
+      // Check for three-way interactions using : notation (e.g., "A:B:C")
+      if (interaction.includes(':')) {
+        const parts = interaction.split(':');
+        return parts.length >= 3;
+      }
+      
+      return false;
+    }
+    
+    // Function to check for three-way interactions and handle spotlight button behavior
+    function checkThreeWayInteraction(type, interaction = null, category = null) {
+      let hasThreeWay = false;
+      
+      if (interaction) {
+        hasThreeWay = isThreeWayInteraction(interaction);
+      } else {
+        // Check all interactions for three-way
+        const interactions = {{ interactions|safe }};
+        hasThreeWay = interactions.some(interaction => isThreeWayInteraction(interaction));
+      }
+      
+      if (hasThreeWay) {
+        // Show custom modal for three-way interactions
+        showThreeWayModal();
+        return;
+      }
+      
+      // If no three-way interactions, proceed with normal behavior
+      if (type === 'single' && interaction) {
+        addSpotlightPlot(interaction);
+      } else if (type === 'ordinal-item' && interaction && category) {
+        addOrdinalSpotlightPlot(interaction, category);
+      } else if (type === 'multinomial-item' && interaction && category) {
+        addMultinomialSpotlightPlot(interaction, category);
+      } else if (type === 'dropdown-item' && interaction) {
+        addSpotlightPlot(interaction);
+      } else {
+        toggleDropdown();
+      }
+    }
+    
+    // Show custom three-way interaction modal
+    function showThreeWayModal() {
+      // Create modal if it doesn't exist
+      let modal = document.getElementById('threeWayModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'threeWayModal';
+        modal.className = 'modal';
+        modal.style.cssText = 'display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);';
+        document.body.appendChild(modal);
+      }
+      
+      // Create modal content
+      modal.innerHTML = `
+        <div class="modal-content" style="background-color: white; margin: 15% auto; padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
+          <div class="modal-header" style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
+            <div style="width: 48px; height: 48px; background-color: #fef3c7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="modal-body" style="text-align: center;">
+            <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Three (or more)-Way Interactions Not Supported</h3>
+            <p style="margin: 0 0 24px 0; color: #6b7280; font-size: 14px; line-height: 1.5;">
+              We cannot visualize three (or more)-way interactions yet! Spotlight plots currently support two-way interactions only.
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+              <button type="button" onclick="closeThreeWayModal()" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px; font-weight: 500; border-radius: 6px; border: none; background-color: #3b82f6; color: white; cursor: pointer; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      modal.style.display = 'block';
+      
+      // Add click-outside-to-close functionality
+      modal.onclick = function(event) {
+        if (event.target === modal) {
+          closeThreeWayModal();
+        }
+      };
+    }
+    
+    // Close three-way modal
+    function closeThreeWayModal() {
+      const modal = document.getElementById('threeWayModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+    
+    // Check for dataset variable updates and refresh if needed
+    (function() {
+      let originalDatasetVariables = null;
+      let currentSessionId = {{ session.id }};
+      let currentDatasetId = {{ dataset.id }};
+      let isUpdating = false;
+      
+      // Function to get current dataset variables
+      async function getCurrentDatasetVariables() {
+        try {
+          const response = await fetch(`/api/dataset/${currentDatasetId}/variables/`);
+          const data = await response.json();
+          return data.success ? data.variables : null;
+        } catch (error) {
+          console.error('Error fetching dataset variables:', error);
+          return null;
+        }
+      }
+      
+      // Function to check for variable changes
+      async function checkForVariableChanges() {
+        if (isUpdating) return; // Prevent multiple simultaneous updates
+        
+        try {
+          const currentVariables = await getCurrentDatasetVariables();
+          if (!currentVariables) return;
+          
+          // If we don't have original variables yet, store them
+          if (!originalDatasetVariables) {
+            originalDatasetVariables = [...currentVariables];
+            return;
+          }
+          
+          // Check if variables have changed
+          if (JSON.stringify(originalDatasetVariables) !== JSON.stringify(currentVariables)) {
+            console.log('Dataset variables changed, updating session...');
+            await updateCurrentSessionFormula(originalDatasetVariables, currentVariables);
+          }
+        } catch (error) {
+          console.error('Error checking for variable changes:', error);
+        }
+      }
+      
+      // Function to update the current session's formula
+      async function updateCurrentSessionFormula(oldVariables, newVariables) {
+        if (isUpdating) return;
+        isUpdating = true;
+        
+        try {
+          // Get the current formula from the hidden input
+          const formulaInput = document.querySelector('input[name="formula"]');
+          if (!formulaInput) return;
+          
+          const currentFormula = formulaInput.value;
+          console.log('Current formula:', currentFormula);
+          console.log('Old variables:', oldVariables);
+          console.log('New variables:', newVariables);
+          
+          // Create a mapping of old to new variable names
+          const renameMap = {};
+          
+          // More robust approach: check if the number of variables is the same
+          // and try to match them by position first, then by similarity
+          if (oldVariables.length === newVariables.length) {
+            // Try position-based matching first
+            for (let i = 0; i < oldVariables.length; i++) {
+              const oldVar = oldVariables[i];
+              const newVar = newVariables[i];
+              if (oldVar !== newVar) {
+                renameMap[oldVar] = newVar;
+              }
+            }
+          } else {
+            // Different number of variables - use similarity matching
+            for (const oldVar of oldVariables) {
+              if (!newVariables.includes(oldVar)) {
+                const similarVar = findSimilarVariable(oldVar, newVariables, oldVariables);
+                if (similarVar) {
+                  renameMap[oldVar] = similarVar;
+                }
+              }
+            }
+            
+            for (const newVar of newVariables) {
+              if (!oldVariables.includes(newVar)) {
+                const similarOldVar = findSimilarVariable(newVar, oldVariables, newVariables);
+                if (similarOldVar && !renameMap[similarOldVar]) {
+                  renameMap[similarOldVar] = newVar;
+                }
+              }
+            }
+          }
+          
+          if (Object.keys(renameMap).length === 0) {
+            console.log('No variable renames detected');
+            originalDatasetVariables = [...newVariables];
+            isUpdating = false;
+            return;
+          }
+          
+          console.log('Rename mapping:', renameMap);
+          
+          // Update the formula with new variable names
+          let newFormula = currentFormula;
+          for (const [oldName, newName] of Object.entries(renameMap)) {
+            const pattern = new RegExp('\\b' + oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+            newFormula = newFormula.replace(pattern, newName);
+          }
+          
+          console.log('Formula before update:', currentFormula);
+          console.log('Formula after update:', newFormula);
+          
+          if (newFormula !== currentFormula) {
+            console.log('Updating formula with new variable names');
+            
+            // Update the hidden input
+            formulaInput.value = newFormula;
+            
+            // Show a notification to the user
+            showVariableUpdateNotification(renameMap);
+            
+            // Auto-refresh the page to show updated results
+            setTimeout(() => {
+              // Instead of just reloading, trigger a re-analysis
+              const form = document.getElementById('regressionOptionsForm');
+              if (form) {
+                // Add a flag to indicate this is a dataset update
+                const updateInput = document.createElement('input');
+                updateInput.type = 'hidden';
+                updateInput.name = 'dataset_updated';
+                updateInput.value = 'true';
+                form.appendChild(updateInput);
+                
+                // Submit the form to re-run the analysis
+                form.submit();
+              } else {
+                // Fallback to page reload
+                window.location.reload();
+              }
+            }, 2000);
+          } else {
+            console.log('No formula changes needed');
+            // Update the stored variables even if no formula change
+            originalDatasetVariables = [...newVariables];
+          }
+        } catch (error) {
+          console.error('Error updating session formula:', error);
+        } finally {
+          isUpdating = false;
+        }
+      }
+      
+      // Helper function to find similar variables (simple heuristic)
+      function findSimilarVariable(target, searchList, excludeList) {
+        // First try exact match (case insensitive)
+        for (const varName of searchList) {
+          if (varName.toLowerCase() === target.toLowerCase()) {
+            return varName;
+          }
+        }
+        
+        // Then try partial matches
+        for (const varName of searchList) {
+          if (varName.toLowerCase().includes(target.toLowerCase()) || 
+              target.toLowerCase().includes(varName.toLowerCase())) {
+            return varName;
+          }
+        }
+        
+        return null;
+      }
+      
+      // Function to show notification about variable updates
+      function showVariableUpdateNotification(renameMap) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed; top: 20px; right: 20px; z-index: 10000;
+          background: #3b82f6; color: white; padding: 16px 20px;
+          border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 14px; max-width: 300px; line-height: 1.4;
+        `;
+        
+        const changes = Object.entries(renameMap).map(([old, new_]) => `${old} → ${new_}`).join(', ');
+        notification.innerHTML = `
+          <div style="font-weight: 600; margin-bottom: 4px;">🔄 Variables Updated</div>
+          <div>${changes}</div>
+          <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">Refreshing results...</div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove notification after 3 seconds
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+          }
+        }, 3000);
+      }
+      
+      // Check for changes every 2 seconds
+      setInterval(checkForVariableChanges, 2000);
+      
+      // Initial check
+      checkForVariableChanges();
+    })();
+    
+    // Function to update formula before form submission
+    window.updateFormulaBeforeSubmit = async function(event) {
+      // Prevent default form submission
+      event.preventDefault();
+      
+      try {
+        const currentDatasetId = {{ dataset.id }};
+        const formulaInput = document.querySelector('input[name="formula"]');
+        if (!formulaInput) {
+          // If no formula input, submit normally
+          document.getElementById('regressionOptionsForm').submit();
+          return false;
+        }
+        
+        const currentFormula = formulaInput.value;
+        console.log('Current formula before update:', currentFormula);
+        
+        // Get current dataset variables
+        const response = await fetch(`/api/dataset/${currentDatasetId}/variables/`);
+        const data = await response.json();
+        
+        if (data.success && data.variables) {
+          const currentVariables = data.variables;
+          console.log('Current dataset variables:', currentVariables);
+          
+          // Check if any variables in the formula are not in the current dataset
+          const formulaVars = extractVariablesFromFormula(currentFormula);
+          console.log('Variables in formula:', formulaVars);
+          
+          const missingVars = formulaVars.filter(varName => !currentVariables.includes(varName));
+          console.log('Missing variables:', missingVars);
+          
+          if (missingVars.length > 0) {
+            // Try to find similar variables for missing ones
+            const renameMap = {};
+            for (const missingVar of missingVars) {
+              const similarVar = findSimilarVariableInList(missingVar, currentVariables);
+              if (similarVar) {
+                renameMap[missingVar] = similarVar;
+              }
+            }
+            
+            if (Object.keys(renameMap).length > 0) {
+              console.log('Found potential renames:', renameMap);
+              
+              // Update the formula
+              let newFormula = currentFormula;
+              for (const [oldName, newName] of Object.entries(renameMap)) {
+                const pattern = new RegExp('\\b' + oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+                newFormula = newFormula.replace(pattern, newName);
+              }
+              
+              if (newFormula !== currentFormula) {
+                console.log('Updating formula:', newFormula);
+                formulaInput.value = newFormula;
+                
+                // Show notification
+                showVariableUpdateNotification(renameMap);
+                
+                // Wait a moment for the notification to be seen, then submit
+                setTimeout(() => {
+                  console.log('Submitting form with updated formula:', newFormula);
+                  document.getElementById('regressionOptionsForm').submit();
+                }, 1500);
+                
+                return false; // Prevent immediate submission
+              }
+            }
+          }
+        }
+        
+        // If no updates needed, submit immediately
+        console.log('No formula updates needed, submitting form');
+        // Ensure all form data is preserved by submitting the form normally
+        const form = document.getElementById('regressionOptionsForm');
+        form.submit();
+        return false;
+        
+      } catch (error) {
+        console.error('Error updating formula before submit:', error);
+        // If there's an error, submit anyway
+        const form = document.getElementById('regressionOptionsForm');
+        form.submit();
+        return false;
+      }
+    };
+    
+    // Helper function to extract variables from formula
+    function extractVariablesFromFormula(formula) {
+      if (!formula) return [];
+      
+      // Split by ~ to get LHS and RHS
+      const parts = formula.split('~');
+      if (parts.length !== 2) return [];
+      
+      const lhs = parts[0].trim();
+      const rhs = parts[1].trim();
+      const variables = [];
+      
+      // Add dependent variable (LHS)
+      if (lhs) {
+        variables.push(lhs);
+      }
+      
+      // Add predictor variables (RHS)
+      if (rhs) {
+        // Split by + to get terms
+        const terms = rhs.split('+').map(t => t.trim()).filter(t => t);
+        
+        for (const term of terms) {
+          // Check if it's an interaction (contains *)
+          if (term.includes('*')) {
+            const interactionVars = term.split('*').map(v => v.trim()).filter(v => v);
+            variables.push(...interactionVars);
+          } else {
+            // Simple term
+            variables.push(term);
+          }
+        }
+      }
+      
+      return variables;
+    }
+    
+    // Helper function to find similar variable in a list
+    function findSimilarVariableInList(target, variableList) {
+      // First try exact match (case insensitive)
+      for (const varName of variableList) {
+        if (varName.toLowerCase() === target.toLowerCase()) {
+          return varName;
+        }
+      }
+      
+      // Then try partial matches
+      for (const varName of variableList) {
+        if (varName.toLowerCase().includes(target.toLowerCase()) || 
+            target.toLowerCase().includes(varName.toLowerCase())) {
+          return varName;
+        }
+      }
+      
+      // For single character targets like 'Y', try to find variables that might be common dependent variables
+      if (target.length === 1 && ['Y', 'y'].includes(target)) {
+        const commonDependentVars = ['edu', 'education', 'income', 'salary', 'wage', 'score', 'grade', 'rating', 'value', 'amount', 'count', 'total', 'sum'];
+        for (const varName of variableList) {
+          if (commonDependentVars.some(common => varName.toLowerCase().includes(common))) {
+            return varName;
+          }
+        }
+      }
+      
+      // If target is a common dependent variable name, try to find similar ones
+      const commonDependentVars = ['edu', 'education', 'income', 'salary', 'wage', 'score', 'grade', 'rating', 'value', 'amount', 'count', 'total', 'sum'];
+      if (commonDependentVars.some(common => target.toLowerCase().includes(common))) {
+        for (const varName of variableList) {
+          if (commonDependentVars.some(common => varName.toLowerCase().includes(common))) {
+            return varName;
+          }
+        }
+      }
+      
+      return null;
+    }
+    
+    // Track added interactions
+    let addedInteractions = new Set();
+    
+    // Track added correlation heatmap
+    let correlationHeatmapAdded = false;
+    
+    // Function to move the "Add Plot" section to the end of the dynamic plots container
+    function moveAddPlotSectionToEnd() {
+      
+      const container = document.getElementById('dynamic-plots-container');
+      if (!container) {
+        console.log('Dynamic plots container not found');
+        return;
+      }
+      
+      console.log('Looking for Add Plots section...');
+      
+      // Look for the "Add Plots" card section specifically
+      const addPlotsCards = document.querySelectorAll('.card .card-title');
+      console.log('Found', addPlotsCards.length, 'cards with titles');
+      
+      for (const cardTitle of addPlotsCards) {
+        console.log('Checking card title:', cardTitle.textContent.trim());
+        if (cardTitle.textContent.trim() === 'Add Plots') {
+          const addPlotsSection = cardTitle.closest('.card');
+          console.log('Found Add Plots card:', addPlotsSection);
+          console.log('Parent node:', addPlotsSection.parentNode);
+          console.log('Is in container?', container.contains(addPlotsSection));
+          
+          if (addPlotsSection) {
+            // Move the entire "Add Plots" card to the end of the dynamic plots container
+            container.appendChild(addPlotsSection);
+            console.log('Successfully moved Add Plots section to end of container');
+            return;
+          }
+        }
+      }
+      
+      // Fallback: look for sections containing plot buttons
+      console.log('Trying fallback method...');
+      const allPlotButtons = document.querySelectorAll('[onclick*="addSpotlightPlot"], [onclick*="addCorrelationHeatmap"], [onclick*="addPlot"]');
+      console.log('Found', allPlotButtons.length, 'plot buttons');
+      
+      for (const button of allPlotButtons) {
+        const parentSection = button.closest('.card, section, div');
+        if (parentSection) {
+          // Check if this section contains plot-related buttons
+          const hasPlotButtons = parentSection.querySelector('[onclick*="addSpotlightPlot"], [onclick*="addCorrelationHeatmap"], [onclick*="addPlot"]');
+          if (hasPlotButtons) {
+            // Move the entire section to the end of the dynamic plots container
+            container.appendChild(parentSection);
+            console.log('Moved Add Plot section to end of container (fallback)');
+            break; // Only move one section
+          }
+        }
+      }
+      
+      console.log('Could not find Add Plots section to move');
+    }
+    
+    // Plot management functions
+    function addPlot(plotType) {
+      const section = document.getElementById(plotType + '-section');
+      if (section) {
+        section.style.display = 'block';
+        // Move to dynamic plots container
+        const container = document.getElementById('dynamic-plots-container');
+        container.appendChild(section);
+        
+        // Move the "Add Plot" section to the end of the container (only once)
+        setTimeout(() => {
+          moveAddPlotSectionToEnd();
+        }, 100);
+        
+        // Update button state
+        const button = document.querySelector(`button[onclick="addPlot('${plotType}')"]`);
+        if (button) {
+          button.style.display = 'none';
+        }
+        
+        // Show plot options in sidebar if needed
+        showPlotOptions(plotType);
+      }
+    }
+
+    function addSpotlightPlot(interaction) {
+      console.log('addSpotlightPlot called with:', interaction);
+      console.log('Interaction type:', typeof interaction);
+      
+      // Ensure interaction is a string
+      if (typeof interaction !== 'string') {
+        console.error('Interaction must be a string, got:', typeof interaction);
+        return;
+      }
+      
+      // Mark interaction as added
+      addedInteractions.add(interaction);
+      
+      // Update dropdown to remove this interaction
+      updateSpotlightDropdown();
+      
+      // Generate spotlight plot for this specific interaction
+      const defaultOptions = {
+        moderatorSeparation: 'mean',
+        moderatorStdDevMultiplier: 1.0
+      };
+      generateSpotlightPlot(interaction, defaultOptions);
+      
+      // Show plot options in sidebar
+      showPlotOptions('spotlight');
+    }
+
+    function addOrdinalSpotlightPlot(interaction, category) {
+      console.log('addOrdinalSpotlightPlot called with:', interaction, category);
+      
+      // Hide the dropdown item that was clicked
+      const clickedItem = document.querySelector(`[data-interaction="${interaction}"][data-category="${category}"]`);
+      if (clickedItem) {
+        clickedItem.style.display = 'none';
+        clickedItem.classList.add('plotted');
+      }
+      
+      // Update the dropdown visibility
+      updateSpotlightDropdown();
+      
+      // Generate the spotlight plot with the selected category
+      const customOptions = { 
+        ordinal_category: category,
+        moderatorSeparation: 'mean',
+        moderatorStdDevMultiplier: 1.0
+      };
+      generateSpotlightPlot(interaction, customOptions);
+    }
+
+    function generateSpotlightPlot(interaction, customOptions = {}) {
+      console.log('Generating spotlight plot for interaction:', interaction);
+      console.log('Custom options:', customOptions);
+      
+      // Make AJAX call to generate spotlight plot
+      const formData = new FormData();
+      formData.append('interaction', interaction);
+      
+      // Add custom options if provided
+      if (customOptions.moderatorVar) {
+        formData.append('moderator_var', customOptions.moderatorVar);
+        console.log('Adding moderator_var:', customOptions.moderatorVar);
+      }
+      if (customOptions.xLabel) formData.append('x_name', customOptions.xLabel);
+      if (customOptions.yLabel) formData.append('y_name', customOptions.yLabel);
+      if (customOptions.legendLow) formData.append('legend_low', customOptions.legendLow);
+      if (customOptions.legendHigh) formData.append('legend_high', customOptions.legendHigh);
+      if (customOptions.colorLow) formData.append('color_low', customOptions.colorLow);
+      if (customOptions.colorHigh) formData.append('color_high', customOptions.colorHigh);
+      if (customOptions.lineStyleLow) formData.append('line_style_low', customOptions.lineStyleLow);
+      if (customOptions.lineStyleHigh) formData.append('line_style_high', customOptions.lineStyleHigh);
+      if (customOptions.showCI !== undefined) formData.append('show_ci', customOptions.showCI);
+      if (customOptions.showGrid !== undefined) formData.append('show_grid', customOptions.showGrid);
+      if (customOptions.backgroundColor) formData.append('background_color', customOptions.backgroundColor);
+      if (customOptions.ordinal_category) formData.append('ordinal_category', customOptions.ordinal_category);
+      if (customOptions.multinomial_category) formData.append('multinomial_category', customOptions.multinomial_category);
+      if (customOptions.moderatorSeparation) formData.append('moderator_separation', customOptions.moderatorSeparation);
+      if (customOptions.moderatorStdDevMultiplier !== undefined) {
+        formData.append('moderator_std_dev_multiplier', customOptions.moderatorStdDevMultiplier);
+        console.log('Adding moderator_std_dev_multiplier:', customOptions.moderatorStdDevMultiplier);
+      }
+      
+      const url = `{% url 'generate_spotlight_plot' session.id %}`;
+      
+      // Get CSRF token from cookie or form
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+      
+      fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': csrfToken || ''
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            throw new Error(`HTTP ${response.status}: ${text}`);
+          });
+        }
+        return response.text();
+      })
+      .then(data => {
+        try {
+          const responseData = JSON.parse(data);
+          
+          // Check if this is an ordinal category selection response
+          if (responseData.type === 'ordinal_category_selection') {
+            showOrdinalCategoryModal(responseData, interaction, customOptions);
+            return;
+          }
+          
+          // Check if this is a multinomial category selection response
+          if (responseData.type === 'multinomial_category_selection') {
+            showMultinomialCategoryModal(responseData, interaction, customOptions);
+            return;
+          }
+          
+          // Regular plot data - create spotlight plot
+          const container = document.getElementById('dynamic-plots-container');
+          
+          // Generate unique plot ID with timestamp to prevent replacement
+          const timestamp = Date.now();
+          const plotId = `spotlight-${interaction.replace(/[^a-zA-Z0-9]/g, '-')}-${timestamp}`;
+          
+          // Create new plot section
+          const plotSection = document.createElement('section');
+          plotSection.id = plotId;
+          plotSection.className = 'card plot-card';
+          plotSection.style.marginBottom = '16px';
+          plotSection.innerHTML = `
+            <div class="card-head">
+              <h3 class="card-title">Spotlight Plot: ${interaction}</h3>
+              <div class="muted small">Moderator lines with optional 95% band</div>
+              <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button type="button" class="btn btn-secondary" onclick="editPlot('${plotId}', 'spotlight', '${interaction}')" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 8px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                  </svg>
+                  Customize
+                </button>
+                <button class="btn" style="padding: 6px 12px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;" onclick="showSpotlightExportModal('plot-${plotId}')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7,10 12,15 17,10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Download
+                </button>
+                <button type="button" class="btn btn-ghost" onclick="removeSpotlightPlot('${plotId}', '${interaction}')">×</button>
+              </div>
+            </div>
+            <div class="plot-container" id="plot-${plotId}"></div>
+          `;
+          
+          container.appendChild(plotSection);
+          
+          // Move the "Add Plot" section to the end of the container
+          setTimeout(() => {
+            moveAddPlotSectionToEnd();
+          }, 100);
+          
+          // Render the plot
+          const plotContainer = document.getElementById(`plot-${plotId}`);
+          if (plotContainer && responseData) {
+            Plotly.newPlot(plotContainer, responseData);
+            
+            // Store plot settings for editing (including ordinal category if present)
+            const settingsKey = `spotlight_${plotId}`;
+            plotSettings[settingsKey] = customOptions;
+          }
+        } catch (parseError) {
+          console.error('Error parsing plot data:', parseError);
+          const container = document.getElementById('dynamic-plots-container');
+          const timestamp = Date.now();
+          const plotId = `spotlight-${interaction.replace(/[^a-zA-Z0-9]/g, '-')}-${timestamp}`;
+          const plotSection = document.createElement('section');
+          plotSection.id = plotId;
+          plotSection.className = 'card plot-card';
+          plotSection.style.marginBottom = '16px';
+          plotSection.innerHTML = `
+            <div class="card-head">
+              <h3 class="card-title">Spotlight Plot: ${interaction}</h3>
+              <div class="muted small">Error</div>
+              <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button type="button" class="btn btn-ghost" onclick="removeSpotlightPlot('${plotId}', '${interaction}')">×</button>
+              </div>
+            </div>
+            <div class="plot-container" id="plot-${plotId}">
+              <div class="error">Error parsing plot data: ${parseError.message}</div>
+            </div>
+          `;
+          container.appendChild(plotSection);
+          
+          // Move the "Add Plot" section to the end of the container
+          setTimeout(() => {
+            moveAddPlotSectionToEnd();
+          }, 100);
+        }
+      })
+      .catch(error => {
+        console.error('Error generating spotlight plot:', error);
+        // Show more detailed error message
+        let errorMsg = error.message;
+        if (errorMsg.includes('not found in dataset')) {
+          errorMsg += '\n\nPlease check that the variable name is spelled correctly and exists in your dataset.';
+        }
+        alert(`Failed to generate spotlight plot: ${errorMsg}`);
+      });
+    }
+
+    function removeSpotlightPlot(plotId, interaction) {
+      // Remove from added interactions
+      addedInteractions.delete(interaction);
+      
+      // Remove the plot section
+      const plotSection = document.getElementById(plotId);
+      if (plotSection) {
+        plotSection.remove();
+      }
+      
+      // For ordinal regression, restore the specific interaction/category combination
+      // Find the ordinal plot item that matches this interaction
+      const ordinalItems = document.querySelectorAll(`.ordinal-plot-item[data-interaction="${interaction}"]`);
+      ordinalItems.forEach(item => {
+        item.style.display = 'block';
+        item.classList.remove('plotted');
+      });
+      
+      // For multinomial regression, restore the specific interaction/category combination
+      // Find the multinomial plot item that matches this interaction
+      const multinomialItems = document.querySelectorAll(`.multinomial-plot-item[data-interaction="${interaction}"]`);
+      multinomialItems.forEach(item => {
+        item.style.display = 'block';
+        item.classList.remove('plotted');
+      });
+      
+      // Update dropdown
+      updateSpotlightDropdown();
+      
+      // Hide plot options in sidebar
+      hidePlotOptions('spotlight');
+    }
+
+    function showOrdinalCategoryModal(data, interaction, customOptions) {
+      console.log('showOrdinalCategoryModal called with:', data);
+      
+      // Create modal if it doesn't exist
+      let modal = document.getElementById('ordinalCategoryModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ordinalCategoryModal';
+        modal.className = 'modal';
+        modal.style.cssText = 'display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);';
+        document.body.appendChild(modal);
+      }
+      
+      // Create modal content
+      modal.innerHTML = `
+        <div class="modal-content" style="background-color: white; margin: 10% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 500px;">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3>Select Category for Ordinal Regression</h3>
+            <button type="button" onclick="closeOrdinalCategoryModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+          </div>
+          <div class="modal-body">
+            <p style="margin-bottom: 15px;">
+              This is an ordinal regression model. Please select which category level you want to plot for the interaction 
+              <strong>${interaction}</strong>.
+            </p>
+            <div style="margin-bottom: 20px;">
+              <label class="field-label">Dependent Variable: ${data.dependent_variable}</label>
+              <div style="margin-top: 10px;">
+                <label class="field-label">Select Category to Plot:</label>
+                <div style="margin-top: 10px;">
+                  ${data.categories.map(category => `
+                    <label style="display: block; margin-bottom: 8px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer;">
+                      <input type="radio" name="ordinal_category" value="${category}" style="margin-right: 8px;">
+                      ${category}
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+              <button type="button" class="btn btn-ghost" onclick="closeOrdinalCategoryModal()">Cancel</button>
+              <button type="button" class="btn" onclick="generateOrdinalSpotlightPlot('${interaction}', '${data.x_variable}', '${data.moderator_variable}')">Generate Plot</button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      modal.style.display = 'block';
+    }
+
+    function closeOrdinalCategoryModal() {
+      const modal = document.getElementById('ordinalCategoryModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    function generateOrdinalSpotlightPlot(interaction, xVar, moderatorVar) {
+      const selectedCategory = document.querySelector('input[name="ordinal_category"]:checked');
+      if (!selectedCategory) {
+        alert('Please select a category to plot.');
+        return;
+      }
+      
+      console.log('Generating ordinal spotlight plot for category:', selectedCategory.value);
+      
+      // Close the modal
+      closeOrdinalCategoryModal();
+      
+      // Generate the plot with the selected category and default settings
+      const customOptions = {
+        ordinal_category: selectedCategory.value,
+        // Include default settings for editing
+        moderatorVar: '',
+        xLabel: '',
+        yLabel: '',
+        legendLow: '',
+        legendHigh: '',
+        colorLow: '#1f77b4',
+        colorHigh: '#ff7f0e',
+        lineStyleLow: 'solid',
+        lineStyleHigh: 'dashed',
+        showCI: true,
+        showGrid: true,
+        backgroundColor: '#ffffff',
+        moderatorSeparation: 'mean',
+        moderatorStdDevMultiplier: 1.0
+      };
+      
+      generateSpotlightPlot(interaction, customOptions);
+    }
+
+    // Multinomial regression functions
+    function addMultinomialSpotlightPlot(interaction, category) {
+      console.log('Adding multinomial spotlight plot for interaction:', interaction, 'category:', category);
+      
+      // Hide the clicked item
+      const clickedItem = document.querySelector(`[data-interaction="${interaction}"][data-category="${category}"]`);
+      if (clickedItem) {
+        clickedItem.style.display = 'none';
+        clickedItem.classList.add('plotted');
+      }
+      
+      // Generate the plot with the selected category and default settings
+      const customOptions = {
+        multinomial_category: category,
+        // Include default settings for editing
+        moderatorVar: '',
+        xLabel: '',
+        yLabel: '',
+        legendLow: '',
+        legendHigh: '',
+        colorLow: '#1f77b4',
+        colorHigh: '#ff7f0e',
+        lineStyleLow: 'solid',
+        lineStyleHigh: 'dashed',
+        showCI: true,
+        showGrid: true,
+        backgroundColor: '#ffffff',
+        moderatorSeparation: 'mean',
+        moderatorStdDevMultiplier: 1.0
+      };
+      
+      generateSpotlightPlot(interaction, customOptions);
+    }
+
+    function showMultinomialCategoryModal(responseData, interaction, customOptions) {
+      // This function is for consistency with ordinal, but multinomial doesn't need a modal
+      // since categories are selected directly from the dropdown
+      console.log('Multinomial category selection not needed - categories selected directly from dropdown');
+      console.log('Response data:', responseData);
+      console.log('Interaction:', interaction);
+      console.log('Custom options:', customOptions);
+    }
+
+    function closeMultinomialCategoryModal() {
+      // This function is for consistency with ordinal, but multinomial doesn't need a modal
+      console.log('Multinomial category modal not needed');
+    }
+
+    function generateMultinomialSpotlightPlot(interaction, xVar, moderatorVar) {
+      // This function is for consistency with ordinal, but multinomial doesn't need this
+      // since categories are selected directly from the dropdown
+      console.log('Multinomial spotlight plot generation handled directly in addMultinomialSpotlightPlot');
+    }
+
+    function updateSpotlightPlot(plotId, interaction, customOptions) {
+      console.log('Updating spotlight plot:', plotId, interaction, customOptions);
+      
+      // Make AJAX call to generate updated spotlight plot
+      const formData = new FormData();
+      formData.append('interaction', interaction);
+      
+      // Add custom options if provided
+      if (customOptions.moderatorVar) {
+        formData.append('moderator_var', customOptions.moderatorVar);
+      }
+      if (customOptions.xLabel) formData.append('x_name', customOptions.xLabel);
+      if (customOptions.yLabel) formData.append('y_name', customOptions.yLabel);
+      if (customOptions.legendLow) formData.append('legend_low', customOptions.legendLow);
+      if (customOptions.legendHigh) formData.append('legend_high', customOptions.legendHigh);
+      if (customOptions.colorLow) formData.append('color_low', customOptions.colorLow);
+      if (customOptions.colorHigh) formData.append('color_high', customOptions.colorHigh);
+      if (customOptions.lineStyleLow) formData.append('line_style_low', customOptions.lineStyleLow);
+      if (customOptions.lineStyleHigh) formData.append('line_style_high', customOptions.lineStyleHigh);
+      if (customOptions.showCI !== undefined) formData.append('show_ci', customOptions.showCI);
+      if (customOptions.showGrid !== undefined) formData.append('show_grid', customOptions.showGrid);
+      if (customOptions.backgroundColor) formData.append('background_color', customOptions.backgroundColor);
+      if (customOptions.ordinal_category) formData.append('ordinal_category', customOptions.ordinal_category);
+      if (customOptions.multinomial_category) formData.append('multinomial_category', customOptions.multinomial_category);
+      if (customOptions.moderatorSeparation) formData.append('moderator_separation', customOptions.moderatorSeparation);
+      if (customOptions.moderatorStdDevMultiplier !== undefined) {
+        formData.append('moderator_std_dev_multiplier', customOptions.moderatorStdDevMultiplier);
+        console.log('Adding moderator_std_dev_multiplier:', customOptions.moderatorStdDevMultiplier);
+      }
+      
+      const url = `{% url 'generate_spotlight_plot' session.id %}`;
+      
+      // Get CSRF token from cookie or form
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+      
+      fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': csrfToken || ''
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            throw new Error(`HTTP ${response.status}: ${text}`);
+          });
+        }
+        return response.text();
+      })
+      .then(data => {
+        try {
+          const responseData = JSON.parse(data);
+          
+          // Check if this is an ordinal category selection response
+          if (responseData.type === 'ordinal_category_selection') {
+            // This shouldn't happen during editing, but handle it gracefully
+            console.warn('Unexpected ordinal category selection during plot update');
+            return;
+          }
+          
+          // Update the existing plot
+          const plotContainer = document.getElementById(`plot-${plotId}`);
+          if (plotContainer && responseData) {
+            Plotly.newPlot(plotContainer, responseData);
+            console.log('Successfully updated spotlight plot');
+          }
+        } catch (parseError) {
+          console.error('Error parsing updated plot data:', parseError);
+          alert(`Failed to update plot: ${parseError.message}`);
+        }
+      })
+      .catch(error => {
+        console.error('Error updating spotlight plot:', error);
+        alert(`Failed to update spotlight plot: ${error.message}`);
+      });
+    }
+
+    function updateCorrelationHeatmap(plotId, customOptions) {
+      console.log('Updating correlation heatmap:', plotId, customOptions);
+      
+      // Get continuous variables from the template
+      const continuousVars = {{ continuous_vars_json|safe }};
+      
+      // Make AJAX call to generate updated correlation heatmap
+      const updateFormData = new FormData();
+      
+      // Add selected variables
+      const updateXVars = customOptions.xVars || continuousVars;
+      const updateYVars = customOptions.yVars || continuousVars;
+      
+      updateXVars.forEach(variable => updateFormData.append('x_vars[]', variable));
+      updateYVars.forEach(variable => updateFormData.append('y_vars[]', variable));
+      
+      // Add custom options if provided
+      if (customOptions.showSignificance !== undefined) {
+        updateFormData.append('show_significance', customOptions.showSignificance);
+      }
+      if (customOptions.colorScheme) {
+        updateFormData.append('color_scheme', customOptions.colorScheme);
+      }
+      
+      const updateUrl = `{% url 'generate_correlation_heatmap' session.id %}`;
+      
+      // Get CSRF token from cookie or form
+      function getUpdateCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      
+      const updateCsrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getUpdateCookie('csrftoken');
+      
+      fetch(updateUrl, {
+        method: 'POST',
+        body: updateFormData,
+        headers: {
+          'X-CSRFToken': updateCsrfToken || ''
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            throw new Error(`HTTP ${response.status}: ${text}`);
+          });
+        }
+        return response.text();
+      })
+      .then(data => {
+        // Update the existing plot
+        const plotContainer = document.getElementById(`plot-${plotId}`);
+        if (plotContainer && data) {
+          try {
+            const plotData = JSON.parse(data);
+            Plotly.newPlot(plotContainer, plotData);
+            console.log('Successfully updated correlation heatmap');
+          } catch (parseError) {
+            console.error('Error parsing updated plot data:', parseError);
+            plotContainer.innerHTML = `<div class="error">Error parsing plot data: ${parseError.message}</div>`;
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error updating correlation heatmap:', error);
+        alert(`Failed to update correlation heatmap: ${error.message}`);
+      });
+    }
+
+    function addCorrelationHeatmap() {
+      console.log('addCorrelationHeatmap called');
+      
+      // Mark heatmap as added
+      correlationHeatmapAdded = true;
+      
+      // Hide the button
+      const button = document.querySelector('button[onclick="addCorrelationHeatmap()"]');
+      if (button) {
+        button.style.display = 'none';
+      }
+      
+      // Generate correlation heatmap
+      generateCorrelationHeatmap();
+      
+      // Show plot options in sidebar
+      showPlotOptions('correlation');
+    }
+
+    function generateCorrelationHeatmap(customOptions = {}) {
+      console.log('Generating correlation heatmap');
+      console.log('Custom options:', customOptions);
+      
+      // Get continuous variables from the template
+      const continuousVars = {{ continuous_vars_json|safe }};
+      
+      // Make AJAX call to generate correlation heatmap
+      const formData = new FormData();
+      
+      // Add selected variables (default to all continuous variables)
+      const xVars = customOptions.xVars || continuousVars;
+      const yVars = customOptions.yVars || continuousVars;
+      
+      xVars.forEach(variable => formData.append('x_vars[]', variable));
+      yVars.forEach(variable => formData.append('y_vars[]', variable));
+      
+      // Add custom options if provided
+      if (customOptions.showSignificance !== undefined) {
+        formData.append('show_significance', customOptions.showSignificance);
+      }
+      if (customOptions.colorScheme) {
+        formData.append('color_scheme', customOptions.colorScheme);
+      }
+      
+      const url = `{% url 'generate_correlation_heatmap' session.id %}`;
+      
+      // Get CSRF token from cookie or form
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+      
+      fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': csrfToken || ''
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            throw new Error(`HTTP ${response.status}: ${text}`);
+          });
+        }
+        return response.text();
+      })
+      .then(data => {
+        // Create a new correlation heatmap section
+        const container = document.getElementById('dynamic-plots-container');
+        const timestamp = Date.now();
+        const plotId = `correlation-heatmap-${timestamp}`;
+        
+        // Create new plot section
+        const plotSection = document.createElement('section');
+        plotSection.id = plotId;
+        plotSection.className = 'card plot-card';
+        plotSection.style.marginBottom = '16px';
+        plotSection.innerHTML = `
+          <div class="card-head">
+            <h3 class="card-title">Correlation Heatmap</h3>
+            <div class="muted small">Pearson correlation coefficients with significance levels</div>
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+              <button type="button" class="btn btn-ghost" onclick="editPlot('${plotId}', 'correlation')" style="font-size: 14px;">✏️ Edit</button>
+              <button type="button" class="btn btn-ghost" onclick="removeCorrelationHeatmap()">×</button>
+            </div>
+          </div>
+          <div class="plot-container" id="plot-${plotId}"></div>
+        `;
+        
+        container.appendChild(plotSection);
+        
+        // Move the "Add Plot" section to the end of the container (only once)
+        setTimeout(() => {
+          moveAddPlotSectionToEnd();
+        }, 100);
+        
+        // Render the plot
+        const plotContainer = document.getElementById(`plot-${plotId}`);
+        if (plotContainer && data) {
+          try {
+            const plotData = JSON.parse(data);
+            Plotly.newPlot(plotContainer, plotData);
+          } catch (parseError) {
+            console.error('Error parsing plot data:', parseError);
+            plotContainer.innerHTML = `<div class="error">Error parsing plot data: ${parseError.message}</div>`;
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error generating correlation heatmap:', error);
+        alert(`Failed to generate correlation heatmap: ${error.message}`);
+      });
+    }
+
+    function removeCorrelationHeatmap() {
+      // Mark heatmap as not added
+      correlationHeatmapAdded = false;
+      
+      // Remove the plot section
+      const plotSection = document.getElementById('correlation-heatmap');
+      if (plotSection) {
+        plotSection.remove();
+      }
+      
+      // Show the button again
+      const button = document.querySelector('button[onclick="addCorrelationHeatmap()"]');
+      if (button) {
+        button.style.display = 'flex';
+      }
+      
+      // Hide plot options in sidebar
+      hidePlotOptions('correlation');
+    }
+
+    function removePlot(plotType) {
+      const section = document.getElementById(plotType + '-section');
+      if (section) {
+        section.style.display = 'none';
+        
+        // Reset button state
+        const button = document.querySelector(`button[onclick="addPlot('${plotType}')"]`);
+        if (button) {
+          button.style.display = 'flex';
+        }
+        
+        // If it's a spotlight plot, reset interactions
+        if (plotType === 'spotlight') {
+          addedInteractions.clear();
+          
+          // Restore ordinal regression items that were plotted
+          const plottedItems = document.querySelectorAll('.ordinal-plot-item.plotted');
+          plottedItems.forEach(item => {
+            item.style.display = 'block';
+            item.classList.remove('plotted');
+          });
+          
+          updateSpotlightDropdown();
+        }
+        
+        // Hide plot options in sidebar
+        hidePlotOptions(plotType);
+      }
+    }
+
+    function toggleDropdown() {
+      const dropdown = document.getElementById('spotlight-dropdown');
+      if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+      }
+    }
+
+    function updateSpotlightDropdown() {
+      const dropdown = document.getElementById('spotlight-dropdown');
+      if (dropdown) {
+        const items = dropdown.querySelectorAll('.dropdown-item');
+        items.forEach(item => {
+          // For ordinal regression items, check if they have the plotted class
+          if (item.classList.contains('ordinal-plot-item')) {
+            // Item is already handled by addOrdinalSpotlightPlot
+            return;
+          } else if (item.classList.contains('multinomial-plot-item')) {
+            // Item is already handled by addMultinomialSpotlightPlot
+            return;
+          } else {
+            // Regular interaction item
+            const interaction = item.textContent.trim();
+            if (interaction && addedInteractions.has(interaction)) {
+              item.style.display = 'none';
+            } else {
+              item.style.display = 'block';
+            }
+          }
+        });
+        
+        // Show/hide dropdown button based on available items
+        const visibleItems = Array.from(items).filter(item => 
+          item.style.display !== 'none' && !item.classList.contains('plotted')
+        );
+        const dropdownButton = document.querySelector('.dropdown-toggle');
+        if (dropdownButton) {
+          if (visibleItems.length === 0) {
+            dropdownButton.style.display = 'none';
+          } else {
+            dropdownButton.style.display = 'flex';
+          }
+        }
+      }
+    }
+
+    function showPlotOptions(plotType) {
+      // Add plot-specific options to sidebar
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar && !document.getElementById(plotType + '-options')) {
+        const optionsDiv = document.createElement('div');
+        optionsDiv.id = plotType + '-options';
+        optionsDiv.className = 'card';
+        optionsDiv.style.marginBottom = '16px';
+        
+        if (plotType === 'spotlight') {
+          // Get the selected interaction
+          const selectedInteraction = Array.from(addedInteractions)[0] || 'No interaction selected';
+          optionsDiv.innerHTML = `
+            <div class="card-head">
+              <h3 class="card-title">Spotlight Options</h3>
+            </div>
+            <div>
+              <label class="field-label">Selected Interaction</label>
+              <div class="muted small" style="padding: 8px; background: #f9fafb; border-radius: 4px; margin-bottom: 8px;">
+                ${selectedInteraction}
+              </div>
+            </div>
+            <div class="grid-2">
+              <div>
+                <label class="field-label">X label</label>
+                <input class="input" type="text" name="x_name" value="{{session.options.x_name}}" placeholder="X">
+              </div>
+              <div>
+                <label class="field-label">Y label</label>
+                <input class="input" type="text" name="y_name" value="{{session.options.y_name}}" placeholder="Y">
+              </div>
+            </div>
+            <div>
+              <label class="field-label">Moderator label</label>
+              <input class="input" type="text" name="moderator_name" value="{{session.options.moderator_name}}" placeholder="Moderator">
+            </div>
+            <div class="grid-2">
+              <div>
+                <label class="field-label">Low line color</label>
+                <input class="input" type="text" name="plot_color_low" value="{{session.options.plot_color_low}}">
+              </div>
+              <div>
+                <label class="field-label">High line color</label>
+                <input class="input" type="text" name="plot_color_high" value="{{session.options.plot_color_high}}">
+              </div>
+            </div>
+            <div class="grid-2">
+              <div>
+                <label class="field-label">Low line style</label>
+                <select class="input" name="line_style_low">
+                  <option value="solid" {% if session.options.line_style_low == 'solid' %}selected{% endif %}>solid</option>
+                  <option value="dashed" {% if session.options.line_style_low == 'dashed' %}selected{% endif %}>dashed</option>
+                  <option value="dotted" {% if session.options.line_style_low == 'dotted' %}selected{% endif %}>dotted</option>
+                  <option value="dashdot" {% if session.options.line_style_low == 'dashdot' %}selected{% endif %}>dashdot</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">High line style</label>
+                <select class="input" name="line_style_high">
+                  <option value="solid" {% if session.options.line_style_high == 'solid' %}selected{% endif %}>solid</option>
+                  <option value="dashed" {% if session.options.line_style_high == 'dashed' %}selected{% endif %}>dashed</option>
+                  <option value="dotted" {% if session.options.line_style_high == 'dotted' %}selected{% endif %}>dotted</option>
+                  <option value="dashdot" {% if session.options.line_style_high == 'dashdot' %}selected{% endif %}>dashdot</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="switch-col">
+                <label class="field-label">Spotlight 95% band</label>
+                <label class="switch">
+                  <input type="checkbox" name="spotlight_ci" {% if session.options.spotlight_ci %}checked{% endif %}>
+                  <span></span>
+                </label>
+              </div>
+            </div>
+          `;
+        } else if (plotType === 'correlation') {
+          const continuousVars = {{ continuous_vars_json|safe }};
+          optionsDiv.innerHTML = `
+            <div class="card-head">
+              <h3 class="card-title">Correlation Heatmap Options</h3>
+            </div>
+            <div>
+              <label class="field-label">X Variables (columns)</label>
+              <div style="max-height: 150px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+                ${continuousVars.map(variable => `
+                  <label style="display: block; margin-bottom: 4px;">
+                    <input type="checkbox" name="x_vars" value="${variable}" checked style="margin-right: 8px;">
+                    ${variable}
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+            <div>
+              <label class="field-label">Y Variables (rows)</label>
+              <div style="max-height: 150px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+                ${continuousVars.map(variable => `
+                  <label style="display: block; margin-bottom: 4px;">
+                    <input type="checkbox" name="y_vars" value="${variable}" checked style="margin-right: 8px;">
+                    ${variable}
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+            <div>
+              <label class="field-label">Color Scheme</label>
+              <select class="input" name="color_scheme">
+                <option value="RdBu">Red-Blue</option>
+                <option value="RdYlBu">Red-Yellow-Blue</option>
+                <option value="Viridis">Viridis</option>
+                <option value="Plasma">Plasma</option>
+                <option value="Inferno">Inferno</option>
+                <option value="Magma">Magma</option>
+                <option value="Blues">Blues</option>
+                <option value="Reds">Reds</option>
+                <option value="Greens">Greens</option>
+                <option value="Purples">Purples</option>
+                <option value="Oranges">Oranges</option>
+                <option value="Greys">Greys</option>
+                <option value="White">Pure White</option>
+                <option value="White-Blue">White to Blue</option>
+                <option value="White-Red">White to Red</option>
+                <option value="White-Green">White to Green</option>
+                <option value="White-Purple">White to Purple</option>
+                <option value="White-Orange">White to Orange</option>
+              </select>
+            </div>
+            <div class="switch-col">
+              <label class="field-label">Show Significance Asterisks</label>
+              <label class="switch">
+                <input type="checkbox" name="show_significance" checked>
+                <span></span>
+              </label>
+            </div>
+          `;
+        }
+        
+        sidebar.appendChild(optionsDiv);
+      }
+    }
+
+    function hidePlotOptions(plotType) {
+      const optionsDiv = document.getElementById(plotType + '-options');
+      if (optionsDiv) {
+        optionsDiv.remove();
+      }
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+      const dropdown = document.getElementById('spotlight-dropdown');
+      const dropdownButton = document.querySelector('.dropdown-toggle');
+      if (dropdown && dropdownButton && !dropdown.contains(event.target) && !dropdownButton.contains(event.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+
+    // Plot editing functionality
+    let currentEditPlot = null;
+    let currentEditType = null;
+    let currentEditInteraction = null;
+    
+    // Store plot settings for persistence
+    let plotSettings = {};
+    
+    // Summary table editing
+    let summaryTableSettings = {};
+
+    function editPlot(plotId, plotType, interaction = null) {
+      console.log('editPlot called with:', {plotId, plotType, interaction});
+      currentEditPlot = plotId;
+      currentEditType = plotType;
+      currentEditInteraction = interaction;
+      
+      const modal = document.getElementById('plotEditModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const optionsDiv = document.getElementById('plotEditOptions');
+      
+      modalTitle.textContent = `Edit ${plotType.charAt(0).toUpperCase() + plotType.slice(1)} Plot`;
+      
+      // Get existing settings for this plot
+      const settingsKey = `${plotType}_${plotId}`;
+      const currentSettings = plotSettings[settingsKey] || {};
+      
+      // Generate options based on plot type
+      let optionsHTML = '';
+      
+      if (plotType === 'spotlight') {
+        optionsHTML = `
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Moderator Display Name</label>
+            <input class="input" type="text" id="moderatorVar" placeholder="Custom name for moderator in plot" value="${currentSettings.moderatorVar || ''}">
+            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+              Enter any name you want to display in the plot legend (e.g., "Age", "Education Level", etc.)
+            </small>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X Axis Label</label>
+            <input class="input" type="text" id="xLabel" placeholder="X Variable" value="${currentSettings.xLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y Axis Label</label>
+            <input class="input" type="text" id="yLabel" placeholder="Y Variable" value="${currentSettings.yLabel || ''}">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Legend Labels</label>
+            <div style="display: flex; gap: 10px;">
+              <input class="input" type="text" id="legendLow" placeholder="Low" style="flex: 1;" value="${currentSettings.legendLow || ''}">
+              <input class="input" type="text" id="legendHigh" placeholder="High" style="flex: 1;" value="${currentSettings.legendHigh || ''}">
+            </div>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Line Colors</label>
+            <div style="display: flex; gap: 10px;">
+              <input class="input" type="color" id="colorLow" value="${currentSettings.colorLow || '#1f77b4'}" style="width: 60px;">
+              <input class="input" type="color" id="colorHigh" value="${currentSettings.colorHigh || '#ff7f0e'}" style="width: 60px;">
+            </div>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Background Color</label>
+            <input class="input" type="color" id="backgroundColor" value="${currentSettings.backgroundColor || '#ffffff'}" style="width: 60px;">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Line Styles</label>
+            <div style="display: flex; gap: 10px;">
+              <select class="input" id="lineStyleLow" style="flex: 1;">
+                <option value="solid" ${currentSettings.lineStyleLow === 'solid' ? 'selected' : ''}>Solid</option>
+                <option value="dashed" ${currentSettings.lineStyleLow === 'dashed' ? 'selected' : ''}>Dashed</option>
+                <option value="dotted" ${currentSettings.lineStyleLow === 'dotted' ? 'selected' : ''}>Dotted</option>
+                <option value="dashdot" ${currentSettings.lineStyleLow === 'dashdot' ? 'selected' : ''}>Dash-Dot</option>
+              </select>
+              <select class="input" id="lineStyleHigh" style="flex: 1;">
+                <option value="solid" ${currentSettings.lineStyleHigh === 'solid' ? 'selected' : ''}>Solid</option>
+                <option value="dashed" ${currentSettings.lineStyleHigh === 'dashed' ? 'selected' : ''}>Dashed</option>
+                <option value="dotted" ${currentSettings.lineStyleHigh === 'dotted' ? 'selected' : ''}>Dotted</option>
+                <option value="dashdot" ${currentSettings.lineStyleHigh === 'dashdot' ? 'selected' : ''}>Dash-Dot</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Confidence Intervals</label>
+            <input type="checkbox" id="showCI" ${currentSettings.showCI === true ? 'checked' : ''}>
+            <span style="margin-left: 8px;">Show 95% confidence bands</span>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Moderator Level Separation</label>
+            <div class="grid-2" style="gap: 12px;">
+              <div>
+                <label class="field-label" style="font-size: 12px; margin-bottom: 4px;">Split Method</label>
+                <select class="input" id="moderatorSeparation">
+                  <option value="mean" ${currentSettings.moderatorSeparation === 'mean' || !currentSettings.moderatorSeparation ? 'selected' : ''}>Mean</option>
+                  <option value="median" ${currentSettings.moderatorSeparation === 'median' ? 'selected' : ''}>Median</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label" style="font-size: 12px; margin-bottom: 4px;">Std Dev Multiplier</label>
+                <input class="input" type="number" id="moderatorStdDevMultiplier" 
+                       value="${currentSettings.moderatorStdDevMultiplier || 1.0}" 
+                       step="0.1" min="0.1" max="3.0" 
+                       style="text-align: center;">
+              </div>
+            </div>
+            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+              Choose split method and how many standard deviations to use for "Low" and "High" groups
+            </small>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Show Grid</label>
+            <input type="checkbox" id="showGrid" ${currentSettings.showGrid !== false ? 'checked' : ''}>
+            <span style="margin-left: 8px;">Display grid lines</span>
+          </div>
+        `;
+      } else if (plotType === 'correlation') {
+        const continuousVars = {{ continuous_vars_json|safe }};
+        const currentXVars = currentSettings.xVars || continuousVars;
+        const currentYVars = currentSettings.yVars || continuousVars;
+        const currentColorScheme = currentSettings.colorScheme || 'RdBu';
+        const currentShowSignificance = currentSettings.showSignificance !== false;
+        
+        optionsHTML = `
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">X Variables (columns)</label>
+            <div style="max-height: 150px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+              ${continuousVars.map(variable => `
+                <label style="display: block; margin-bottom: 4px;">
+                  <input type="checkbox" name="x_vars" value="${variable}" ${currentXVars.includes(variable) ? 'checked' : ''} style="margin-right: 8px;">
+                  ${variable}
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Y Variables (rows)</label>
+            <div style="max-height: 150px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+              ${continuousVars.map(variable => `
+                <label style="display: block; margin-bottom: 4px;">
+                  <input type="checkbox" name="y_vars" value="${variable}" ${currentYVars.includes(variable) ? 'checked' : ''} style="margin-right: 8px;">
+                  ${variable}
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Color Scheme</label>
+            <select class="input" name="color_scheme">
+              <option value="RdBu" ${currentColorScheme === 'RdBu' ? 'selected' : ''}>Red-Blue</option>
+              <option value="RdYlBu" ${currentColorScheme === 'RdYlBu' ? 'selected' : ''}>Red-Yellow-Blue</option>
+              <option value="Viridis" ${currentColorScheme === 'Viridis' ? 'selected' : ''}>Viridis</option>
+              <option value="Plasma" ${currentColorScheme === 'Plasma' ? 'selected' : ''}>Plasma</option>
+              <option value="Inferno" ${currentColorScheme === 'Inferno' ? 'selected' : ''}>Inferno</option>
+              <option value="Magma" ${currentColorScheme === 'Magma' ? 'selected' : ''}>Magma</option>
+              <option value="Blues" ${currentColorScheme === 'Blues' ? 'selected' : ''}>Blues</option>
+              <option value="Reds" ${currentColorScheme === 'Reds' ? 'selected' : ''}>Reds</option>
+              <option value="Greens" ${currentColorScheme === 'Greens' ? 'selected' : ''}>Greens</option>
+              <option value="Purples" ${currentColorScheme === 'Purples' ? 'selected' : ''}>Purples</option>
+              <option value="Oranges" ${currentColorScheme === 'Oranges' ? 'selected' : ''}>Oranges</option>
+              <option value="Greys" ${currentColorScheme === 'Greys' ? 'selected' : ''}>Greys</option>
+              <option value="White" ${currentColorScheme === 'White' ? 'selected' : ''}>Pure White</option>
+              <option value="White-Blue" ${currentColorScheme === 'White-Blue' ? 'selected' : ''}>White to Blue</option>
+              <option value="White-Red" ${currentColorScheme === 'White-Red' ? 'selected' : ''}>White to Red</option>
+              <option value="White-Green" ${currentColorScheme === 'White-Green' ? 'selected' : ''}>White to Green</option>
+              <option value="White-Purple" ${currentColorScheme === 'White-Purple' ? 'selected' : ''}>White to Purple</option>
+              <option value="White-Orange" ${currentColorScheme === 'White-Orange' ? 'selected' : ''}>White to Orange</option>
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label class="field-label">Show Significance Asterisks</label>
+            <input type="checkbox" name="show_significance" ${currentShowSignificance ? 'checked' : ''}>
+            <span style="margin-left: 8px;">Display significance levels (*, **, ***)</span>
+          </div>
+        `;
+      }
+      
+      optionsDiv.innerHTML = optionsHTML;
+      modal.style.display = 'block';
+      
+    }
+    
+    function editSummaryTable() {
+      console.log('editSummaryTable called');
+      
+      const modal = document.getElementById('plotEditModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const optionsDiv = document.getElementById('plotEditOptions');
+      
+      modalTitle.textContent = 'Edit Summary Table';
+      
+      // Get current summary table variables (equation variables)
+      const currentSummaryVars = {{ summary_stats_json|safe }};
+      const currentVars = Object.keys(currentSummaryVars);
+      
+      // Get all numeric variables from the dataset for selection (but only show equation vars by default)
+      const allNumericVars = {{ all_numeric_vars_json|safe }};
+      const equationVars = {{ continuous_vars_json|safe }};
+      
+      
+      // Get current settings
+      const currentSettings = summaryTableSettings || {};
+      
+      const optionsHTML = `
+        <div style="margin-bottom: 15px;">
+          <label class="field-label">Variables to Include in Summary Table</label>
+          <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+            ${equationVars.map(variable => {
+              const isChecked = currentVars.includes(variable);
+              return `
+                <label style="display: block; margin-bottom: 4px;">
+                  <input type="checkbox" name="summary_vars" value="${variable}" ${isChecked ? 'checked' : ''} style="margin-right: 8px;">
+                  ${variable}
+                </label>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      
+      optionsDiv.innerHTML = optionsHTML;
+      modal.style.display = 'block';
+      
+      // Set current edit type
+      currentEditType = 'summary';
+    }
+
+    function closePlotEditModal() {
+      document.getElementById('plotEditModal').style.display = 'none';
+      currentEditPlot = null;
+      currentEditType = null;
+      currentEditInteraction = null;
+    }
+
+    function applyPlotChanges() {
+      console.log('applyPlotChanges called');
+      console.log('currentEditPlot:', currentEditPlot);
+      console.log('currentEditType:', currentEditType);
+      if (!currentEditType) {
+        console.log('Early return: missing edit type');
+        return;
+      }
+      
+      // For summary table, we don't need a plot ID
+      if (currentEditType === 'summary') {
+        // Handle summary table changes
+        const selectedVars = Array.from(document.querySelectorAll('input[name="summary_vars"]:checked')).map(cb => cb.value);
+        
+        
+        // Ensure at least one variable is selected
+        if (selectedVars.length === 0) {
+          alert('Please select at least one variable for the summary table');
+          return;
+        }
+        
+        const customOptions = {
+          selectedVars: selectedVars
+        };
+        
+        // Save settings
+        summaryTableSettings = customOptions;
+        
+        // Regenerate summary table
+        generateSummaryTable(customOptions);
+        
+        closePlotEditModal();
+        return;
+      }
+      
+      // For plot editing, we need a plot ID
+      if (!currentEditPlot) {
+        console.log('Early return: missing plot info for plot editing');
+        return;
+      }
+      
+      const plotContainer = document.getElementById(`plot-${currentEditPlot}`);
+      if (!plotContainer) return;
+      
+      // Save settings for persistence
+      const settingsKey = `${currentEditType}_${currentEditPlot}`;
+      const newSettings = {};
+      
+      // Get current plot data
+      let plotData;
+      if (currentEditType === 'spotlight') {
+        // For spotlight plots, collect form values and regenerate
+        if (currentEditInteraction) {
+          const customOptions = {
+            moderatorVar: document.getElementById('moderatorVar').value,
+            xLabel: document.getElementById('xLabel').value,
+            yLabel: document.getElementById('yLabel').value,
+            legendLow: document.getElementById('legendLow').value,
+            legendHigh: document.getElementById('legendHigh').value,
+            colorLow: document.getElementById('colorLow').value,
+            colorHigh: document.getElementById('colorHigh').value,
+            lineStyleLow: document.getElementById('lineStyleLow').value,
+            lineStyleHigh: document.getElementById('lineStyleHigh').value,
+            showCI: document.getElementById('showCI').checked,
+            showGrid: document.getElementById('showGrid').checked,
+            backgroundColor: document.getElementById('backgroundColor').value,
+            moderatorSeparation: document.getElementById('moderatorSeparation').value,
+            moderatorStdDevMultiplier: parseFloat(document.getElementById('moderatorStdDevMultiplier').value) || 1.0
+          };
+          
+          // For ordinal regression, preserve the existing category to avoid showing the modal again
+          if (plotSettings[settingsKey] && plotSettings[settingsKey].ordinal_category) {
+            customOptions.ordinal_category = plotSettings[settingsKey].ordinal_category;
+            console.log('Preserved ordinal category for editing:', customOptions.ordinal_category);
+          } else {
+            console.log('No ordinal category found in settings for key:', settingsKey);
+            console.log('Available settings keys:', Object.keys(plotSettings));
+          }
+          
+          // For multinomial regression, preserve the existing category to avoid showing the modal again
+          if (plotSettings[settingsKey] && plotSettings[settingsKey].multinomial_category) {
+            customOptions.multinomial_category = plotSettings[settingsKey].multinomial_category;
+            console.log('Preserved multinomial category for editing:', customOptions.multinomial_category);
+          } else {
+            console.log('No multinomial category found in settings for key:', settingsKey);
+            console.log('Available plot settings:', plotSettings[settingsKey]);
+          }
+          
+          console.log('Final customOptions for edit:', customOptions);
+          
+          // Save settings
+          plotSettings[settingsKey] = customOptions;
+          
+          // Instead of creating a new plot, update the existing one
+          updateSpotlightPlot(currentEditPlot, currentEditInteraction, customOptions);
+        }
+      } else if (currentEditType === 'correlation') {
+        // For correlation heatmap, collect form values and regenerate
+        const xVars = Array.from(document.querySelectorAll('input[name="x_vars"]:checked')).map(cb => cb.value);
+        const yVars = Array.from(document.querySelectorAll('input[name="y_vars"]:checked')).map(cb => cb.value);
+        const colorScheme = document.querySelector('select[name="color_scheme"]').value;
+        const showSignificance = document.querySelector('input[name="show_significance"]').checked;
+        
+        // Ensure at least one variable is selected for each axis
+        if (xVars.length === 0 || yVars.length === 0) {
+          alert('Please select at least one variable for each axis');
+          return;
+        }
+        
+        const customOptions = {
+          xVars: xVars,
+          yVars: yVars,
+          colorScheme: colorScheme,
+          showSignificance: showSignificance
+        };
+        
+        // Save settings
+        plotSettings[settingsKey] = customOptions;
+        
+        // Instead of creating a new plot, update the existing one
+        updateCorrelationHeatmap(currentEditPlot, customOptions);
+      }
+      
+      closePlotEditModal();
+    }
+
+    function generateSummaryTable(customOptions = {}) {
+      console.log('Generating summary table with options:', customOptions);
+      
+      // Get the selected variables
+      const selectedVars = customOptions.selectedVars || Object.keys({{ summary_stats_json|safe }});
+      // Use default statistics settings from the template
+      const showMin = {{ show_min|yesno:"true,false" }};
+      const showMax = {{ show_max|yesno:"true,false" }};
+      const showRange = {{ show_range|yesno:"true,false" }};
+      const showVariance = {{ show_variance|yesno:"true,false" }};
+      const showVif = {{ show_vif|yesno:"true,false" }};
+      
+      // Get current summary stats
+      const allSummaryStats = {{ summary_stats_json|safe }};
+      
+      // Filter to only selected variables (all should exist since they're equation variables)
+      const filteredStats = {};
+      selectedVars.forEach(varName => {
+        if (allSummaryStats[varName]) {
+          filteredStats[varName] = allSummaryStats[varName];
+        }
+      });
+      
+      
+      // Generate the table HTML
+      let tableHTML = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Variable</th>
+              ${showMin ? '<th>Min</th>' : ''}
+              ${showMax ? '<th>Max</th>' : ''}
+              ${showRange ? '<th>Range</th>' : ''}
+              ${showVariance ? '<th>Variance</th>' : ''}
+              ${showVif ? '<th>VIF</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      // Add rows for each variable
+      Object.entries(filteredStats).forEach(([varName, stats]) => {
+        tableHTML += `
+          <tr>
+            <td><strong>${varName}</strong></td>
+            ${showMin ? `<td class="mono">${stats.min ? stats.min.toFixed(3) : '—'}</td>` : ''}
+            ${showMax ? `<td class="mono">${stats.max ? stats.max.toFixed(3) : '—'}</td>` : ''}
+            ${showRange ? `<td class="mono">${stats.range ? stats.range.toFixed(3) : '—'}</td>` : ''}
+            ${showVariance ? `<td class="mono">${stats.variance ? stats.variance.toFixed(3) : '—'}</td>` : ''}
+            ${showVif ? `<td class="mono">${stats.vif && stats.vif !== 'nan' ? stats.vif.toFixed(2) : '—'}</td>` : ''}
+          </tr>
+        `;
+      });
+      
+      tableHTML += `
+          </tbody>
+        </table>
+      `;
+      
+      // Update the summary table
+      const summarySection = document.getElementById('summary-table-section');
+      if (summarySection) {
+        const tableWrap = summarySection.querySelector('.table-wrap');
+        if (tableWrap) {
+          tableWrap.innerHTML = tableHTML;
+        }
+      }
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+      const modal = document.getElementById('plotEditModal');
+      if (event.target === modal) {
+        closePlotEditModal();
+      }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      // Handle regression options form submission
+      const regressionForm = document.getElementById('regressionOptionsForm');
+      if (regressionForm) {
+        regressionForm.addEventListener('submit', function(e) {
+          // Show loading state
+          const submitBtn = this.querySelector('button[type="submit"]');
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Updating...';
+          }
+        });
+      }
+
+      // Initialize spotlight export modal quality options
+      const qualityOptions = document.querySelectorAll('.spotlight-quality-option');
+      qualityOptions.forEach(option => {
+        option.addEventListener('click', function() {
+          const quality = this.dataset.quality;
+          document.getElementById('customResolutionInputsSpotlight').style.display = quality === 'custom' ? 'block' : 'none';
+        });
+      });
+
+      // Add event handler for download button in modal
+      const spotlightDownloadBtnInModal = document.getElementById('spotlightDownloadBtnInModal');
+      if (spotlightDownloadBtnInModal) {
+        spotlightDownloadBtnInModal.addEventListener('click', function() {
+          downloadSpotlightPlot(); // Will get quality from selected radio button
+        });
+      }
+    });
+
+    // Store current spotlight plot ID for download
+    let currentSpotlightPlotId = null;
+
+    // Show export modal for spotlight plot
+    function showSpotlightExportModal(plotId) {
+      const plotDiv = document.getElementById(plotId);
+      if (!plotDiv) {
+        alert('Plot not available');
+        return;
+      }
+
+      // Check if Plotly is available
+      if (typeof Plotly === 'undefined') {
+        alert('Plotly library not loaded');
+        return;
+      }
+
+      currentSpotlightPlotId = plotId;
+      document.getElementById('spotlightExportModal').style.display = 'block';
+    }
+
+    // Hide export modal
+    function hideSpotlightExportModal() {
+      document.getElementById('spotlightExportModal').style.display = 'none';
+      currentSpotlightPlotId = null;
+    }
+
+    // Download spotlight plot with quality settings
+    function downloadSpotlightPlot() {
+      if (!currentSpotlightPlotId) {
+        alert('Plot ID not set');
+        return;
+      }
+
+      const plotDiv = document.getElementById(currentSpotlightPlotId);
+      if (!plotDiv || typeof Plotly === 'undefined') {
+        alert('Plot not available');
+        return;
+      }
+
+      // Get selected quality
+      const selectedQuality = document.querySelector('input[name="spotlight-quality"]:checked');
+      if (!selectedQuality) {
+        alert('Please select a download quality');
+        return;
+      }
+
+      const quality = selectedQuality.value;
+
+      const qualitySettings = {
+        standard: { width: 800, height: 600 },
+        high: { width: 1200, height: 900 },
+        ultra: { width: 1600, height: 1200 }
+      };
+
+      let settings = qualitySettings[quality];
+
+      if (quality === 'custom') {
+        const customWidth = parseInt(document.getElementById('customWidthSpotlight').value);
+        const customHeight = parseInt(document.getElementById('customHeightSpotlight').value);
+        if (customWidth && customHeight && customWidth >= 400 && customHeight >= 300) {
+          settings = { width: customWidth, height: customHeight };
+        } else {
+          alert('Please enter valid width (400-4000) and height (300-3000)');
+          return;
+        }
+      }
+
+      if (!settings) {
+        alert('Invalid quality setting selected');
+        return;
+      }
+
+      try {
+        // Calculate scale for 300 DPI (default is 96 DPI, so scale = 300/96 ≈ 3.125)
+        const dpi = 300;
+        const defaultDpi = 96;
+        const scale = dpi / defaultDpi;
+
+        Plotly.downloadImage(currentSpotlightPlotId, {
+          format: 'png',
+          width: settings.width,
+          height: settings.height,
+          scale: scale,
+          filename: 'spotlight_plot'
+        });
+        hideSpotlightExportModal();
+      } catch (error) {
+        console.error('Download error:', error);
+        alert('Error downloading plot. Please try again.');
+      }
+    }
+
+    // Show success modal for model errors
+    function showModelErrorsSuccessModal(columnsAdded, columnNames) {
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease-out;';
+      
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 12px; padding: 0; max-width: 500px; width: 90%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); animation: slideIn 0.3s ease-out; overflow: hidden;">
+          <div style="padding: 24px 24px 20px 24px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+            <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 600;">Success!</h3>
+            <p style="margin: 0; color: #6b7280; font-size: 14px;">Successfully added ${columnsAdded} residual column${columnsAdded !== 1 ? 's' : ''} to the dataset</p>
+          </div>
+          <div style="padding: 20px 24px; max-height: 300px; overflow-y: auto;">
+            <div style="background: #f9fafb; border-radius: 8px; padding: 16px;">
+              <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 12px;">Column names:</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${columnNames.map(name => `
+                  <div style="padding: 10px 12px; background: white; border: 1px solid #e5e7eb; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 12px; color: #1f2937;">
+                    ${name}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+          <div style="padding: 16px 24px 24px 24px; display: flex; justify-content: flex-end; border-top: 1px solid #e5e7eb; background: #f9fafb;">
+            <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" style="padding: 8px 20px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.1)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+      
+      // Add animations if not already defined
+      if (!document.getElementById('modelErrorsModalStyles')) {
+        const style = document.createElement('style');
+        style.id = 'modelErrorsModalStyles';
+        style.textContent = `
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes slideIn {
+            from { 
+              opacity: 0;
+              transform: translateY(-20px);
+            }
+            to { 
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      document.body.appendChild(modal);
+      
+      // Close on backdrop click
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+      
+      // Close on Escape key
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+          modal.remove();
+          document.removeEventListener('keydown', handleEscape);
+        }
+      };
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    // Show error modal for model errors
+    function showModelErrorsErrorModal(errorMessage) {
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease-out;';
+      
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 12px; padding: 0; max-width: 450px; width: 90%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); animation: slideIn 0.3s ease-out; overflow: hidden;">
+          <div style="padding: 24px 24px 20px 24px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+            <div style="width: 64px; height: 64px; background: #fef2f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+            </div>
+            <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 600;">Error</h3>
+          </div>
+          <div style="padding: 20px 24px;">
+            <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">${errorMessage}</p>
+          </div>
+          <div style="padding: 16px 24px 24px 24px; display: flex; justify-content: flex-end; border-top: 1px solid #e5e7eb; background: #f9fafb;">
+            <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" style="padding: 8px 20px; background: #dc2626; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#b91c1c'" onmouseout="this.style.backgroundColor='#dc2626'">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Close on backdrop click
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+      
+      // Close on Escape key
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+          modal.remove();
+          document.removeEventListener('keydown', handleEscape);
+        }
+      };
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    // Add model errors/residuals to dataset
+    function addModelErrorsToDataset() {
+      const sessionId = {{ session.id }};
+      const datasetId = {{ dataset.id }};
+      const btn = document.getElementById('addErrorsBtn');
+      
+        if (!sessionId || !datasetId) {
+        showModelErrorsErrorModal('Session or dataset ID not found');
+        return;
+      }
+
+      // Show loading state
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 6v6l4 2"/></svg>Processing...';
+
+      fetch(`/session/${sessionId}/add-model-errors/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({
+          dataset_id: datasetId
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        
+        if (data.success) {
+          showModelErrorsSuccessModal(data.columns_added, data.column_names);
+        } else {
+          showModelErrorsErrorModal(data.error || 'Failed to add model errors to dataset');
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        showModelErrorsErrorModal('Error adding model errors to dataset. Please try again.');
+      });
+    }
+  </script>
+
+<!-- Plot Edit Modal -->
+<div id="plotEditModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+  <div class="modal-content" style="background-color: white; margin: 5% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 500px; max-height: 80vh; overflow-y: auto;">
+    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 id="modalTitle">Edit Plot</h3>
+      <button type="button" onclick="closePlotEditModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="plotEditForm">
+        <div id="plotEditOptions">
+          <!-- Options will be populated dynamically -->
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+          <button type="button" onclick="closePlotEditModal()" class="btn btn-ghost">Cancel</button>
+          <button type="button" onclick="applyPlotChanges()" class="btn btn-primary">Apply Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+  <!-- Export Modal for Spotlight Plot -->
+  <div id="spotlightExportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 12px; padding: 24px; min-width: 450px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0; font-size: 1.25rem; color: #1f2937;">Select Download Quality</h3>
+        <button onclick="hideSpotlightExportModal()" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">×</button>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 0.875rem;">
+          Choose the quality and resolution for your plot download:
+        </p>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label class="spotlight-quality-option" data-quality="standard" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="spotlight-quality" value="standard" checked style="margin-right: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Standard Quality</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">800 × 600 pixels • Good for presentations</div>
+            </div>
+          </label>
+          
+          <label class="spotlight-quality-option" data-quality="high" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="spotlight-quality" value="high" style="margin-right: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">High Quality</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">1200 × 900 pixels • Great for reports</div>
+            </div>
+          </label>
+          
+          <label class="spotlight-quality-option" data-quality="ultra" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="spotlight-quality" value="ultra" style="margin-right: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Ultra High Quality</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">1600 × 1200 pixels • Perfect for publications</div>
+            </div>
+          </label>
+          
+          <label class="spotlight-quality-option" data-quality="custom" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="spotlight-quality" value="custom" style="margin-right: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Custom Resolution</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">Specify your own dimensions</div>
+            </div>
+          </label>
+        </div>
+        
+        <div id="customResolutionInputsSpotlight" style="display: none; margin-top: 16px; padding: 16px; background: #f9fafb; border-radius: 8px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Width (pixels)</label>
+              <input type="number" id="customWidthSpotlight" value="1200" min="400" max="4000" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Height (pixels)</label>
+              <input type="number" id="customHeightSpotlight" value="900" min="300" max="3000" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button onclick="hideSpotlightExportModal()" style="padding: 8px 16px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-size: 0.875rem;">Cancel</button>
+        <button id="spotlightDownloadBtnInModal" style="padding: 8px 16px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 600;">Download Plot</button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

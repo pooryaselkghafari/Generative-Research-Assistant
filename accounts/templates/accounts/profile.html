@@ -1,0 +1,243 @@
+{% extends "engine/base.html" %}
+{% load static %}
+
+{% block title %}Profile - Analysis Assistant{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+  <div class="profile-header">
+    <h1>Profile Settings</h1>
+    <p>Manage your account and subscription</p>
+  </div>
+  
+  <div class="profile-grid">
+    <div class="profile-card">
+      <h2>Account Information</h2>
+      <div class="info-item">
+        <label>Username</label>
+        <span>{{ user.username }}</span>
+      </div>
+      <div class="info-item">
+        <label>Email</label>
+        <span>{{ user.email|default:"Not provided" }}</span>
+      </div>
+      <div class="info-item">
+        <label>Member since</label>
+        <span>{{ user.date_joined|date:"F d, Y" }}</span>
+      </div>
+    </div>
+    
+    <div class="profile-card">
+      <h2>Subscription</h2>
+      <div class="subscription-info">
+        <div class="subscription-badge {{ profile.subscription_type }}">
+          {{ profile.get_subscription_type_display }}
+        </div>
+        {% if profile.is_subscription_active %}
+          <p class="subscription-status active">
+            Active until {{ profile.subscription_end|date:"F d, Y" }}
+            ({{ profile.days_remaining }} days remaining)
+          </p>
+        {% else %}
+          <p class="subscription-status inactive">
+            {% if profile.subscription_type == 'free' %}
+              Free tier - <a href="{% url 'subscription' %}">Upgrade now</a>
+            {% else %}
+              Expired - <a href="{% url 'subscription' %}">Renew subscription</a>
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+      
+      <div class="subscription-limits">
+        <h3>Current Limits</h3>
+        <div class="limit-item">
+          <span>Datasets</span>
+          <span>{{ user.datasets.count }}/{{ profile.max_datasets|default:"∞" }}</span>
+        </div>
+        <div class="limit-item">
+          <span>Sessions</span>
+          <span>{{ user.sessions.count }}/{{ profile.max_sessions|default:"∞" }}</span>
+        </div>
+        <div class="limit-item">
+          <span>Max file size</span>
+          <span>{{ profile.max_file_size_mb|default:"∞" }} MB</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="profile-actions">
+    <a href="{% url 'subscription' %}" class="btn btn-primary">
+      Manage Subscription
+    </a>
+    <a href="{% url 'index' %}" class="btn btn-secondary">
+      Back to Dashboard
+    </a>
+  </div>
+</div>
+
+<style>
+.profile-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.profile-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.profile-header h1 {
+  margin: 0 0 8px 0;
+  color: #1f2937;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.profile-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 18px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 40px;
+}
+
+.profile-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 30px;
+}
+
+.profile-card h2 {
+  margin: 0 0 20px 0;
+  color: #1f2937;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-item label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.info-item span {
+  color: #6b7280;
+}
+
+.subscription-info {
+  margin-bottom: 30px;
+}
+
+.subscription-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.subscription-badge.free {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.subscription-badge.basic {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.subscription-badge.pro {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.subscription-badge.enterprise {
+  background: #e0e7ff;
+  color: #7c3aed;
+}
+
+.subscription-status {
+  margin: 0;
+  font-size: 14px;
+}
+
+.subscription-status.active {
+  color: #059669;
+}
+
+.subscription-status.inactive {
+  color: #dc2626;
+}
+
+.subscription-status a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.subscription-status a:hover {
+  text-decoration: underline;
+}
+
+.subscription-limits h3 {
+  margin: 0 0 15px 0;
+  color: #374151;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.limit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.limit-item span:first-child {
+  color: #6b7280;
+}
+
+.limit-item span:last-child {
+  color: #374151;
+  font-weight: 500;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .profile-actions {
+    flex-direction: column;
+  }
+}
+</style>
+{% endblock %}

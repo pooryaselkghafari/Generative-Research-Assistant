@@ -1,0 +1,69 @@
+<div class="grid">
+  {% if result_stats %}
+    <div class="card">
+      <div class="h">Model Fit</div>
+      <div class="kpi">
+        {% if result_stats.r2 is not None %}
+          <div class="k"><div class="kname">R²</div><div class="kval">{{ result_stats.r2|floatformat:3 }}</div></div>
+        {% endif %}
+        {% if result_stats.adj_r2 is not None %}
+          <div class="k"><div class="kname">Adj. R²</div><div class="kval">{{ result_stats.adj_r2|floatformat:3 }}</div></div>
+        {% endif %}
+        {% if result_stats.aic is not None %}
+          <div class="k"><div class="kname">AIC</div><div class="kval">{{ result_stats.aic|floatformat:3 }}</div></div>
+        {% endif %}
+        {% if result_stats.bic is not None %}
+          <div class="k"><div class="kname">BIC</div><div class="kval">{{ result_stats.bic|floatformat:3 }}</div></div>
+        {% endif %}
+        {% if result_stats.n is not None %}
+          <div class="k"><div class="kname">N</div><div class="kval">{{ result_stats.n }}</div></div>
+        {% endif %}
+      </div>
+      <div class="subtle">KPIs shown depend on toggles you set in the sidebar.</div>
+    </div>
+  {% endif %}
+
+  <div class="results-grid">
+    <div class="card">
+      <div class="h">Coefficients</div>
+      {% if model_table_rows %}
+        <div style="max-height: 60vh; overflow:auto;">
+          <table class="table">
+            <thead>
+              <tr>
+                {% for col in model_table_cols %}
+                  <th>{{ col }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in model_table_rows %}
+                <tr>
+                  {% for col in model_table_cols %}
+                    {% if col == "Estimate" %}
+                      <td>{{ row[col]|safe }}</td>
+                    {% else %}
+                      <td>{{ row[col] }}</td>
+                    {% endif %}
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="muted">No coefficients to display.</div>
+      {% endif %}
+    </div>
+
+    <div class="plots">
+
+      {% if spotlight_html %}
+        <div class="card">
+          <div class="h">Spotlight Plot</div>
+          <div>{{ spotlight_html|safe }}</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

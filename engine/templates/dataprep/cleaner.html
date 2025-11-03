@@ -1,0 +1,1856 @@
+{% load static %}
+{% load engine_extras %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Data Cleaner — {{ dataset.name }}</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; background: #0b0f17; color: #e6edf3; }
+    header { position: sticky; top: 0; background: #0b0f17; border-bottom: 1px solid #1f2937; padding: 12px 16px; z-index: 20; display: flex; gap: 12px; align-items: center; }
+    .title { font-weight: 600; font-size: 1.05rem; margin-right: 12px; }
+    .btn { background: linear-gradient(135deg, #10b981, #059669); color: white; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.9; }
+    .btn.secondary { background: #111827; color: #e6edf3; border: 1px solid #334155; }
+    .wrap { padding: 12px 16px; }
+    table { border-collapse: collapse; width: 100%; background: #0f172a; border: 1px solid #1f2937; table-layout: auto; }
+    th, td { border-bottom: 1px solid #1f2937; padding: 8px; font-size: 13px; text-align: left; }
+    thead th { position: sticky; top: 0; background: #0b1220; z-index: 10; border-bottom: 2px solid #1f2937; }
+    thead th { min-width: 220px; }
+    input[type="text"], select { width: 100%; background: #0b0f17; color: #e6edf3; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; }
+    .order-input { display: none; margin-top: 6px; }
+    .hint { color: #9ca3af; font-size: 12px; }
+    .scroll-container { 
+      overflow-y: auto; 
+      overflow-x: auto; 
+      max-height: calc(100vh - 180px); 
+      border-radius: 8px; 
+      position: relative;
+      scroll-behavior: smooth;
+    }
+    .scroll-container::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scroll-container::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
+    .scroll-container::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+    .scroll-container::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    
+    /* Sort button styles */
+    .sort-btn {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .sort-btn:hover {
+      background: #374151;
+      color: #e5e7eb;
+    }
+    .sort-btn.active {
+      background: #3b82f6;
+      color: white;
+    }
+    .sort-btn .sort-icon {
+      font-size: 10px;
+      transition: transform 0.2s;
+    }
+    .sort-btn.asc .sort-icon {
+      transform: rotate(180deg);
+    }
+    
+    /* Modern Alert Styles */
+    .modern-alert {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      min-width: 350px;
+      max-width: 500px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      z-index: 10000;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      border-left: 4px solid;
+    }
+    
+    .modern-alert.show {
+      transform: translateX(0);
+    }
+    
+    .modern-alert.error {
+      border-left-color: #ef4444;
+    }
+    
+    .modern-alert.warning {
+      border-left-color: #f59e0b;
+    }
+    
+    .modern-alert.success {
+      border-left-color: #10b981;
+    }
+    
+    .modern-alert.info {
+      border-left-color: #3b82f6;
+    }
+    
+    .modern-alert-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+    }
+    
+    .modern-alert-title {
+      font-weight: 600;
+      font-size: 16px;
+      color: #1f2937;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .modern-alert-icon {
+      width: 20px;
+      height: 20px;
+    }
+    
+    .modern-alert-close {
+      background: none;
+      border: none;
+      color: #6b7280;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+    
+    .modern-alert-close:hover {
+      background: #f3f4f6;
+    }
+    
+    .modern-alert-body {
+      padding: 0 20px 16px;
+      color: #4b5563;
+      line-height: 1.5;
+    }
+    
+    .modern-alert-actions {
+      padding: 12px 20px 16px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    
+    .modern-alert-btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .modern-alert-btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .modern-alert-btn-primary:hover {
+      background: #2563eb;
+    }
+    
+    .modern-alert-btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+    
+    .modern-alert-btn-secondary:hover {
+      background: #e5e7eb;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">Data Cleaner — {{ dataset.name }}</div>
+    <form method="post" action="{% url 'dataprep_apply' dataset.id %}" id="cleaner-form">
+      {% csrf_token %}
+      <!-- submit lives here so it can include all inputs from the table below via form="cleaner-form" -->
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn" type="button" id="btnSaveOverwrite">Save</button>
+        <button class="btn secondary" type="button" id="btnSaveAs">Save as…</button>
+      </div>
+    </form>
+  </header>
+
+  <div class="wrap">
+    {% if is_large_dataset %}
+    <div id="large-dataset-warning" style="background: #fef3c7; color: #92400e; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #f59e0b; position: relative;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 18px;">⚠️</span>
+        <div style="flex: 1;">
+          <strong>Large Dataset Detected</strong><br>
+          This dataset has {{ total_rows|floatformat:0|add:0|floatformat:0 }} rows. 
+          Only the first 1,000 rows are shown in the preview below for performance reasons.
+          The data editor will work with the full dataset when you make changes.
+        </div>
+        <button 
+          type="button" 
+          onclick="closeLargeDatasetWarning()" 
+          style="background: none; border: none; color: #92400e; font-size: 20px; cursor: pointer; padding: 4px; margin-left: 8px; border-radius: 4px; transition: background-color 0.2s;"
+          onmouseover="this.style.backgroundColor='rgba(146, 64, 14, 0.1)'"
+          onmouseout="this.style.backgroundColor='transparent'"
+          title="Close warning"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+    {% endif %}
+    <div style="margin-bottom:16px;">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; flex-wrap: wrap;">
+        <button class="btn" type="button" id="btnDropRows" style="margin-right: 4px; background: linear-gradient(135deg, #dc2626, #b91c1c);">Drop Rows</button>
+        <button class="btn" type="button" id="btnDropColumns" style="margin-right: 4px; background: linear-gradient(135deg, #dc2626, #b91c1c);">Drop Columns</button>
+        <button class="btn" type="button" id="btnMergeColumns" style="margin-right: 4px;">Merge Columns</button>
+        <button class="btn" type="button" id="btnCodeColumns" style="margin-right: 4px;">Code Columns</button>
+        <button class="btn" type="button" id="btnNormalize" style="margin-right: 12px;">Normalize</button>
+        <label for="columnSearch" style="color:#9ca3af; font-size:14px; font-weight:500;">Search Columns:</label>
+        <input 
+          type="text" 
+          id="columnSearch" 
+          placeholder="Type to filter columns..." 
+          style="flex:1; max-width:300px; padding:8px 12px; border:2px solid #374151; border-radius:6px; background:#1f2937; color:#ffffff; font-size:14px; outline:none; transition:border-color 0.2s;"
+          oninput="filterColumns(this.value)"
+        />
+      </div>
+    </div>
+
+    <div class="scroll-container">
+      <table>
+        <thead>
+          <tr>
+            {% for col in columns %}
+              <th>
+                <input type="hidden" name="orig[]" value="{{ col }}" form="cleaner-form">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <input type="text" name="name[]" value="{{ col }}" form="cleaner-form" style="flex:1;">
+                  <button type="button" class="sort-btn" data-column="{{ col }}" onclick="sortColumn('{{ col }}')">
+                    <span class="sort-icon">▼</span>
+                    Sort
+                  </button>
+                </div>
+
+                <div style="margin-top:12px;">
+                  <select name="type[]" class="type-select" form="cleaner-form" data-col="{{ col }}" style="margin-top:8px;">
+                    {% with is_all_str=all_str_cols|get_item:col existing_type=existing_types|get_item:col %}
+                      {% for val,label in var_types %}
+                        {% if is_all_str and val == 'numeric' %}
+                          {# skip #}
+                        {% elif is_all_str and val == 'binary' %}
+                          {# skip #}
+                        {% elif is_all_str and val == 'count' %}
+                          {# skip #}
+                        {% else %}
+                          <option value="{{ val }}" {% if existing_type == val %}selected{% endif %}>{{ label }}</option>
+                        {% endif %}
+                      {% endfor %}
+                    {% endwith %}
+                  </select>
+                </div>
+
+                <div class="order-input" style="display:none;">
+                  <input type="hidden" name="order[]" form="cleaner-form" value="{{ existing_orders|get_item:col }}">
+                </div>
+              </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              {% for col in columns %}
+                <td>{{ row|get_item:col }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Ranking Modal -->
+  <div id="rankModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.55);" onclick="closeRankModal()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(640px, 92vw); background:#0f172a; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,.4);">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937;">
+        <strong id="rankTitle">Rank values</strong>
+        <button onclick="closeRankModal()" class="btn secondary" style="height:28px;">✕</button>
+      </div>
+      <div style="padding:12px 14px;">
+        <p class="hint">Drag to reorder from lowest to highest.</p>
+        <ul id="rankList" style="list-style:none; margin:10px 0; padding:0; max-height:360px; overflow:auto;">
+        </ul>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn secondary" onclick="closeRankModal()">Cancel</button>
+          <button class="btn" onclick="applyRank()">Apply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Normalize Modal -->
+  <div id="normalizeModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.55);" onclick="closeNormalizeModal()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(600px, 92vw); background:#0f172a; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,.4);">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937;">
+        <strong>Normalize Columns</strong>
+        <button onclick="closeNormalizeModal()" class="btn secondary" style="height:28px;">✕</button>
+      </div>
+      <div style="padding:12px 14px;">
+        <p class="hint" style="margin-bottom:16px;">Select numeric columns to normalize and choose the normalization method.</p>
+        
+        <div style="margin-bottom:16px;">
+          <label class="hint" style="display:block; margin-bottom:8px;">Normalization Method:</label>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="radio" name="normalizeMethod" value="min_max" checked style="margin:0;">
+              <span>Min-Max (0-1)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="radio" name="normalizeMethod" value="mean_center" style="margin:0;">
+              <span>Mean Center</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="radio" name="normalizeMethod" value="standardize" style="margin:0;">
+              <span>Standardize (Z-score)</span>
+            </label>
+          </div>
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <label class="hint" style="display:block; margin-bottom:8px;">Select Columns to Normalize:</label>
+          <div id="normalizeColumnList" style="max-height:200px; overflow-y:auto; border:1px solid #374151; border-radius:6px; padding:8px; background:#1f2937;">
+            <!-- Columns will be populated by JavaScript -->
+          </div>
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn secondary" onclick="closeNormalizeModal()">Cancel</button>
+          <button class="btn" onclick="applyNormalization()">Apply Normalization</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save As Modal -->
+  <div id="saveAsModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.55);" onclick="closeSaveAs()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(520px, 92vw); background:#0f172a; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,.4);">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937;">
+        <strong>Save dataset as…</strong>
+        <button onclick="closeSaveAs()" class="btn secondary" style="height:28px;">✕</button>
+      </div>
+      <div style="padding:12px 14px; display:flex; flex-direction:column; gap:10px;">
+        <div>
+          <label class="hint">Base file name</label>
+          <input class="input" id="saveAsName" type="text" placeholder="e.g., dataset_cleaned">
+        </div>
+        <div>
+          <label class="hint">Format</label>
+          <select class="input" id="saveAsFormat">
+            <option value="csv">CSV</option>
+            <option value="xlsx">Excel (.xlsx)</option>
+            <option value="tsv">TSV</option>
+            <option value="json">JSON</option>
+          </select>
+        </div>
+        <div class="hint">Files will be saved under: /media/datasets on the server, or choose Download to save locally.</div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+          <button class="btn secondary" type="button" onclick="closeSaveAs()">Cancel</button>
+          <button class="btn" type="button" onclick="confirmSaveAs('server')">Save to server</button>
+          <button class="btn" type="button" onclick="confirmSaveAs('download')">Download</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drop Rows Modal -->
+  <div id="dropRowsModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.55);" onclick="closeDropRows()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(800px, 95vw); max-height:90vh; background:#0f172a; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937;">
+        <strong>Drop Rows by Criteria</strong>
+        <button onclick="closeDropRows()" class="btn secondary" style="height:28px;">✕</button>
+      </div>
+      <div style="padding:16px;">
+        <div class="hint" style="margin-bottom:16px;">
+          Define conditions to drop rows. Use column names and operators like ==, !=, >, <, >=, <=, and functions like mean(), max(), min(), sum(), count(), std(), median().
+        </div>
+        
+        <div id="dropConditions" style="display:flex; flex-direction:column; gap:12px;">
+          <div class="condition-row" style="display:flex; flex-direction:column; gap:8px; padding:12px; background:#1f2937; border-radius:8px;">
+            <select class="condition-operator" style="background:#ffffff; color:#1f293b; border:1px solid #d1d5db; border-radius:6px; padding:6px 8px; width:80px; font-weight:500; font-size:13px;">
+              <option value="drop">Drop if</option>
+              <option value="keep">Keep if</option>
+            </select>
+            <textarea class="condition-formula" placeholder="col1 > 100 and col2 == 'str' or col3 < mean(col4)" style="width:100%; background:#ffffff; color:#1f293b; border:2px solid #d1d5db; border-radius:6px; padding:12px 16px; font-family:monospace; font-size:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); min-height:60px; resize:vertical; line-height:1.5;" onclick="clearPlaceholder(this)">col1 > 100 and col2 == 'str' or col3 < mean(col4)</textarea>
+          </div>
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:16px; gap:8px;">
+          <button type="button" onclick="closeDropRows()" class="btn secondary">Cancel</button>
+          <button type="button" onclick="previewDropRows()" class="btn">Preview</button>
+          <button type="button" onclick="applyDropRows()" class="btn">Apply</button>
+        </div>
+        
+        <div id="dropPreview" style="margin-top:16px; display:none;">
+          <div class="hint">Preview: <span id="dropCount">0</span> rows will be dropped</div>
+          <div id="dropPreviewTable" style="max-height:200px; overflow-y:auto; border:1px solid #1f2937; border-radius:6px; margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Merge Columns Modal -->
+  <div id="mergeColumnsModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.55);" onclick="closeMergeColumns()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(800px, 95vw); max-height:90vh; background:#0f172a; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937;">
+        <strong>Merge Columns</strong>
+        <button onclick="closeMergeColumns()" class="btn secondary" style="height:28px;">✕</button>
+      </div>
+      <div style="padding:16px;">
+        <div class="hint" style="margin-bottom:16px;">
+          Create a new column by combining existing columns using a formula. Use column names and operators like +, -, *, /, and functions like mean(), max(), min(), sum(), count(), std(), median().
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <label class="field-label" style="display:block; margin-bottom:8px;">New Column Name:</label>
+          <input 
+            type="text" 
+            id="mergeColumnName" 
+            placeholder="Enter new column name..." 
+            style="width:100%; background:#ffffff; color:#1f293b; border:2px solid #d1d5db; border-radius:6px; padding:12px 16px; font-size:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1);"
+          />
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <label class="field-label" style="display:block; margin-bottom:8px;">Merge Formula:</label>
+          <textarea 
+            id="mergeFormula" 
+            placeholder="col1 + col2 or col1 * col2 / col3 or mean(col1, col2)" 
+            style="width:100%; background:#ffffff; color:#1f293b; border:2px solid #d1d5db; border-radius:6px; padding:12px 16px; font-family:monospace; font-size:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); min-height:80px; resize:vertical; line-height:1.5;" 
+            oninput="setupAutocomplete(this)" 
+            onclick="clearPlaceholder(this)"
+          >col1 + col2 or col1 * col2 / col3 or mean(col1, col2)</textarea>
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:16px; gap:8px;">
+          <button type="button" onclick="closeMergeColumns()" class="btn secondary">Cancel</button>
+          <button type="button" onclick="previewMergeColumns()" class="btn">Preview</button>
+          <button type="button" onclick="applyMergeColumns()" class="btn">Apply</button>
+        </div>
+        
+        <div id="mergePreview" style="margin-top:16px; display:none;">
+          <div class="hint">Preview: New column will be created with <span id="mergeRowCount">0</span> values</div>
+          <div id="mergePreviewTable" style="max-height:200px; overflow-y:auto; border:1px solid #1f2937; border-radius:6px; margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Code Columns Modal -->
+  <div id="codeColumnsModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.55);" onclick="closeCodeColumns()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(800px, 95vw); max-height:90vh; background:#0f172a; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937;">
+        <strong>Code Columns</strong>
+        <button onclick="closeCodeColumns()" class="btn secondary" style="height:28px;">✕</button>
+      </div>
+      <div style="padding:16px;">
+        <div class="hint" style="margin-bottom:16px;">
+          Select a column to recode its values. You can replace each unique value with a custom value of your choice.
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <label class="field-label" style="display:block; margin-bottom:8px;">Select Column to Code:</label>
+          <select 
+            id="codeColumnSelect" 
+            style="width:100%; background:#ffffff; color:#1f293b; border:2px solid #d1d5db; border-radius:6px; padding:12px 16px; font-size:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1);"
+            onchange="loadColumnValues()"
+          >
+            <option value="">Select a column...</option>
+          </select>
+        </div>
+        
+        <div id="codingInterface" style="display:none;">
+          <div style="margin-bottom:16px;">
+            <label class="field-label" style="display:block; margin-bottom:8px;">Recode Values:</label>
+            <div id="valueMappingList" style="max-height:300px; overflow-y:auto; border:1px solid #374151; border-radius:6px; padding:8px; background:#1f2937;">
+              <!-- Value mappings will be populated here -->
+            </div>
+          </div>
+          
+          <div style="margin-bottom:16px;">
+            <label class="field-label" style="display:block; margin-bottom:8px;">Output Options:</label>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <input type="radio" name="codingMode" value="replace" checked style="margin:0;">
+                <span>Replace original column</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <input type="radio" name="codingMode" value="new" style="margin:0;">
+                <span>Create new column</span>
+              </label>
+            </div>
+            
+            <div id="newColumnNameDiv" style="display:none;">
+              <label class="field-label" style="display:block; margin-bottom:8px;">New Column Name:</label>
+              <input 
+                type="text" 
+                id="newColumnName" 
+                placeholder="Enter new column name..." 
+                style="width:100%; background:#ffffff; color:#1f293b; border:2px solid #d1d5db; border-radius:6px; padding:12px 16px; font-size:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1);"
+              />
+            </div>
+          </div>
+          
+          <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:16px; gap:8px;">
+            <button type="button" onclick="closeCodeColumns()" class="btn secondary">Cancel</button>
+            <button type="button" onclick="applyColumnCoding()" class="btn">Apply Coding</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drop Columns Modal -->
+  <div id="dropColumnsModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.55);" onclick="closeDropColumns()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(600px, 95vw); max-height:90vh; background:#0f172a; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937;">
+        <strong>Drop Columns</strong>
+        <button onclick="closeDropColumns()" class="btn secondary" style="height:28px;">✕</button>
+      </div>
+      <div style="padding:16px;">
+        <div class="hint" style="margin-bottom:16px;">
+          Select one or more columns to delete from the dataset. This action cannot be undone.
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <label class="hint" style="display:block; margin-bottom:8px;">Select Columns to Drop:</label>
+            <div style="display:flex; gap:8px;">
+              <button type="button" onclick="selectAllColumns()" class="btn secondary" style="font-size:12px; padding:4px 8px;">Select All</button>
+              <button type="button" onclick="deselectAllColumns()" class="btn secondary" style="font-size:12px; padding:4px 8px;">Deselect All</button>
+            </div>
+          </div>
+          <div id="dropColumnsList" style="max-height:400px; overflow-y:auto; border:1px solid #1f2937; border-radius:6px; padding:8px; background:#0b0f17;">
+            <!-- Columns will be populated by JavaScript -->
+          </div>
+        </div>
+        
+        <div id="dropColumnsCount" style="margin-bottom:16px; padding:12px; background:#1f2937; border-radius:6px; font-size:14px;">
+          <strong>0 columns</strong> selected for deletion
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:16px; gap:8px;">
+          <button type="button" onclick="closeDropColumns()" class="btn secondary">Cancel</button>
+          <button type="button" onclick="applyDropColumns()" class="btn" id="btnApplyDropColumns" disabled>Drop Selected Columns</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script id="uniques-data" type="application/json">{{ uniques_json|safe }}</script>
+  <script id="columns-data" type="application/json">{{ columns_json|safe }}</script>
+  <script src="{% static 'engine/dataprep/cleaner.js' %}"></script>
+  <script>
+    // Drop Rows functionality
+    let availableColumns = [];
+    
+    // Sorting functionality
+    let currentSort = { column: null, direction: 'asc' };
+    let originalData = [];
+    
+    // Clear placeholder text when user clicks on textarea
+    function clearPlaceholder(textarea) {
+      if (textarea.value === textarea.placeholder) {
+        textarea.value = '';
+        textarea.style.color = '#1f293b'; // Ensure text color is dark
+      }
+    }
+    
+    // Filter columns based on search input
+    function filterColumns(searchTerm) {
+      const table = document.querySelector('table');
+      const headers = table.querySelectorAll('thead th');
+      const searchLower = searchTerm.toLowerCase();
+      
+      headers.forEach((header, index) => {
+        // Get the column name from the input field
+        const nameInput = header.querySelector('input[name="name[]"]');
+        if (nameInput) {
+          const columnName = nameInput.value.toLowerCase();
+          const shouldShow = columnName.includes(searchLower);
+          
+          // Show/hide the entire column
+          header.style.display = shouldShow ? '' : 'none';
+          
+          // Also hide corresponding data cells in each row
+          const rows = table.querySelectorAll('tbody tr');
+          rows.forEach(row => {
+            const cell = row.children[index];
+            if (cell) {
+              cell.style.display = shouldShow ? '' : 'none';
+            }
+          });
+        }
+      });
+      
+      // Update search input border color based on results
+      const searchInput = document.getElementById('columnSearch');
+      const visibleColumns = Array.from(headers).filter(header => 
+        header.style.display !== 'none'
+      ).length;
+      
+      if (searchTerm && visibleColumns === 0) {
+        searchInput.style.borderColor = '#ef4444'; // Red for no results
+      } else if (searchTerm && visibleColumns > 0) {
+        searchInput.style.borderColor = '#10b981'; // Green for results found
+      } else {
+        searchInput.style.borderColor = '#374151'; // Default gray
+      }
+    }
+    
+    // Modern Alert Functions
+    function showModernAlert(message, type = 'info') {
+      const alert = createModernAlert(message, type);
+      document.body.appendChild(alert);
+      
+      // Trigger animation
+      setTimeout(() => alert.classList.add('show'), 10);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        alert.classList.remove('show');
+        setTimeout(() => document.body.removeChild(alert), 300);
+      }, 5000);
+    }
+    
+    function showModernConfirm(message, type = 'warning') {
+      return new Promise((resolve) => {
+        const alert = createModernAlert(message, type, true);
+        document.body.appendChild(alert);
+        
+        // Trigger animation
+        setTimeout(() => alert.classList.add('show'), 10);
+        
+        // Handle button clicks
+        const confirmBtn = alert.querySelector('.modern-alert-btn-primary');
+        const cancelBtn = alert.querySelector('.modern-alert-btn-secondary');
+        
+        confirmBtn.addEventListener('click', () => {
+          alert.classList.remove('show');
+          setTimeout(() => {
+            document.body.removeChild(alert);
+            resolve(true);
+          }, 300);
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+          alert.classList.remove('show');
+          setTimeout(() => {
+            document.body.removeChild(alert);
+            resolve(false);
+          }, 300);
+        });
+      });
+    }
+    
+    function createModernAlert(message, type = 'info', isConfirm = false) {
+      const alert = document.createElement('div');
+      alert.className = `modern-alert ${type}`;
+      
+      const icons = {
+        error: '❌',
+        warning: '⚠️',
+        success: '✅',
+        info: 'ℹ️'
+      };
+      
+      const titles = {
+        error: 'Error',
+        warning: 'Warning',
+        success: 'Success',
+        info: 'Information'
+      };
+      
+      if (isConfirm) {
+        alert.innerHTML = `
+          <div class="modern-alert-header">
+            <div class="modern-alert-title">
+              <span class="modern-alert-icon">${icons[type]}</span>
+              ${titles[type]}
+            </div>
+          </div>
+          <div class="modern-alert-body">${message}</div>
+          <div class="modern-alert-actions">
+            <button class="modern-alert-btn modern-alert-btn-secondary">Cancel</button>
+            <button class="modern-alert-btn modern-alert-btn-primary">Confirm</button>
+          </div>
+        `;
+      } else {
+        alert.innerHTML = `
+          <div class="modern-alert-header">
+            <div class="modern-alert-title">
+              <span class="modern-alert-icon">${icons[type]}</span>
+              ${titles[type]}
+            </div>
+            <button class="modern-alert-close" onclick="this.closest('.modern-alert').classList.remove('show'); setTimeout(() => this.closest('.modern-alert').remove(), 300);">✕</button>
+          </div>
+          <div class="modern-alert-body">${message}</div>
+        `;
+      }
+      
+      return alert;
+    }
+    
+    // Load available columns
+    document.addEventListener('DOMContentLoaded', function() {
+      const columnsData = document.getElementById('columns-data');
+      if (columnsData) {
+        try {
+          availableColumns = JSON.parse(columnsData.textContent);
+          console.log('Loaded columns:', availableColumns);
+        } catch(e) {
+          console.error('Error parsing columns data:', e);
+        }
+      } else {
+        console.error('No columns-data element found');
+      }
+      
+      // Initialize drop rows button
+      const btnDropRows = document.getElementById('btnDropRows');
+      console.log('Drop rows button found:', btnDropRows);
+      if (btnDropRows) {
+        btnDropRows.addEventListener('click', function(e) {
+          console.log('Drop rows button clicked');
+          e.preventDefault();
+          openDropRows();
+        });
+        console.log('Drop rows button event listener added');
+      } else {
+        console.error('Drop rows button not found');
+      }
+      
+      // Initialize drop columns button
+      const btnDropColumns = document.getElementById('btnDropColumns');
+      if (btnDropColumns) {
+        btnDropColumns.addEventListener('click', function(e) {
+          e.preventDefault();
+          openDropColumns();
+        });
+      }
+      
+      const btnNormalize = document.getElementById('btnNormalize');
+      if (btnNormalize) {
+        btnNormalize.addEventListener('click', function(e) {
+          e.preventDefault();
+          openNormalizeModal();
+        });
+      }
+      
+      const btnMergeColumns = document.getElementById('btnMergeColumns');
+      if (btnMergeColumns) {
+        btnMergeColumns.addEventListener('click', function(e) {
+          e.preventDefault();
+          openMergeColumns();
+        });
+      }
+      
+      const btnCodeColumns = document.getElementById('btnCodeColumns');
+      if (btnCodeColumns) {
+        btnCodeColumns.addEventListener('click', function(e) {
+          e.preventDefault();
+          openCodeColumns();
+        });
+      }
+    });
+    
+    function openDropRows() {
+      console.log('openDropRows called');
+      const modal = document.getElementById('dropRowsModal');
+      console.log('Modal found:', modal);
+      if (modal) {
+        modal.style.display = 'block';
+        console.log('Modal displayed');
+        // Reset conditions
+        const conditionsContainer = document.getElementById('dropConditions');
+        if (conditionsContainer) {
+          conditionsContainer.innerHTML = '';
+          addCondition();
+        }
+        const preview = document.getElementById('dropPreview');
+        if (preview) {
+          preview.style.display = 'none';
+        }
+      } else {
+        console.error('Drop rows modal not found');
+      }
+    }
+    
+    function closeDropRows() {
+      const modal = document.getElementById('dropRowsModal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    function addCondition() {
+      const container = document.getElementById('dropConditions');
+      const conditionRow = document.createElement('div');
+      conditionRow.className = 'condition-row';
+      conditionRow.style.cssText = 'display:flex; flex-direction:column; gap:8px; padding:12px; background:#1f2937; border-radius:8px;';
+      
+      conditionRow.innerHTML = `
+        <select class="condition-operator" style="background:#ffffff; color:#1f293b; border:1px solid #d1d5db; border-radius:6px; padding:6px 8px; width:80px; font-weight:500; font-size:13px;">
+          <option value="drop">Drop if</option>
+          <option value="keep">Keep if</option>
+        </select>
+        <textarea class="condition-formula" placeholder="col1 > 100 and col2 == 'str' or col3 < mean(col4)" style="width:100%; background:#ffffff; color:#1f293b; border:2px solid #d1d5db; border-radius:6px; padding:12px 16px; font-family:monospace; font-size:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); min-height:60px; resize:vertical; line-height:1.5;" oninput="setupAutocomplete(this)" onclick="clearPlaceholder(this)">col1 > 100 and col2 == 'str' or col3 < mean(col4)</textarea>
+      `;
+      
+      container.appendChild(conditionRow);
+      setupAutocomplete(conditionRow.querySelector('.condition-formula'));
+    }
+    
+    
+    function setupAutocomplete(input) {
+      if (!input) return;
+      
+      // Create autocomplete dropdown
+      let dropdown = input.parentNode.querySelector('.autocomplete-dropdown');
+      if (!dropdown) {
+        dropdown = document.createElement('div');
+        dropdown.className = 'autocomplete-dropdown';
+        dropdown.style.cssText = 'position:absolute; top:100%; left:0; right:0; background:#ffffff; border:2px solid #3b82f6; border-radius:6px; max-height:200px; overflow-y:auto; z-index:1000; display:none; box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+        input.parentNode.style.position = 'relative';
+        input.parentNode.appendChild(dropdown);
+      }
+      
+      // Define operators with distinct colors
+      const operators = [
+        { text: 'AND', color: '#ef4444', bgColor: '#fef2f2' },
+        { text: 'OR', color: '#3b82f6', bgColor: '#eff6ff' },
+        { text: '==', color: '#059669', bgColor: '#ecfdf5' },
+        { text: '!=', color: '#dc2626', bgColor: '#fef2f2' },
+        { text: '>', color: '#7c3aed', bgColor: '#f3e8ff' },
+        { text: '<', color: '#ea580c', bgColor: '#fff7ed' },
+        { text: '>=', color: '#0891b2', bgColor: '#ecfeff' },
+        { text: '<=', color: '#be185d', bgColor: '#fdf2f8' },
+        { text: '*', color: '#9333ea', bgColor: '#faf5ff' },
+        { text: '/', color: '#c026d3', bgColor: '#fdf4ff' }
+      ];
+      
+      // Define statistical functions with descriptions
+      const statisticalFunctions = [
+        { text: 'min(', description: 'Minimum value', color: '#059669', bgColor: '#ecfdf5' },
+        { text: 'max(', description: 'Maximum value', color: '#059669', bgColor: '#ecfdf5' },
+        { text: 'mean(', description: 'Mean (average)', color: '#059669', bgColor: '#ecfdf5' },
+        { text: 'median(', description: 'Median value', color: '#059669', bgColor: '#ecfdf5' },
+        { text: 'std(', description: 'Standard deviation', color: '#059669', bgColor: '#ecfdf5' },
+        { text: 'var(', description: 'Variance', color: '#059669', bgColor: '#ecfdf5' },
+        { text: 'log(', description: 'Logarithm (base 10)', color: '#059669', bgColor: '#ecfdf5' }
+      ];
+      
+      input.addEventListener('input', function() {
+        const query = this.value;
+        const cursorPos = this.selectionStart;
+        const beforeCursor = query.substring(0, cursorPos);
+        
+        // Find the current word being typed
+        const wordMatch = beforeCursor.match(/\b[a-zA-Z_][a-zA-Z0-9_]*$/);
+        const currentWord = wordMatch ? wordMatch[0] : '';
+        
+        if (currentWord.length >= 1) {
+          console.log('Current word:', currentWord);
+          console.log('Available columns:', availableColumns);
+          
+          // Get column matches
+          const columnMatches = availableColumns.filter(col => 
+            col.toLowerCase().includes(currentWord.toLowerCase())
+          ).slice(0, 8);
+          
+          console.log('Column matches:', columnMatches);
+          
+          // Get operator matches
+          const operatorMatches = operators.filter(op => 
+            op.text.toLowerCase().includes(currentWord.toLowerCase())
+          );
+          
+          // Get statistical function matches (case-insensitive)
+          const functionMatches = statisticalFunctions.filter(func => 
+            func.text.toLowerCase().includes(currentWord.toLowerCase())
+          );
+          
+          console.log('Operator matches:', operatorMatches);
+          console.log('Function matches:', functionMatches);
+          
+          const allMatches = [...columnMatches, ...operatorMatches, ...functionMatches];
+          
+          if (allMatches.length > 0) {
+            dropdown.innerHTML = '';
+            
+            // Add column matches
+            columnMatches.forEach(match => {
+              const item = document.createElement('div');
+              item.style.cssText = 'padding:10px 12px; cursor:pointer; border-bottom:1px solid #e5e7eb; color:#1f293b; font-size:14px; transition:background-color 0.2s; display:flex; align-items:center;';
+              item.innerHTML = `
+                <span style="margin-right:8px; color:#6b7280; font-size:12px;">📊</span>
+                <span>${match}</span>
+              `;
+              item.addEventListener('mouseenter', () => {
+                item.style.backgroundColor = '#f3f4f6';
+              });
+              item.addEventListener('mouseleave', () => {
+                item.style.backgroundColor = 'transparent';
+              });
+              item.addEventListener('click', () => {
+                const newValue = beforeCursor.replace(new RegExp('\\b' + currentWord + '\\b$'), match) + query.substring(cursorPos);
+                this.value = newValue;
+                this.focus();
+                dropdown.style.display = 'none';
+              });
+              dropdown.appendChild(item);
+            });
+            
+            // Add operator matches
+            operatorMatches.forEach(op => {
+              const item = document.createElement('div');
+              item.style.cssText = `padding:10px 12px; cursor:pointer; border-bottom:1px solid #e5e7eb; font-size:14px; transition:background-color 0.2s; display:flex; align-items:center; background-color:${op.bgColor};`;
+              item.innerHTML = `
+                <span style="margin-right:8px; color:${op.color}; font-weight:bold; font-size:12px;">⚡</span>
+                <span style="color:${op.color}; font-weight:bold;">${op.text}</span>
+              `;
+              item.addEventListener('mouseenter', () => {
+                item.style.backgroundColor = '#f3f4f6';
+              });
+              item.addEventListener('mouseleave', () => {
+                item.style.backgroundColor = op.bgColor;
+              });
+              item.addEventListener('click', () => {
+                const newValue = beforeCursor.replace(new RegExp('\\b' + currentWord + '\\b$'), op.text) + query.substring(cursorPos);
+                this.value = newValue;
+                this.focus();
+                dropdown.style.display = 'none';
+              });
+              dropdown.appendChild(item);
+            });
+            
+            // Add statistical function matches
+            functionMatches.forEach(func => {
+              const item = document.createElement('div');
+              item.style.cssText = `padding:10px 12px; cursor:pointer; border-bottom:1px solid #e5e7eb; font-size:14px; transition:background-color 0.2s; display:flex; align-items:center; justify-content:space-between; background-color:${func.bgColor};`;
+              item.innerHTML = `
+                <div style="display:flex; align-items:center;">
+                  <span style="margin-right:8px; color:${func.color}; font-weight:bold; font-size:12px;">📐</span>
+                  <span style="color:${func.color}; font-weight:bold; font-family:monospace;">${func.text}</span>
+                </div>
+                <span style="color:#6b7280; font-size:12px; margin-left:8px;">${func.description}</span>
+              `;
+              item.addEventListener('mouseenter', () => {
+                item.style.backgroundColor = '#f3f4f6';
+              });
+              item.addEventListener('mouseleave', () => {
+                item.style.backgroundColor = func.bgColor;
+              });
+              item.addEventListener('click', () => {
+                // Replace the current word with the function name (keep original case if it's a prefix)
+                const regex = new RegExp('\\b' + currentWord + '\\b$', 'i');
+                const newValue = beforeCursor.replace(regex, func.text) + query.substring(cursorPos);
+                this.value = newValue;
+                this.focus();
+                // Move cursor to after the opening parenthesis
+                const newCursorPos = beforeCursor.replace(regex, func.text).length;
+                this.setSelectionRange(newCursorPos, newCursorPos);
+                dropdown.style.display = 'none';
+              });
+              dropdown.appendChild(item);
+            });
+            
+            dropdown.style.display = 'block';
+          } else {
+            dropdown.style.display = 'none';
+          }
+        } else {
+          dropdown.style.display = 'none';
+        }
+      });
+      
+      input.addEventListener('blur', function() {
+        setTimeout(() => dropdown.style.display = 'none', 200);
+      });
+    }
+    
+    async function previewDropRows() {
+      const conditions = collectDropConditions();
+      if (conditions.length === 0) {
+        showModernAlert('Please add at least one condition', 'warning');
+        return;
+      }
+      
+      // Validate conditions before sending
+      const validationError = validateConditions(conditions);
+      if (validationError) {
+        showModernAlert(validationError, 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/dataset/{{ dataset.id }}/preview-drop/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({ conditions: conditions })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          document.getElementById('dropCount').textContent = data.rows_to_drop;
+          
+          // Show preview table
+          const previewTable = document.getElementById('dropPreviewTable');
+          if (data.preview_rows && data.preview_rows.length > 0) {
+            let tableHTML = '<table style="width:100%; border-collapse:collapse;"><thead><tr>';
+            data.columns.forEach(col => {
+              tableHTML += `<th style="padding:8px; border-bottom:1px solid #334155; background:#0b1220;">${col}</th>`;
+            });
+            tableHTML += '</tr></thead><tbody>';
+            
+            data.preview_rows.forEach(row => {
+              tableHTML += '<tr>';
+              data.columns.forEach(col => {
+                tableHTML += `<td style="padding:6px 8px; border-bottom:1px solid #334155;">${row[col] || ''}</td>`;
+              });
+              tableHTML += '</tr>';
+            });
+            tableHTML += '</tbody></table>';
+            previewTable.innerHTML = tableHTML;
+          } else {
+            previewTable.innerHTML = '<div style="padding:20px; text-align:center; color:#9ca3af;">No rows match the criteria</div>';
+          }
+          
+          document.getElementById('dropPreview').style.display = 'block';
+        } else {
+          const error = await response.text();
+          showModernAlert('Error previewing drop conditions: ' + error, 'error');
+        }
+      } catch (error) {
+        showModernAlert('Error previewing drop conditions: ' + error.message, 'error');
+      }
+    }
+    
+    async function applyDropRows() {
+      const conditions = collectDropConditions();
+      if (conditions.length === 0) {
+        showModernAlert('Please add at least one condition', 'warning');
+        return;
+      }
+      
+      // Validate conditions before sending
+      const validationError = validateConditions(conditions);
+      if (validationError) {
+        showModernAlert(validationError, 'error');
+        return;
+      }
+      
+      // Get fresh preview count before showing confirmation
+      let rowCount = 0;
+      try {
+        const previewResponse = await fetch('/api/dataset/{{ dataset.id }}/preview-drop/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({ conditions: conditions })
+        });
+        
+        if (previewResponse.ok) {
+          const previewData = await previewResponse.json();
+          rowCount = previewData.rows_to_drop;
+          // Update the preview display
+          document.getElementById('dropCount').textContent = rowCount;
+          const preview = document.getElementById('dropPreview');
+          if (preview) {
+            preview.style.display = 'block';
+          }
+        } else {
+          const error = await previewResponse.text();
+          showModernAlert('Error previewing drop conditions: ' + error, 'error');
+          return;
+        }
+      } catch (error) {
+        showModernAlert('Error previewing drop conditions: ' + error.message, 'error');
+        return;
+      }
+      
+      const confirmed = await showModernConfirm(`This will drop ${rowCount} rows. Continue?`, 'warning');
+      if (!confirmed) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/dataset/{{ dataset.id }}/apply-drop/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({ conditions: conditions })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          showModernAlert(`Successfully dropped ${data.rows_dropped} rows. ${data.rows_remaining} rows remaining.`, 'success');
+          closeDropRows();
+          // Reload the page to show updated data
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          const error = await response.text();
+          showModernAlert('Error applying drop conditions: ' + error, 'error');
+        }
+      } catch (error) {
+        showModernAlert('Error applying drop conditions: ' + error.message, 'error');
+      }
+    }
+    
+    function collectDropConditions() {
+      const conditions = [];
+      document.querySelectorAll('.condition-row').forEach(row => {
+        const operator = row.querySelector('.condition-operator').value;
+        const formula = row.querySelector('.condition-formula').value.trim();
+        if (formula) {
+          conditions.push({ operator, formula });
+        }
+      });
+      return conditions;
+    }
+    
+    // Merge Columns functionality
+    function openMergeColumns() {
+      console.log('openMergeColumns called');
+      const modal = document.getElementById('mergeColumnsModal');
+      console.log('Modal found:', modal);
+      if (modal) {
+        modal.style.display = 'block';
+        console.log('Modal displayed');
+        // Reset form
+        document.getElementById('mergeColumnName').value = '';
+        document.getElementById('mergeFormula').value = 'col1 + col2 or col1 * col2 / col3 or mean(col1, col2)';
+        const preview = document.getElementById('mergePreview');
+        if (preview) {
+          preview.style.display = 'none';
+        }
+        // Setup autocomplete for the formula textarea
+        setupAutocomplete(document.getElementById('mergeFormula'));
+      } else {
+        console.error('Merge columns modal not found');
+      }
+    }
+    
+    function closeMergeColumns() {
+      const modal = document.getElementById('mergeColumnsModal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    async function previewMergeColumns() {
+      const columnName = document.getElementById('mergeColumnName').value.trim();
+      const formula = document.getElementById('mergeFormula').value.trim();
+      
+      if (!columnName) {
+        showModernAlert('Please enter a column name', 'warning');
+        return;
+      }
+      
+      if (!formula || formula === 'col1 + col2 or col1 * col2 / col3 or mean(col1, col2)') {
+        showModernAlert('Please enter a merge formula', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/dataprep/merge-columns-preview/{{ dataset.id }}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            column_name: columnName,
+            formula: formula
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          document.getElementById('mergeRowCount').textContent = data.row_count;
+          
+          // Show preview table
+          const previewTable = document.getElementById('mergePreviewTable');
+          previewTable.innerHTML = data.preview_html;
+          document.getElementById('mergePreview').style.display = 'block';
+        } else {
+          const error = await response.text();
+          showModernAlert('Error previewing merge: ' + error, 'error');
+        }
+      } catch (error) {
+        showModernAlert('Error previewing merge: ' + error.message, 'error');
+      }
+    }
+    
+    async function applyMergeColumns() {
+      const columnName = document.getElementById('mergeColumnName').value.trim();
+      const formula = document.getElementById('mergeFormula').value.trim();
+      
+      if (!columnName) {
+        showModernAlert('Please enter a column name', 'warning');
+        return;
+      }
+      
+      if (!formula || formula === 'col1 + col2 or col1 * col2 / col3 or mean(col1, col2)') {
+        showModernAlert('Please enter a merge formula', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/dataprep/merge-columns/{{ dataset.id }}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            column_name: columnName,
+            formula: formula
+          })
+        });
+        
+        if (response.ok) {
+          showModernAlert('Columns merged successfully!', 'success');
+          closeMergeColumns();
+          // Reload the page to show the new column
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          const error = await response.text();
+          showModernAlert('Error merging columns: ' + error, 'error');
+        }
+      } catch (error) {
+        showModernAlert('Error merging columns: ' + error.message, 'error');
+      }
+    }
+    
+    // Code Columns functionality
+    function openCodeColumns() {
+      console.log('openCodeColumns called');
+      const modal = document.getElementById('codeColumnsModal');
+      console.log('Modal found:', modal);
+      if (modal) {
+        modal.style.display = 'block';
+        console.log('Modal displayed');
+        
+        // Populate column dropdown
+        const columnSelect = document.getElementById('codeColumnSelect');
+        columnSelect.innerHTML = '<option value="">Select a column...</option>';
+        
+        availableColumns.forEach(col => {
+          const option = document.createElement('option');
+          option.value = col;
+          option.textContent = col;
+          columnSelect.appendChild(option);
+        });
+        
+        // Hide coding interface initially
+        document.getElementById('codingInterface').style.display = 'none';
+        
+        // Add event listeners for radio buttons
+        document.querySelectorAll('input[name="codingMode"]').forEach(radio => {
+          radio.addEventListener('change', function() {
+            const newColumnDiv = document.getElementById('newColumnNameDiv');
+            if (this.value === 'new') {
+              newColumnDiv.style.display = 'block';
+            } else {
+              newColumnDiv.style.display = 'none';
+            }
+          });
+        });
+      } else {
+        console.error('Code columns modal not found');
+      }
+    }
+    
+    function closeCodeColumns() {
+      const modal = document.getElementById('codeColumnsModal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    async function loadColumnValues() {
+      const columnName = document.getElementById('codeColumnSelect').value;
+      if (!columnName) {
+        document.getElementById('codingInterface').style.display = 'none';
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/dataprep/get-column-values/{{ dataset.id }}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({ column_name: columnName })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          populateValueMapping(data.unique_values);
+          document.getElementById('codingInterface').style.display = 'block';
+        } else {
+          const error = await response.text();
+          showModernAlert('Error loading column values: ' + error, 'error');
+        }
+      } catch (error) {
+        showModernAlert('Error loading column values: ' + error.message, 'error');
+      }
+    }
+    
+    function populateValueMapping(uniqueValues) {
+      const mappingList = document.getElementById('valueMappingList');
+      mappingList.innerHTML = '';
+      
+      uniqueValues.forEach(value => {
+        const mappingRow = document.createElement('div');
+        mappingRow.style.cssText = 'display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid #374151;';
+        
+        mappingRow.innerHTML = `
+          <div style="flex:1; color:#e5e7eb; font-weight:500;">${value}</div>
+          <div style="color:#9ca3af; font-size:14px;">→</div>
+          <input 
+            type="text" 
+            value="${value}" 
+            data-original="${value}"
+            style="flex:1; background:#ffffff; color:#1f293b; border:1px solid #d1d5db; border-radius:4px; padding:6px 8px; font-size:14px;"
+            placeholder="Enter new value..."
+          />
+        `;
+        
+        mappingList.appendChild(mappingRow);
+      });
+    }
+    
+    async function applyColumnCoding() {
+      const columnName = document.getElementById('codeColumnSelect').value;
+      if (!columnName) {
+        showModernAlert('Please select a column to code', 'warning');
+        return;
+      }
+      
+      // Get coding mode and new column name
+      const codingMode = document.querySelector('input[name="codingMode"]:checked').value;
+      const newColumnName = document.getElementById('newColumnName').value.trim();
+      
+      // Validate new column name if creating new column
+      if (codingMode === 'new') {
+        if (!newColumnName) {
+          showModernAlert('Please enter a name for the new column', 'warning');
+          return;
+        }
+        
+        // Check if new column name already exists
+        if (availableColumns.includes(newColumnName)) {
+          showModernAlert(`Column '${newColumnName}' already exists. Please choose a different name.`, 'warning');
+          return;
+        }
+      }
+      
+      // Collect value mappings
+      const valueMapping = {};
+      const mappingInputs = document.querySelectorAll('#valueMappingList input[type="text"]');
+      
+      mappingInputs.forEach(input => {
+        const originalValue = input.getAttribute('data-original');
+        const newValue = input.value.trim();
+        if (newValue && newValue !== originalValue) {
+          valueMapping[originalValue] = newValue;
+        }
+      });
+      
+      if (Object.keys(valueMapping).length === 0) {
+        showModernAlert('No value changes detected. Please modify at least one value.', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/dataprep/apply-column-coding/{{ dataset.id }}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            column_name: columnName,
+            value_mapping: valueMapping,
+            coding_mode: codingMode,
+            new_column_name: newColumnName
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const targetColumn = codingMode === 'new' ? newColumnName : columnName;
+          showModernAlert(`Successfully recoded column '${targetColumn}'`, 'success');
+          closeCodeColumns();
+          // Reload the page to show the updated data
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          const error = await response.text();
+          showModernAlert('Error applying column coding: ' + error, 'error');
+        }
+      } catch (error) {
+        showModernAlert('Error applying column coding: ' + error.message, 'error');
+      }
+    }
+    
+    function validateConditions(conditions) {
+      for (let i = 0; i < conditions.length; i++) {
+        const condition = conditions[i];
+        const formula = condition.formula.trim();
+        
+        if (!formula) {
+          return `Condition ${i + 1} is empty. Please provide a valid condition.`;
+        }
+        
+        // Check for common syntax errors
+        if (formula.includes('=') && !formula.includes('==') && !formula.includes('!=') && !formula.includes('>=') && !formula.includes('<=')) {
+          return `Condition ${i + 1}: Use == for equality comparison, not =. Did you mean: ${formula.replace('=', '==')}`;
+        }
+        
+        // Check for basic syntax
+        if (formula.includes('&&') || formula.includes('||')) {
+          return `Condition ${i + 1}: Use AND/OR instead of &&/||. Did you mean: ${formula.replace(/&&/g, 'AND').replace(/\|\|/g, 'OR')}`;
+        }
+        
+        // Check for invalid characters (allow parentheses for functions)
+        if (formula.match(/[^a-zA-Z0-9_\s=!<>()'".,+\-*/]/)) {
+          return `Condition ${i + 1}: Contains invalid characters. Only use letters, numbers, spaces, and operators (==, !=, >, <, >=, <=, AND, OR). Functions like mean(), max(), min(), sum(), count() are supported.`;
+        }
+      }
+      
+      return null; // No validation errors
+    }
+    
+    // Sorting functions
+    function sortColumn(columnName) {
+      console.log('Sorting column:', columnName);
+      
+      // Store original data if not already stored
+      if (originalData.length === 0) {
+        const tbody = document.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        originalData = rows.map(row => {
+          const cells = Array.from(row.querySelectorAll('td'));
+          return cells.map(cell => cell.textContent);
+        });
+      }
+      
+      // Determine sort direction
+      if (currentSort.column === columnName) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.column = columnName;
+        currentSort.direction = 'asc';
+      }
+      
+      // Get column index
+      const columnIndex = availableColumns.indexOf(columnName);
+      if (columnIndex === -1) {
+        console.error('Column not found:', columnName);
+        return;
+      }
+      
+      // Sort the data
+      const sortedData = [...originalData].sort((a, b) => {
+        const aVal = a[columnIndex];
+        const bVal = b[columnIndex];
+        
+        // Try to parse as numbers
+        const aNum = parseFloat(aVal);
+        const bNum = parseFloat(bVal);
+        const isNumeric = !isNaN(aNum) && !isNaN(bNum);
+        
+        if (isNumeric) {
+          // Numeric sorting
+          return currentSort.direction === 'asc' ? aNum - bNum : bNum - aNum;
+        } else {
+          // String sorting
+          const aStr = String(aVal).toLowerCase();
+          const bStr = String(bVal).toLowerCase();
+          if (currentSort.direction === 'asc') {
+            return aStr.localeCompare(bStr);
+          } else {
+            return bStr.localeCompare(aStr);
+          }
+        }
+      });
+      
+      // Update the table
+      updateTable(sortedData);
+      
+      // Update sort button states
+      updateSortButtons(columnName);
+    }
+    
+    function updateTable(data) {
+      const tbody = document.querySelector('tbody');
+      tbody.innerHTML = '';
+      
+      data.forEach(rowData => {
+        const row = document.createElement('tr');
+        rowData.forEach(cellData => {
+          const cell = document.createElement('td');
+          cell.textContent = cellData;
+          row.appendChild(cell);
+        });
+        tbody.appendChild(row);
+      });
+    }
+    
+    function updateSortButtons(activeColumn) {
+      // Reset all sort buttons
+      document.querySelectorAll('.sort-btn').forEach(btn => {
+        btn.classList.remove('active', 'asc', 'desc');
+        const icon = btn.querySelector('.sort-icon');
+        icon.textContent = '▼';
+      });
+      
+      // Update active sort button
+      const activeBtn = document.querySelector(`[data-column="${activeColumn}"]`);
+      if (activeBtn) {
+        activeBtn.classList.add('active', currentSort.direction);
+        const icon = activeBtn.querySelector('.sort-icon');
+        icon.textContent = currentSort.direction === 'asc' ? '▲' : '▼';
+      }
+    }
+
+    // Ensure proper scrolling behavior
+    document.addEventListener('DOMContentLoaded', function() {
+      const scrollContainer = document.querySelector('.scroll-container');
+      if (scrollContainer) {
+        console.log('Setting up scrolling for container:', scrollContainer);
+        
+        // Ensure the container can scroll to the very bottom
+        scrollContainer.style.paddingBottom = '60px';
+        scrollContainer.style.boxSizing = 'border-box';
+        
+        // Ensure the last row is visible by adding extra space
+        const table = scrollContainer.querySelector('table');
+        if (table) {
+          const tbody = table.querySelector('tbody');
+          if (tbody) {
+            console.log('Found tbody with', tbody.children.length, 'rows');
+            
+            // Add extra padding to the last row
+            const lastRow = tbody.lastElementChild;
+            if (lastRow) {
+              lastRow.style.borderBottom = '2px solid #1f2937';
+              lastRow.style.paddingBottom = '30px';
+              lastRow.style.marginBottom = '20px';
+            }
+            
+            // Add an extra empty row for better scrolling
+            const extraRow = document.createElement('tr');
+            extraRow.innerHTML = '<td colspan="' + table.querySelectorAll('th').length + '" style="height: 50px; border: none; background: transparent;"></td>';
+            tbody.appendChild(extraRow);
+            
+            console.log('Added extra row, total rows now:', tbody.children.length);
+          }
+        }
+        
+        // Force scroll to bottom multiple times to ensure it works
+        const forceScrollToBottom = () => {
+          const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+          console.log('Scroll info - Height:', scrollContainer.scrollHeight, 'Client:', scrollContainer.clientHeight, 'Max scroll:', maxScroll);
+          scrollContainer.scrollTop = maxScroll;
+        };
+        
+        // Try multiple times with different delays
+        setTimeout(forceScrollToBottom, 50);
+        setTimeout(forceScrollToBottom, 200);
+        setTimeout(forceScrollToBottom, 500);
+        
+        // Add a scroll event listener to ensure we can reach the bottom
+        scrollContainer.addEventListener('scroll', function() {
+          const scrollTop = scrollContainer.scrollTop;
+          const clientHeight = scrollContainer.clientHeight;
+          const scrollHeight = scrollContainer.scrollHeight;
+          const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10;
+          
+          console.log('Scroll event - Top:', scrollTop, 'Client:', clientHeight, 'Height:', scrollHeight, 'At bottom:', isAtBottom);
+          
+          if (isAtBottom) {
+            // Ensure we're truly at the bottom
+            scrollContainer.scrollTop = scrollHeight;
+          }
+        });
+        
+        // Add a resize observer to handle dynamic content changes
+        if (window.ResizeObserver) {
+          const resizeObserver = new ResizeObserver(() => {
+            setTimeout(forceScrollToBottom, 100);
+          });
+          resizeObserver.observe(scrollContainer);
+        }
+      } else {
+        console.error('Scroll container not found');
+      }
+    });
+
+    // Function to close the large dataset warning
+    function closeLargeDatasetWarning() {
+      const warning = document.getElementById('large-dataset-warning');
+      if (warning) {
+        warning.style.display = 'none';
+      }
+    }
+
+    // Normalization functions
+    function openNormalizeModal() {
+      const modal = document.getElementById('normalizeModal');
+      if (modal) {
+        // Get numeric columns from the dataset
+        const numericColumns = getNumericColumns();
+        
+        // Populate the column list
+        const columnList = document.getElementById('normalizeColumnList');
+        columnList.innerHTML = '';
+        
+        if (numericColumns.length === 0) {
+          columnList.innerHTML = '<p class="hint" style="text-align:center; color:#9ca3af;">No numeric columns found in the dataset.</p>';
+        } else {
+          numericColumns.forEach(col => {
+            const checkbox = document.createElement('label');
+            checkbox.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 0; cursor:pointer;';
+            checkbox.innerHTML = `
+              <input type="checkbox" value="${col}" style="margin:0;">
+              <span>${col}</span>
+            `;
+            columnList.appendChild(checkbox);
+          });
+        }
+        
+        modal.style.display = 'block';
+      }
+    }
+    
+    function closeNormalizeModal() {
+      const modal = document.getElementById('normalizeModal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    function getNumericColumns() {
+      // Get numeric columns from the dataset
+      // This would need to be passed from the backend or determined from the data
+      const numericColumns = [];
+      
+      // Check each column type to determine if it's numeric
+      document.querySelectorAll('select.type-select').forEach(select => {
+        const colName = select.getAttribute('data-col');
+        const currentType = select.value;
+        
+        // Consider numeric, count, and auto (if it's actually numeric) as numeric
+        if (currentType === 'numeric' || currentType === 'count' || 
+            (currentType === 'auto' && isColumnNumeric(colName))) {
+          numericColumns.push(colName);
+        }
+      });
+      
+      return numericColumns;
+    }
+    
+    function isColumnNumeric(colName) {
+      // This is a simplified check - in a real implementation, you'd check the actual data
+      // For now, we'll assume auto columns that don't look like text are numeric
+      return true; // Simplified for now
+    }
+    
+    async function applyNormalization() {
+      const selectedColumns = [];
+      const method = document.querySelector('input[name="normalizeMethod"]:checked').value;
+      
+      // Get selected columns
+      document.querySelectorAll('#normalizeColumnList input[type="checkbox"]:checked').forEach(checkbox => {
+        selectedColumns.push(checkbox.value);
+      });
+      
+      if (selectedColumns.length === 0) {
+        showModernAlert('Please select at least one column to normalize', 'warning');
+        return;
+      }
+      
+      try {
+        // Send normalization request to backend
+        const response = await fetch(`/dataprep/normalize/{{ dataset.id }}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            columns: selectedColumns,
+            method: method
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          showModernAlert(`Successfully normalized ${result.normalized_columns.length} columns`, 'success');
+          
+          // Close modal
+          closeNormalizeModal();
+          
+          // Reload the page to show the new normalized columns
+          window.location.reload();
+        } else {
+          const error = await response.json();
+          showModernAlert(`Error: ${error.error || 'Failed to normalize columns'}`, 'error');
+        }
+      } catch (error) {
+        console.error('Normalization error:', error);
+        showModernAlert('Failed to normalize columns. Please try again.', 'error');
+      }
+    }
+
+    // Drop Columns functionality
+    function openDropColumns() {
+      const modal = document.getElementById('dropColumnsModal');
+      if (modal) {
+        modal.style.display = 'block';
+        populateDropColumnsList();
+        updateDropColumnsCount();
+      }
+    }
+    
+    function closeDropColumns() {
+      const modal = document.getElementById('dropColumnsModal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    function populateDropColumnsList() {
+      const listContainer = document.getElementById('dropColumnsList');
+      if (!listContainer || !availableColumns || availableColumns.length === 0) {
+        return;
+      }
+      
+      listContainer.innerHTML = '';
+      availableColumns.forEach(col => {
+        const checkboxContainer = document.createElement('label');
+        checkboxContainer.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 4px; cursor: pointer; transition: background-color 0.2s;';
+        checkboxContainer.onmouseover = function() { this.style.backgroundColor = '#1f2937'; };
+        checkboxContainer.onmouseout = function() { this.style.backgroundColor = 'transparent'; };
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = col;
+        checkbox.style.cssText = 'margin: 0; cursor: pointer;';
+        checkbox.addEventListener('change', updateDropColumnsCount);
+        
+        const label = document.createElement('span');
+        label.textContent = col;
+        label.style.cssText = 'color: #e6edf3; font-size: 14px;';
+        
+        checkboxContainer.appendChild(checkbox);
+        checkboxContainer.appendChild(label);
+        listContainer.appendChild(checkboxContainer);
+      });
+    }
+    
+    function updateDropColumnsCount() {
+      const checkboxes = document.querySelectorAll('#dropColumnsList input[type="checkbox"]');
+      const checked = Array.from(checkboxes).filter(cb => cb.checked);
+      const countElement = document.getElementById('dropColumnsCount');
+      const applyButton = document.getElementById('btnApplyDropColumns');
+      
+      if (countElement) {
+        countElement.innerHTML = `<strong>${checked.length} column${checked.length !== 1 ? 's' : ''}</strong> selected for deletion`;
+      }
+      
+      if (applyButton) {
+        applyButton.disabled = checked.length === 0;
+      }
+    }
+    
+    function selectAllColumns() {
+      const checkboxes = document.querySelectorAll('#dropColumnsList input[type="checkbox"]');
+      checkboxes.forEach(cb => cb.checked = true);
+      updateDropColumnsCount();
+    }
+    
+    function deselectAllColumns() {
+      const checkboxes = document.querySelectorAll('#dropColumnsList input[type="checkbox"]');
+      checkboxes.forEach(cb => cb.checked = false);
+      updateDropColumnsCount();
+    }
+    
+    async function applyDropColumns() {
+      const checkboxes = document.querySelectorAll('#dropColumnsList input[type="checkbox"]:checked');
+      const selectedColumns = Array.from(checkboxes).map(cb => cb.value);
+      
+      if (selectedColumns.length === 0) {
+        showModernAlert('Please select at least one column to drop', 'warning');
+        return;
+      }
+      
+      const confirmed = await showModernConfirm(
+        `This will permanently delete ${selectedColumns.length} column${selectedColumns.length !== 1 ? 's' : ''}: ${selectedColumns.join(', ')}. This action cannot be undone. Continue?`,
+        'warning'
+      );
+      
+      if (!confirmed) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/dataprep/drop-columns/{{ dataset.id }}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            columns: selectedColumns
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          showModernAlert(`Successfully dropped ${result.columns_dropped} column${result.columns_dropped !== 1 ? 's' : ''}. ${result.columns_remaining} column${result.columns_remaining !== 1 ? 's' : ''} remaining.`, 'success');
+          closeDropColumns();
+          // Reload the page to show updated columns
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          const error = await response.json();
+          showModernAlert(`Error: ${error.error || 'Failed to drop columns'}`, 'error');
+        }
+      } catch (error) {
+        console.error('Drop columns error:', error);
+        showModernAlert('Failed to drop columns. Please try again.', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

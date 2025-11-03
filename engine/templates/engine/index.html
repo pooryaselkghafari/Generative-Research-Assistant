@@ -1,0 +1,1119 @@
+{% extends "engine/base.html" %}
+{% load static %}
+{% block title %}Generative Research Assistant — Sessions{% endblock %}
+
+{% block extra_head %}
+<script>
+  // Set AI chat context when page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof aiChatContext !== 'undefined') {
+      aiChatContext = {
+        module: document.getElementById('moduleSelect')?.value || '',
+        dataset_name: document.querySelector('select[name="dataset_id"] option:checked')?.textContent || '',
+        formula: document.getElementById('equationBox')?.value || ''
+      };
+      
+      // Update context when form fields change
+      const moduleSelect = document.getElementById('moduleSelect');
+      const datasetSelect = document.querySelector('select[name="dataset_id"]');
+      const formulaInput = document.getElementById('equationBox');
+      
+      if (moduleSelect) {
+        moduleSelect.addEventListener('change', function() {
+          aiChatContext.module = this.value;
+        });
+      }
+      
+      if (datasetSelect) {
+        datasetSelect.addEventListener('change', function() {
+          aiChatContext.dataset_name = this.options[this.selectedIndex]?.textContent || '';
+        });
+      }
+      
+      if (formulaInput) {
+        formulaInput.addEventListener('input', function() {
+          aiChatContext.formula = this.value;
+        });
+      }
+    }
+  });
+</script>
+<style>
+  /* Loading spinner animation */
+  .loading-spinner {
+    animation: spin 2s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Modal animations */
+  .modal {
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  .modal-content {
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideIn {
+    from { 
+      opacity: 0;
+      transform: translateY(-50px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Progress bar animation */
+  #progressBar {
+    transition: width 0.5s ease-in-out;
+  }
+  
+  /* Loading status animation */
+  #currentStep {
+    transition: opacity 0.3s ease-in-out;
+  }
+</style>
+{% endblock %}
+{# BEFORE (line ~6) #}
+{# AFTER #}
+{% if current and current.dataset %}
+  <a class="btn secondary" href="{% url 'dataprep_open' current.dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+    Clean / Types…
+  </a>
+{% endif %}
+
+{% block sidebar %}
+
+  <section class="card">
+    <div class="card-header">
+      <h2 class="card-title">Sessions</h2>
+      <div class="card-actions">
+        <button id="selectAllBtn" class="btn btn-sm btn-ghost" onclick="toggleSelectAll()" style="display: none;">
+          Select All
+        </button>
+        <button id="bulkDeleteBtn" class="btn btn-sm btn-danger" onclick="bulkDeleteSessions()" style="display: none;">
+          Delete Selected
+        </button>
+      </div>
+    </div>
+    <div class="modern-search">
+      <div class="search-container">
+        <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 21L16.514 16.506L21 21ZM19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <input type="search" id="sessionFilter" placeholder="Search sessions..." oninput="filterSessions(this)" />
+        <button class="search-clear" id="searchClear" onclick="clearSearch()" style="display: none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="sessions-scroll-container">
+      <ul id="sessionList" class="list">
+        {% for s in sessions %}
+        <li class="list-row session-item" data-session-id="{{s.id}}">
+          <div class="row-left">
+            <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
+            <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
+            {% if not s.dataset_id %}<span class="badge warn" title="Dataset deleted">no dataset</span>{% endif %}
+          </div>
+          <div class="row-right">
+            <span class="muted small">{{s.updated_at|date:"M d, H:i"}}</span>
+            <button class="icon-btn danger" title="Delete session" aria-label="Delete session" onclick="showSingleDeleteConfirmation({{s.id}}, '{{s.name|escapejs}}')">✕</button>
+          </div>
+        </li>
+        {% empty %}
+        <li class="muted">No sessions yet</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <h2 class="card-title">Datasets</h2>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="dataset-count">{{ datasets|length }} dataset{{ datasets|length|pluralize }}</span>
+        <button id="mergeBtn" class="btn btn-sm" onclick="openMergeModal()" disabled style="background:linear-gradient(135deg, #f59e0b, #d97706); color:white; border:none; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; transition:all 0.2s;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right:4px;">
+            <path d="M17 3H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7V5h10v14zM9 7h6v2H9V7zm0 4h6v2H9v-2zm0 4h6v2H9v-2z"/>
+          </svg>
+          Merge
+        </button>
+      </div>
+    </div>
+    
+    {% if datasets %}
+    <div class="dataset-list">
+      {% for d in datasets %}
+      <div class="dataset-item">
+        <div style="margin-right:12px;">
+          <input type="checkbox" class="dataset-checkbox" data-dataset-id="{{ d.id }}" data-dataset-name="{{ d.name }}" onchange="updateMergeButton()" style="width: 20px; height: 20px; cursor: pointer;">
+        </div>
+        <div class="dataset-info">
+          <div class="dataset-name">
+            <span class="file-icon">
+              {% if d.name|slice:"-4:" == ".csv" %}
+                📊
+              {% elif d.name|slice:"-5:" == ".xlsx" or d.name|slice:"-4:" == ".xls" %}
+                📈
+              {% else %}
+                📄
+              {% endif %}
+            </span>
+            <span class="name" title="{{ d.name }}">{{ d.name }}</span>
+          </div>
+          <div class="dataset-meta">
+            <span class="upload-date">{{ d.uploaded_at|date:"M d, Y" }}</span>
+            <span class="upload-time">{{ d.uploaded_at|date:"H:i" }}</span>
+          </div>
+        </div>
+        <div class="dataset-actions">
+          <a class="action-btn primary" href="{% url 'dataprep_open' d.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);" title="Clean & Types">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+            </svg>
+          </a>
+          <button class="action-btn danger" type="button" title="Delete dataset" onclick="showDatasetDeleteConfirmation({{ d.id }}, '{{ d.name|escapejs }}')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4zM8 9h8v10H8V9z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">📊</div>
+      <p class="empty-text">No datasets yet</p>
+      <p class="empty-subtext">Upload your first dataset to get started</p>
+    </div>
+    {% endif %}
+
+    <div class="upload-section">
+      <h3 class="upload-title">Upload New Dataset</h3>
+      <form action="/datasets/upload/" method="post" enctype="multipart/form-data" class="upload-form">
+        {% csrf_token %}
+        <div class="form-group">
+          <label class="field-label">Display name (optional)</label>
+          <input class="input" type="text" name="dataset_name" placeholder="Enter a custom name for your dataset">
+        </div>
+        <div class="form-group">
+          <label class="dropzone" id="dropzone">
+            <input type="file" name="dataset" required accept=".csv,.xlsx,.xls" id="fileInput" />
+            <div class="dropzone-content">
+              <div class="dropzone-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 15v4H5v-4H3v6h18v-6h-2zm-7-1l4-4h-3V4h-2v6H8l4 4z"/>
+                </svg>
+              </div>
+              <div class="dropzone-text">
+                <span class="dropzone-main">Drop files here or click to upload</span>
+                <span class="dropzone-sub">Supports CSV, XLSX, and XLS files</span>
+              </div>
+            </div>
+            <div class="upload-progress" id="uploadProgress" style="display: none;">
+              <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+              </div>
+              <span class="progress-text" id="progressText">Uploading...</span>
+            </div>
+          </label>
+        </div>
+      </form>
+    </div>
+  </section>
+{% endblock %}
+
+{% block content %}
+<form action="/run/" method="post" class="card form" id="analysisForm" onsubmit="return handleFormSubmission()">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="{% if current %}update{% else %}new{% endif %}">
+  {% if current %}<input type="hidden" name="session_id" value="{{current.id}}">{% endif %}
+
+  <!-- Essentials -->
+  <div class="grid-3">
+    <div>
+      <label class="field-label">Session name</label>
+      <div class="modern-search">
+        <div class="search-container">
+          <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <input type="text" name="session_name" value="{{current.name}}" placeholder="e.g., Pilot model on v1 dataset">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <label class="field-label">Model</label>
+      <div class="modern-search">
+        <div class="search-container">
+          <svg class="search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <select name="module" id="moduleSelect" required>
+            <!-- Null placeholder (default) -->
+            <option value="" {% if not current or not current.module %}selected{% endif %}>Choose a model…</option>
+            {% for k, v in modules.items %}
+              {% if k != 'bayesian' %}
+                <option value="{{k}}" {% if current and current.module == k %}selected{% endif %}>
+                  {% if k == 'regression' %}Regression
+                  {% elif k == 'anova' %}ANOVA
+                  {% else %}{{k|upper}}{% endif %}
+                </option>
+              {% endif %}
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <label class="field-label">Dataset</label>
+      <div class="modern-search">
+        <div class="search-container">
+          <svg class="search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 21v-4a2 2 0 012-2h4a2 2 0 012 2v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9 6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <select name="dataset_id" id="datasetSelect" required>
+            <option value="">Select a dataset</option>
+            {% for d in datasets %}
+              <option value="{{d.id}}" {% if current and current.dataset_id == d.id %}selected{% endif %}>{{d.name}}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analysis Type Selection -->
+  <div class="grid-1" style="margin-bottom: 20px;">
+    <div>
+      <label class="field-label">Analysis Type</label>
+      <div class="segment">
+        <label>
+          <input type="radio" name="analysis_type" value="frequentist" {% if not current or current.analysis_type == 'frequentist' %}checked{% endif %}>
+          <span>Frequentist</span>
+        </label>
+        <label>
+          <input type="radio" name="analysis_type" value="bayesian" {% if current and current.analysis_type == 'bayesian' %}checked{% endif %}>
+          <span>Bayesian</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat-like equation box -->
+  <div class="equation-wrap">
+    <label class="field-label">Equation(s)</label>
+    <div class="modern-search">
+      <div class="search-container equation-container" style="position: relative;">
+        <textarea name="formula" id="equationBox" rows="4"
+          placeholder="Select a dataset first, then type your equation(s)…
+
+Examples
+  y ~ x1 + x2 + x1:x2
+  y1 + y2 ~ x + z
+  y ~ x * m        (shorthand for x + m + x:m)" {% if not current %}disabled{% endif %}>{% if current %}{{current.formula}}{% endif %}</textarea>
+        <div id="autocompleteDropdown" class="autocomplete-dropdown" style="display: none;"></div>
+      </div>
+    </div>
+    <div id="equationStatus" class="equation-status" style="margin-top: 8px; font-size: 14px;"></div>
+  </div>
+
+  <!-- Action buttons moved to results page -->
+  <div class="toolbar">
+    <button id="visualizeBtn" class="btn btn-secondary" type="button" onclick="goToVisualize()" disabled
+            style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;"
+            title="Select model & dataset, then type an equation to visualize">
+      Visualize
+    </button>
+    <button id="runBtn" class="btn btn-neutral" type="submit" disabled
+            title="Select model & dataset, then type an equation">
+      {% if current %}Update{% else %}Run{% endif %}
+    </button>
+    <button id="askAiBtn" class="btn" type="button" onclick="toggleAIChatbox()" 
+            style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none;"
+            title="Ask AI Assistant">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+      Ask AI
+    </button>
+  </div>
+
+</form>
+
+<!-- Error Fix Popup Modal -->
+<div id="errorFixModal" class="error-modal" style="display: none;">
+  <div class="error-modal-backdrop" onclick="closeErrorModal()"></div>
+  <div class="error-modal-content">
+    <div class="error-modal-header">
+      <h3 id="errorModalTitle">Fix Equation Issues</h3>
+      <button class="error-modal-close" onclick="closeErrorModal()">×</button>
+    </div>
+    <div class="error-modal-body">
+      <div id="errorModalMessage" class="error-modal-message"></div>
+      <div class="error-modal-equation">
+        <label>Original:</label>
+        <div class="equation-display" id="originalEquation"></div>
+      </div>
+      <div class="error-modal-equation" id="fixedEquationSection" style="display: none;">
+        <label>Fixed:</label>
+        <div class="equation-display fixed" id="fixedEquation"></div>
+      </div>
+      <div class="error-modal-unknown-vars" id="unknownVarsSection" style="display: none;">
+        <label>Unknown variables:</label>
+        <div class="unknown-vars-list" id="unknownVarsList"></div>
+      </div>
+    </div>
+    <div class="error-modal-footer">
+      <button id="acceptFixBtn" class="btn btn-primary" onclick="acceptFix()" style="display: none;">
+        Accept Fix
+      </button>
+      <button id="dropUnknownBtn" class="btn btn-warning" onclick="dropUnknownVars()" style="display: none;">
+        Drop Unknown Variables
+      </button>
+      <button id="returnToEditBtn" class="btn btn-secondary" onclick="returnToEdit()">
+        Return to Edit
+      </button>
+    </div>
+  </div>
+</div>
+
+        <!-- Merge Datasets Modal -->
+        <div id="mergeModal" class="modern-modal" style="display: none;">
+          <div class="modern-modal-backdrop" onclick="closeMergeModal()"></div>
+          <div class="modern-modal-content">
+            <div class="modern-modal-header">
+              <div class="modal-title">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 12px;">
+                  <path d="M17 3H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7V5h10v14zM9 7h6v2H9V7zm0 4h6v2H9v-2zm0 4h6v2H9v-2z"/>
+                </svg>
+                <h2>Merge Datasets</h2>
+              </div>
+              <button class="modern-modal-close" onclick="closeMergeModal()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+              </button>
+            </div>
+            
+            <div class="modern-modal-body">
+              <div class="merge-instructions">
+                <div class="instruction-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                </div>
+                <div class="instruction-text">
+                  <h3>How to merge datasets</h3>
+                  <p>Select a column from each dataset that contains common values (like IDs or keys). The merge will combine rows where these columns have matching values.</p>
+                </div>
+              </div>
+              
+              <div id="mergeDatasetsList" class="datasets-selection">
+                <!-- Selected datasets will be populated here -->
+              </div>
+              
+              <div id="mergePreview" class="merge-preview">
+                <div class="preview-header">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                  </svg>
+                  <h3>Merge Preview</h3>
+                </div>
+                <div id="mergePreviewContent" class="preview-content">
+                  Select columns to see merge preview
+                </div>
+              </div>
+            </div>
+            
+            <div class="modern-modal-footer">
+              <button onclick="closeMergeModal()" class="btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+                Cancel
+              </button>
+              <button onclick="executeMerge()" id="executeMergeBtn" class="btn-primary" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                  <path d="M17 3H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7V5h10v14zM9 7h6v2H9V7zm0 4h6v2H9v-2zm0 4h6v2H9v-2z"/>
+                </svg>
+                Merge Datasets
+              </button>
+            </div>
+          </div>
+        </div>
+
+  <!-- Bayesian Loading Modal -->
+  <div id="bayesianLoadingModal" class="modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7);">
+    <div class="modal-content" style="background-color: white; margin: 10% auto; padding: 32px; border-radius: 16px; width: 90%; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+      <div class="modal-header" style="text-align: center; margin-bottom: 24px;">
+        <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="loading-spinner">
+            <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" stroke-linecap="round" stroke-dasharray="31.416" stroke-dashoffset="31.416">
+              <animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/>
+              <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/>
+            </circle>
+          </svg>
+        </div>
+        <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 600;">Running Bayesian Analysis</h3>
+        <p style="margin: 0; color: #6b7280; font-size: 14px;">This may take a few minutes depending on your data size and MCMC settings</p>
+      </div>
+      
+      <div class="modal-body" style="text-align: center;">
+        <div id="loadingStatus" style="margin-bottom: 20px; padding: 16px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #10b981;">
+          <div style="font-weight: 600; color: #374151; margin-bottom: 4px;">Current Step:</div>
+          <div id="currentStep" style="color: #6b7280; font-size: 14px;">Initializing Bayesian regression analysis...</div>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 12px; color: #6b7280;">Progress</span>
+            <span id="progressPercent" style="font-size: 12px; color: #6b7280;">0%</span>
+          </div>
+          <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+            <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 4px; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+        
+        <div id="loadingDetails" style="font-size: 12px; color: #9ca3af; margin-top: 16px;">
+          <div>• MCMC sampling can take 1-5 minutes</div>
+          <div>• Larger datasets require more time</div>
+          <div>• You can safely close this window and return later</div>
+        </div>
+        
+        <div style="margin-top: 24px; display: flex; gap: 12px; justify-content: center;">
+          <button type="button" onclick="cancelBayesianAnalysis()" class="btn btn-secondary" style="
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            padding: 12px 20px; 
+            font-size: 14px; 
+            font-weight: 600; 
+            border-radius: 8px; 
+            border: 1px solid #e5e7eb; 
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9); 
+            color: #374151; 
+            cursor: pointer; 
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+          " onmouseover="this.style.background='linear-gradient(135deg, #f1f5f9, #e2e8f0)'; this.style.borderColor='#d1d5db'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'" onmouseout="this.style.background='linear-gradient(135deg, #f8fafc, #f1f5f9)'; this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;">
+              <path d="M6 18L18 6M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Cancel Analysis
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dataset Delete Confirmation Modal -->
+  <div id="datasetDeleteModal" class="modern-modal" style="display: none;">
+    <div class="modern-modal-backdrop" onclick="closeDatasetDeleteModal()"></div>
+    <div class="modern-modal-content">
+      <div class="modern-modal-header">
+        <div class="modal-title">
+          <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 16px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+              <polyline points="3,6 5,6 21,6"></polyline>
+              <path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </div>
+          <div>
+            <h2 style="margin: 0; color: #1f2937; font-size: 1.25rem; font-weight: 600;">Delete Dataset</h2>
+            <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 0.875rem;">This action cannot be undone</p>
+          </div>
+        </div>
+        <button class="modern-modal-close" onclick="closeDatasetDeleteModal()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="modern-modal-body">
+        <div style="padding: 20px; background: #fef2f2; border-radius: 12px; border-left: 4px solid #ef4444; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; margin-bottom: 12px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" style="margin-right: 8px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            <span style="font-weight: 600; color: #dc2626;">Warning: Permanent Deletion</span>
+          </div>
+          <p style="margin: 0; color: #7f1d1d; font-size: 0.875rem; line-height: 1.5;">
+            You are about to permanently delete the dataset <strong id="datasetDeleteName"></strong>. 
+            This will also disconnect it from any analysis sessions that use it.
+          </p>
+        </div>
+        
+        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 0.875rem; font-weight: 600;">What will happen:</h4>
+          <ul style="margin: 0; padding-left: 20px; color: #6b7280; font-size: 0.875rem; line-height: 1.6;">
+            <li>The dataset file will be permanently removed from the server</li>
+            <li>All analysis sessions using this dataset will be disconnected</li>
+            <li>This action cannot be undone</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="modern-modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeDatasetDeleteModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" onclick="confirmDatasetDelete()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+            <polyline points="3,6 5,6 21,6"></polyline>
+            <path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          Delete Dataset
+        </button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// Bayesian Loading Management
+let loadingModal = null;
+let progressInterval = null;
+let currentProgress = 0;
+
+// Define the expected steps and their progress percentages
+const bayesianSteps = [
+  { step: "Initializing Bayesian regression analysis...", progress: 5 },
+  { step: "Validating outcome variable...", progress: 10 },
+  { step: "Preparing data and cleaning missing values...", progress: 15 },
+  { step: "Data preparation completed successfully", progress: 20 },
+  { step: "Creating Bayesian model with Bambi...", progress: 25 },
+  { step: "Model created successfully", progress: 30 },
+  { step: "Starting MCMC sampling...", progress: 35 },
+  { step: "Running MCMC chains (this may take several minutes)...", progress: 50 },
+  { step: "MCMC sampling completed successfully", progress: 75 },
+  { step: "Computing posterior summary statistics...", progress: 85 },
+  { step: "Summary statistics computed successfully", progress: 90 },
+  { step: "Formatting results table...", progress: 95 },
+  { step: "Finalizing results and preparing output...", progress: 98 },
+  { step: "Analysis completed successfully!", progress: 100 }
+];
+
+function showBayesianLoadingModal() {
+  console.log('showBayesianLoadingModal called');
+  loadingModal = document.getElementById('bayesianLoadingModal');
+  console.log('Loading modal element:', loadingModal);
+  
+  if (loadingModal) {
+    console.log('Showing loading modal');
+    loadingModal.style.display = 'block';
+    currentProgress = 0;
+    updateProgress(0, "Initializing Bayesian regression analysis...");
+    
+    // Start progress simulation
+    startProgressSimulation();
+  } else {
+    console.error('Loading modal element not found!');
+  }
+}
+
+function hideBayesianLoadingModal() {
+  if (loadingModal) {
+    loadingModal.style.display = 'none';
+    if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+  }
+}
+
+function updateProgress(progress, step) {
+  const progressBar = document.getElementById('progressBar');
+  const progressPercent = document.getElementById('progressPercent');
+  const currentStep = document.getElementById('currentStep');
+  
+  if (progressBar) {
+    progressBar.style.width = progress + '%';
+  }
+  if (progressPercent) {
+    progressPercent.textContent = progress + '%';
+  }
+  if (currentStep) {
+    currentStep.textContent = step;
+  }
+  
+  currentProgress = progress;
+}
+
+function startProgressSimulation() {
+  let stepIndex = 0;
+  
+  progressInterval = setInterval(() => {
+    if (stepIndex < bayesianSteps.length) {
+      const currentStepData = bayesianSteps[stepIndex];
+      updateProgress(currentStepData.progress, currentStepData.step);
+      stepIndex++;
+    } else {
+      // Keep the last step visible
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+  }, 2000); // Update every 2 seconds
+}
+
+function handleFormSubmission() {
+  // First validate the form
+  if (!validateFormSubmission()) {
+    return false;
+  }
+  
+  // Get the selected analysis type
+  const analysisType = document.querySelector('input[name="analysis_type"]:checked').value;
+  const moduleValue = document.getElementById('moduleSelect').value;
+  const formula = document.getElementById('equationBox').value;
+  
+  // Check for Bayesian regression with non-numeric DV before starting progress
+  if (moduleValue === 'regression' && analysisType === 'bayesian' && formula) {
+    // Extract dependent variable from equation
+    if (formula.includes('~')) {
+      const lhs = formula.split('~')[0].trim();
+      const dv = lhs.split('+')[0].trim(); // Get first dependent variable
+      
+      // Check if DV is numeric
+      if (window.datasetColumnTypes && window.datasetColumnTypes[dv]) {
+        const dvType = window.datasetColumnTypes[dv];
+        if (dvType !== 'numeric') {
+          // Show error modal instead of proceeding
+          showBayesianDVErrorModal(dvType);
+          return false; // Prevent form submission
+        }
+      }
+    }
+  }
+  
+  // If it's a Bayesian analysis, show loading modal
+  if (analysisType === 'bayesian') {
+    console.log('Bayesian analysis detected, showing loading modal');
+    showBayesianLoadingModal();
+    
+    // Disable submit button
+    const submitBtn = document.querySelector('#runBtn');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Running Analysis...';
+    }
+  }
+  
+  // Add a hidden input to indicate which template to use
+  const templateInput = document.createElement('input');
+  templateInput.type = 'hidden';
+  templateInput.name = 'template_override';
+  templateInput.value = analysisType === 'bayesian' ? 'bayesian_results' : 'results';
+  
+  // Add it to the form
+  document.getElementById('analysisForm').appendChild(templateInput);
+  
+  // Let the form submit normally - the backend will handle the routing
+  return true;
+}
+
+// Function to cancel Bayesian analysis
+function cancelBayesianAnalysis() {
+  console.log('Cancelling Bayesian analysis...');
+  
+  // Show modern confirmation dialog
+  showCancelConfirmationModal();
+}
+
+// Function to show modern confirmation modal
+function showCancelConfirmationModal() {
+  // Create modal if it doesn't exist
+  let modal = document.getElementById('cancelConfirmationModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'cancelConfirmationModal';
+    modal.className = 'modal';
+    modal.style.cssText = 'display: none; position: fixed; z-index: 10001; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6);';
+    document.body.appendChild(modal);
+  }
+  
+  // Create modal content
+  modal.innerHTML = `
+    <div class="modal-content" style="background-color: white; margin: 20% auto; padding: 32px; border-radius: 16px; width: 90%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); animation: slideIn 0.3s ease-out;">
+      <div class="modal-header" style="text-align: center; margin-bottom: 24px;">
+        <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 600;">Cancel Analysis?</h3>
+        <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.5;">
+          Are you sure you want to cancel the Bayesian analysis? This will stop the current analysis and you will need to restart it.
+        </p>
+      </div>
+      
+      <div style="display: flex; gap: 12px; justify-content: center;">
+        <button type="button" onclick="closeCancelConfirmationModal()" class="btn btn-ghost" style="
+          padding: 10px 20px; 
+          font-size: 14px; 
+          font-weight: 500; 
+          border-radius: 8px; 
+          border: 1px solid #e5e7eb; 
+          background-color: #f9fafb; 
+          color: #374151; 
+          cursor: pointer; 
+          transition: all 0.2s ease;
+        " onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='#f9fafb'">
+          Keep Running
+        </button>
+        <button type="button" onclick="confirmCancelAnalysis()" class="btn btn-primary" style="
+          display: flex; 
+          align-items: center; 
+          gap: 8px; 
+          padding: 10px 20px; 
+          font-size: 14px; 
+          font-weight: 600; 
+          border-radius: 8px; 
+          border: none; 
+          background: linear-gradient(135deg, #ef4444, #dc2626); 
+          color: white; 
+          cursor: pointer; 
+          transition: all 0.2s ease;
+          box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        " onmouseover="this.style.background='linear-gradient(135deg, #dc2626, #b91c1c)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'" onmouseout="this.style.background='linear-gradient(135deg, #ef4444, #dc2626)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;">
+            <path d="M6 18L18 6M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Yes, Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  modal.style.display = 'block';
+  
+  // Add click-outside-to-close functionality
+  modal.onclick = function(event) {
+    if (event.target === modal) {
+      closeCancelConfirmationModal();
+    }
+  };
+}
+
+// Function to close confirmation modal
+function closeCancelConfirmationModal() {
+  const modal = document.getElementById('cancelConfirmationModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// Function to confirm cancellation
+function confirmCancelAnalysis() {
+  closeCancelConfirmationModal();
+  
+  // Hide the loading modal
+  hideBayesianLoadingModal();
+  
+  // Make a request to cancel the analysis
+  fetch('/cancel-bayesian-analysis/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken')
+    },
+    body: JSON.stringify({
+      session_id: null // No session ID available on index page
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showUpdateMessage('Analysis cancelled successfully');
+      
+      // Reload the page to reset the form
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } else {
+      showUpdateMessage('Error cancelling analysis: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(error => {
+    console.error('Error cancelling analysis:', error);
+    showUpdateMessage('Error cancelling analysis. Please try again.');
+  });
+}
+
+// Helper function to get CSRF token from cookie
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+// Function to show update message
+function showUpdateMessage(message) {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed; top: 20px; right: 20px; z-index: 10000;
+    background: #10b981; color: white; padding: 12px 16px;
+    border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px; font-weight: 500;
+  `;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  // Remove notification after 2 seconds
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.parentNode.removeChild(notification);
+    }
+  }, 2000);
+}
+
+// Show Bayesian DV error modal
+function showBayesianDVErrorModal(dvType) {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.style.cssText = 'display: block; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);';
+  
+  modal.innerHTML = `
+    <div class="modal-content" style="background-color: white; margin: 15% auto; padding: 24px; border-radius: 12px; width: 80%; max-width: 500px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0; color: #dc2626; font-size: 1.25rem;">Bayesian Regression Not Supported</h3>
+        <button type="button" onclick="closeBayesianDVErrorModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280;">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; align-items: center; margin-bottom: 16px; padding: 12px; background-color: #fef2f2; border-radius: 8px; border-left: 4px solid #dc2626;">
+          <div style="margin-right: 12px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+          </div>
+          <div>
+            <p style="margin: 0; font-weight: 600; color: #dc2626;">Analysis Type Not Available</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px; color: #374151; line-height: 1.6;">
+          Bayesian regression with <strong>${dvType}</strong> dependent variables is not yet supported in this version of the application.
+        </p>
+        <p style="margin-bottom: 20px; color: #6b7280; line-height: 1.6;">
+          For categorical outcomes (binary, ordinal, multinomial), please use <strong>Frequentist Regression</strong> instead, which provides excellent results for these analysis types.
+        </p>
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+          <button type="button" class="btn btn-ghost" onclick="closeBayesianDVErrorModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="switchToFrequentist()">Switch to Frequentist</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  window.currentModal = modal;
+}
+
+// Close Bayesian DV error modal
+function closeBayesianDVErrorModal() {
+  if (window.currentModal) {
+    window.currentModal.remove();
+    window.currentModal = null;
+  }
+}
+
+// Switch to frequentist analysis
+function switchToFrequentist() {
+  const frequentistRadio = document.querySelector('input[name="analysis_type"][value="frequentist"]');
+  if (frequentistRadio) {
+    frequentistRadio.checked = true;
+    // Trigger change event to update UI
+    frequentistRadio.dispatchEvent(new Event('change'));
+  }
+  closeBayesianDVErrorModal();
+}
+
+// Dataset Delete Confirmation Functions
+let currentDatasetId = null;
+
+function showDatasetDeleteConfirmation(datasetId, datasetName) {
+  currentDatasetId = datasetId;
+  const modal = document.getElementById('datasetDeleteModal');
+  const nameElement = document.getElementById('datasetDeleteName');
+  
+  if (modal && nameElement) {
+    nameElement.textContent = `"${datasetName}"`;
+    modal.style.display = 'block';
+  }
+}
+
+function closeDatasetDeleteModal() {
+  const modal = document.getElementById('datasetDeleteModal');
+  if (modal) {
+    modal.style.display = 'none';
+    currentDatasetId = null;
+  }
+}
+
+function confirmDatasetDelete() {
+  if (currentDatasetId) {
+    // Create a form and submit it
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/datasets/delete/${currentDatasetId}/`;
+    
+    // Add CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfToken) {
+      const csrfInput = document.createElement('input');
+      csrfInput.type = 'hidden';
+      csrfInput.name = 'csrfmiddlewaretoken';
+      csrfInput.value = csrfToken.value;
+      form.appendChild(csrfInput);
+    }
+    
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Index page loaded');
+  console.log('Loading modal element:', document.getElementById('bayesianLoadingModal'));
+  console.log('Test button element:', document.querySelector('button[onclick="showBayesianLoadingModal()"]'));
+  
+  // Initialize analysis type toggle state
+  updateAnalysisTypeToggle();
+});
+
+// Function to update analysis type toggle based on model selection
+function updateAnalysisTypeToggle() {
+  const moduleSelect = document.getElementById('moduleSelect');
+  const analysisTypeRadios = document.querySelectorAll('input[name="analysis_type"]');
+  const analysisTypeContainer = document.querySelector('.grid-1');
+  
+  if (!moduleSelect || !analysisTypeContainer) return;
+  
+  const selectedModule = moduleSelect.value;
+  
+  if (selectedModule === 'bma' || selectedModule === 'anova') {
+    // Disable analysis type toggle for BMA and ANOVA
+    analysisTypeContainer.style.display = 'none';
+    // Uncheck all radio buttons
+    analysisTypeRadios.forEach(radio => {
+      radio.checked = false;
+      radio.disabled = true;
+    });
+  } else {
+    // Enable analysis type toggle for other models
+    analysisTypeContainer.style.display = 'block';
+    analysisTypeRadios.forEach(radio => {
+      radio.disabled = false;
+    });
+    // Set default to frequentist if nothing is selected
+    if (!document.querySelector('input[name="analysis_type"]:checked')) {
+      document.querySelector('input[name="analysis_type"][value="frequentist"]').checked = true;
+    }
+  }
+}
+
+// Add event listener to module select
+document.addEventListener('DOMContentLoaded', function() {
+  const moduleSelect = document.getElementById('moduleSelect');
+  if (moduleSelect) {
+    moduleSelect.addEventListener('change', updateAnalysisTypeToggle);
+  }
+});
+
+function clearSearch() {
+  const searchInput = document.getElementById('sessionFilter');
+  const clearBtn = document.getElementById('searchClear');
+  
+  searchInput.value = '';
+  clearBtn.style.display = 'none';
+  filterSessions(searchInput);
+  searchInput.focus();
+}
+
+function goToVisualize() {
+  // Get form data
+  const form = document.getElementById('analysisForm');
+  const formData = new FormData(form);
+  
+  // Check if required fields are filled
+  const module = formData.get('module');
+  const datasetId = formData.get('dataset_id');
+  const formula = formData.get('formula');
+  
+  if (!module || !datasetId || !formula) {
+    alert('Please select a model, dataset, and enter an equation before visualizing.');
+    return;
+  }
+  
+  // Create a new form for visualization
+  const visualizeForm = document.createElement('form');
+  visualizeForm.method = 'POST';
+  visualizeForm.action = '/visualize/';
+  
+  // Add CSRF token
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  const csrfInput = document.createElement('input');
+  csrfInput.type = 'hidden';
+  csrfInput.name = 'csrfmiddlewaretoken';
+  csrfInput.value = csrfToken;
+  visualizeForm.appendChild(csrfInput);
+  
+  // Add form data
+  for (const [key, value] of formData.entries()) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = key;
+    input.value = value;
+    visualizeForm.appendChild(input);
+  }
+  
+  // Submit the form
+  document.body.appendChild(visualizeForm);
+  visualizeForm.submit();
+}
+</script>
+
+{% endblock %}

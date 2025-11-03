@@ -1,0 +1,323 @@
+{% extends "engine/base.html" %}
+{% load static %}
+
+{% block title %}Subscription - Analysis Assistant{% endblock %}
+
+{% block content %}
+<div class="subscription-container">
+  <div class="subscription-header">
+    <h1>Choose Your Plan</h1>
+    <p>Select the perfect plan for your statistical analysis needs</p>
+  </div>
+  
+  <div class="plans-grid">
+    {% for plan in plans %}
+    <div class="plan-card {% if plan.name|lower == 'pro' %}featured{% endif %}">
+      {% if plan.name|lower == 'pro' %}
+        <div class="plan-badge">Most Popular</div>
+      {% endif %}
+      
+      <div class="plan-header">
+        <h3>{{ plan.name }}</h3>
+        <p>{{ plan.description }}</p>
+      </div>
+      
+      <div class="plan-pricing">
+        <div class="price">
+          <span class="currency">$</span>
+          <span class="amount">{{ plan.price_monthly }}</span>
+          <span class="period">/month</span>
+        </div>
+        <div class="price-yearly">
+          <span class="currency">$</span>
+          <span class="amount">{{ plan.price_yearly }}</span>
+          <span class="period">/year</span>
+          <span class="savings">Save 20%</span>
+        </div>
+      </div>
+      
+      <div class="plan-features">
+        <div class="feature">
+          <span class="feature-icon">📊</span>
+          <span>{{ plan.max_datasets|default:"∞" }} datasets</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">🔬</span>
+          <span>{{ plan.max_sessions|default:"∞" }} analysis sessions</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">📁</span>
+          <span>{{ plan.max_file_size_mb|default:"∞" }} MB max file size</span>
+        </div>
+        {% for feature in plan.features %}
+        <div class="feature">
+          <span class="feature-icon">✓</span>
+          <span>{{ feature }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      
+      <div class="plan-actions">
+        {% if profile.subscription_type == plan.name|lower %}
+          <button class="btn btn-secondary" disabled>Current Plan</button>
+        {% else %}
+          <button class="btn btn-primary plan-select" data-plan-id="{{ plan.id }}">
+            {% if profile.subscription_type == 'free' %}Upgrade{% else %}Switch{% endif %}
+          </button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  
+  {% if profile.subscription_type != 'free' %}
+  <div class="subscription-management">
+    <h2>Manage Subscription</h2>
+    <div class="management-actions">
+      <button class="btn btn-danger" onclick="cancelSubscription()">
+        Cancel Subscription
+      </button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+const stripe = Stripe('{{ stripe_public_key }}');
+
+document.querySelectorAll('.plan-select').forEach(button => {
+  button.addEventListener('click', async (e) => {
+    const planId = e.target.dataset.planId;
+    e.target.disabled = true;
+    e.target.textContent = 'Processing...';
+    
+    try {
+      const response = await fetch(`/accounts/subscription/checkout/${planId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        throw new Error(data.error || 'Something went wrong');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+      e.target.disabled = false;
+      e.target.textContent = 'Try Again';
+    }
+  });
+});
+
+function cancelSubscription() {
+  if (confirm('Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your billing period.')) {
+    fetch('/accounts/subscription/cancel/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert('Error cancelling subscription: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(error => {
+      alert('Error: ' + error.message);
+    });
+  }
+}
+</script>
+
+<style>
+.subscription-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.subscription-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.subscription-header h1 {
+  margin: 0 0 12px 0;
+  color: #1f2937;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.subscription-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 18px;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+  margin-bottom: 50px;
+}
+
+.plan-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 30px;
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.plan-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.plan-card.featured {
+  border: 2px solid #3b82f6;
+  transform: scale(1.05);
+}
+
+.plan-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #3b82f6;
+  color: white;
+  padding: 6px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.plan-header h3 {
+  margin: 0 0 8px 0;
+  color: #1f2937;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.plan-header p {
+  margin: 0 0 20px 0;
+  color: #6b7280;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.plan-pricing {
+  margin-bottom: 30px;
+}
+
+.price {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.currency {
+  font-size: 20px;
+  color: #6b7280;
+  margin-right: 4px;
+}
+
+.amount {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.period {
+  font-size: 16px;
+  color: #6b7280;
+  margin-left: 4px;
+}
+
+.price-yearly {
+  display: flex;
+  align-items: baseline;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.savings {
+  background: #10b981;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.plan-features {
+  margin-bottom: 30px;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.feature-icon {
+  margin-right: 12px;
+  font-size: 16px;
+}
+
+.plan-actions {
+  text-align: center;
+}
+
+.plan-actions .btn {
+  width: 100%;
+  padding: 12px;
+  font-weight: 600;
+}
+
+.subscription-management {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 30px;
+  text-align: center;
+}
+
+.subscription-management h2 {
+  margin: 0 0 20px 0;
+  color: #1f2937;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.management-actions .btn {
+  padding: 12px 24px;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .plan-card.featured {
+    transform: none;
+  }
+}
+</style>
+{% endblock %}

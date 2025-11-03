@@ -1,0 +1,2005 @@
+{% extends "engine/base.html" %}
+{% block title %}Bayesian Results — Generative Research Assistant{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+  // Set AI chat context when page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof aiChatContext !== 'undefined') {
+      aiChatContext = {
+        session_name: '{% if session %}{{ session.name|escapejs }}{% endif %}',
+        formula: '{% if session %}{{ session.formula|escapejs }}{% endif %}',
+        module: 'bayesian regression',
+        dataset_name: '{% if dataset %}{{ dataset.name|escapejs }}{% endif %}'
+      };
+    }
+  });
+</script>
+<style>
+  /* Loading spinner animation */
+  .loading-spinner {
+    animation: spin 2s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Modal animations */
+  .modal {
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  .modal-content {
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideIn {
+    from { 
+      opacity: 0;
+      transform: translateY(-50px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Progress bar animation */
+  #progressBar {
+    transition: width 0.5s ease-in-out;
+  }
+  
+  /* Loading status animation */
+  #currentStep {
+    transition: opacity 0.3s ease-in-out;
+  }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="/session/{{session.id}}/" class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">Modify</a>
+  <a href="{% url 'download_session_history' session.id %}?format=text" class="btn btn-ghost" style="margin-left: 8px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+    </svg>
+    Download History
+  </a>
+  <button class="btn" type="button" onclick="toggleAIChatbox()" 
+          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
+          title="Ask AI Assistant">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    Ask AI
+  </button>
+{% endblock %}
+
+{% block sidebar %}
+  <!-- Model Parameters Form (requires re-running) -->
+  <form method="post" action="{% url 'run' %}" id="bayesianModelForm" onsubmit="return handleBayesianFormSubmission(event)">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="update">
+    <input type="hidden" name="session_id" value="{{session.id}}">
+    <input type="hidden" name="module" value="bayesian">
+    <input type="hidden" name="analysis_type" value="bayesian">
+    <input type="hidden" name="formula" value="{{session.formula}}">
+    <input type="hidden" name="dataset_id" value="{{dataset.id}}">
+    <input type="hidden" name="session_name" value="{{session.name}}">
+
+    <!-- Model Parameters -->
+    <div class="card" style="margin-bottom: 16px;">
+      <div class="card-head">
+        <h3 class="card-title">Model Parameters</h3>
+        <button type="submit" class="btn btn-primary" style="margin-left: auto;">Update Analysis</button>
+      </div>
+
+      <div>
+        <label class="field-label">Number of draws</label>
+        <input class="input" type="number" name="draws" value="{{session.options.draws|default:2000}}" min="100" max="10000" step="100">
+        <small class="muted">Number of posterior samples to draw (100-10,000)</small>
+      </div>
+
+      <div>
+        <label class="field-label">Number of tuning steps</label>
+        <input class="input" type="number" name="tune" value="{{session.options.tune|default:1000}}" min="100" max="5000" step="100">
+        <small class="muted">Number of tuning steps for MCMC (100-5,000)</small>
+      </div>
+
+      <div>
+        <label class="field-label">Number of chains</label>
+        <input class="input" type="number" name="chains" value="{{session.options.chains|default:4}}" min="1" max="8" step="1">
+        <small class="muted">Number of MCMC chains to run (1-8)</small>
+      </div>
+
+      <div>
+        <label class="field-label">Prior specification</label>
+        <select class="input" name="prior">
+          <option value="auto" {% if session.options.prior == 'auto' or not session.options.prior %}selected{% endif %}>Auto (moderate priors)</option>
+          <option value="weakly_informative" {% if session.options.prior == 'weakly_informative' %}selected{% endif %}>Weakly informative (large variance)</option>
+          <option value="informative" {% if session.options.prior == 'informative' %}selected{% endif %}>Informative (small variance)</option>
+        </select>
+        <small class="muted">Type of prior distribution to use</small>
+      </div>
+    </div>
+  </form>
+
+  <!-- Display Options (client-side updates) -->
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Display Options</h3>
+      <button type="button" onclick="updateDisplayOptions()" class="btn btn-secondary" style="margin-left: auto;">Update View</button>
+    </div>
+
+      <!-- Result table toggles -->
+      <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+        <h4 style="margin: 0 0 12px 0; color: var(--text); font-size: 14px; font-weight: 600;">Result table columns</h4>
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">Mean</label>
+            <label class="switch">
+              <input type="checkbox" name="show_mean" {% if session.options.show_mean != False %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">Std Dev</label>
+            <label class="switch">
+              <input type="checkbox" name="show_std" {% if session.options.show_std != False %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">HPD 2.5%</label>
+            <label class="switch">
+              <input type="checkbox" name="show_hpd_low" {% if session.options.show_hpd_low != False %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">HPD 97.5%</label>
+            <label class="switch">
+              <input type="checkbox" name="show_hpd_high" {% if session.options.show_hpd_high != False %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">Rhat</label>
+            <label class="switch">
+              <input type="checkbox" name="show_rhat" {% if session.options.show_rhat != False %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">ESS</label>
+            <label class="switch">
+              <input type="checkbox" name="show_ess" {% if session.options.show_ess != False %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary tables toggles -->
+      <div style="margin-bottom: 20px;">
+        <h4 style="margin: 0 0 12px 0; color: #374151; font-size: 14px; font-weight: 600;">Summary table columns</h4>
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">Min</label>
+            <label class="switch">
+              <input type="checkbox" name="show_min" {% if session.options.show_min != False %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">Max</label>
+            <label class="switch">
+              <input type="checkbox" name="show_max" {% if session.options.show_max != False %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">Range</label>
+            <label class="switch">
+              <input type="checkbox" name="show_range" {% if session.options.show_range %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">Variance</label>
+            <label class="switch">
+              <input type="checkbox" name="show_variance" {% if session.options.show_variance %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+    </div>
+{% endblock %}
+
+{% block content %}
+  <!-- Modern Results Header -->
+  <div class="modern-results-header">
+    <div class="header-main">
+      <div class="regression-type-badge">
+        <span class="regression-type">{{regression_type|default:"Bayesian Results"}}</span>
+      </div>
+      <div class="header-actions">
+        <a class="modern-edit-btn" href="{% url 'dataprep_open' dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+          Edit Dataset
+        </a>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span class="meta-label">Session:</span>
+        <span class="meta-value">{{session.name}}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <span class="meta-label">Dataset:</span>
+        <span class="meta-value">{{dataset.name}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Modal -->
+  <div id="bayesianLoadingModal" class="modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7);">
+    <div class="modal-content" style="background-color: white; margin: 10% auto; padding: 32px; border-radius: 16px; width: 90%; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+      <div class="modal-header" style="text-align: center; margin-bottom: 24px;">
+        <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="loading-spinner">
+            <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" stroke-linecap="round" stroke-dasharray="31.416" stroke-dashoffset="31.416">
+              <animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/>
+              <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/>
+            </circle>
+          </svg>
+        </div>
+        <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 600;">Running Bayesian Analysis</h3>
+        <p style="margin: 0; color: #6b7280; font-size: 14px;">This may take a few minutes depending on your data size and MCMC settings</p>
+      </div>
+      
+      <div class="modal-body" style="text-align: center;">
+        <div id="loadingStatus" style="margin-bottom: 20px; padding: 16px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6;">
+          <div style="font-weight: 600; color: #374151; margin-bottom: 4px;">Current Step:</div>
+          <div id="currentStep" style="color: #6b7280; font-size: 14px;">Initializing Bayesian regression analysis...</div>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 12px; color: #6b7280;">Progress</span>
+            <span id="progressPercent" style="font-size: 12px; color: #6b7280;">0%</span>
+          </div>
+          <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+            <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #1d4ed8); border-radius: 4px; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+        
+        <div id="loadingDetails" style="font-size: 12px; color: #9ca3af; margin-top: 16px;">
+          <div>• MCMC sampling can take 1-5 minutes</div>
+          <div>• Larger datasets require more time</div>
+          <div>• You can safely close this window and return later</div>
+        </div>
+        
+        <div style="margin-top: 24px; display: flex; gap: 12px; justify-content: center;">
+          <button type="button" onclick="cancelBayesianAnalysis()" class="btn btn-secondary" style="
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            padding: 12px 20px; 
+            font-size: 14px; 
+            font-weight: 600; 
+            border-radius: 8px; 
+            border: 1px solid #e5e7eb; 
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9); 
+            color: #374151; 
+            cursor: pointer; 
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+          " onmouseover="this.style.background='linear-gradient(135deg, #f1f5f9, #e2e8f0)'; this.style.borderColor='#d1d5db'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'" onmouseout="this.style.background='linear-gradient(135deg, #f8fafc, #f1f5f9)'; this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;">
+              <path d="M6 18L18 6M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Cancel Analysis
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bayesian Results table at the top -->
+  {% if model_cols and model_matrix %}
+  <section class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Bayesian Regression Table</h3>
+      <div class="muted small">Posterior estimates with 95% credible intervals</div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table" id="bayesianTable">
+        <thead>
+          <tr>{% for col in model_cols %}<th>{{ col }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for row in model_matrix %}
+          <tr>
+            {% for cell in row %}
+              {% if forloop.counter0 == estimate_col_index %}
+                <td class="mono">{{ cell|safe }}</td>
+              {% else %}
+                <td class="mono">{{ cell }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+          {% if model_stats %}
+          <tr class="table-stats-row" style="border-top: 2px solid var(--table-stats-border); background-color: var(--table-stats-bg);">
+            <td><strong>N</strong></td>
+            <td class="mono"><strong>{{ model_stats.n_obs }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% if model_stats.draws %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>Draws</strong></td>
+            <td class="mono"><strong>{{ model_stats.draws }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% if model_stats.prior_type %}
+          <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+            <td><strong>Prior</strong></td>
+            <td class="mono"><strong>{{ model_stats.prior_type|title }}</strong></td>
+            {% for col in model_cols %}
+              {% if forloop.counter0 > 1 %}
+                <td class="mono">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Bootstrap Results -->
+  {% if bootstrap_results %}
+  <section class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Bootstrap Results</h3>
+      <div class="muted small">Bootstrap confidence intervals ({{bootstrap_results.n_bootstrap}} iterations)</div>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Mean</th>
+            <th>Std Dev</th>
+            <th>2.5%</th>
+            <th>97.5%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="5" class="text-center">
+              <div class="muted">Bootstrap results will be displayed here when available</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Summary Statistics -->
+  {% if summary_stats %}
+  <section class="card" id="summary-table-section" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Summary Statistics</h3>
+      <div style="margin-left: auto; display: flex; gap: 8px;">
+        <button type="button" class="btn btn-ghost" onclick="editSummaryTable()" style="font-size: 14px;">✏️ Edit Variables</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th data-column="min">Min</th>
+            <th data-column="max">Max</th>
+            <th data-column="range">Range</th>
+            <th data-column="variance">Variance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for var, stats in summary_stats.items %}
+          <tr>
+            <td><strong>{{ var }}</strong></td>
+            <td class="mono" data-column="min">{{ stats.min|floatformat:3 }}</td>
+            <td class="mono" data-column="max">{{ stats.max|floatformat:3 }}</td>
+            <td class="mono" data-column="range">{{ stats.range|floatformat:3 }}</td>
+            <td class="mono" data-column="variance">{{ stats.variance|floatformat:3 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Plot Addition Controls -->
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Add Plots</h3>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+      
+      {% if interactions %}
+      {% if model_matrix and model_matrix|length > 0 and "Variable Error" not in model_matrix.0.0 %}
+        {% if regression_type == "Bayesian Ordinal Regression" %}
+          <!-- For ordinal regression, show interaction/level combinations -->
+          <div class="dropdown" style="position: relative;">
+            <button type="button" class="btn btn-ghost dropdown-toggle" onclick="checkThreeWayInteraction('ordinal')" style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">+</span> Spotlight Plot
+              <span style="font-size: 12px;">▼</span>
+            </button>
+            <div class="dropdown-menu" id="spotlight-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; min-width: 250px; max-height: 400px; overflow-y: auto;">
+              {% for interaction in interactions %}
+                <div class="dropdown-section" style="border-bottom: 1px solid #e5e7eb; padding: 8px 0;">
+                  <div style="font-weight: 600; color: #374151; padding: 4px 12px; font-size: 12px; text-transform: uppercase;">{{ interaction }}</div>
+                  {% for category in dv_categories %}
+                    <button type="button" class="dropdown-item ordinal-plot-item" 
+                            data-interaction="{{ interaction }}" 
+                            data-category="{{ category }}"
+                            onclick="checkThreeWayInteraction('ordinal-item', '{{ interaction }}', '{{ category }}')" 
+                            style="display: block; width: 100%; padding: 8px 12px 8px 24px; text-align: left; border: none; background: none; cursor: pointer; font-size: 14px; color: #6b7280; transition: background-color 0.2s;"
+                            onmouseover="this.style.backgroundColor='#f3f4f6'"
+                            onmouseout="this.style.backgroundColor='transparent'">
+                      {{ category }}
+                    </button>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% elif regression_type == "Bayesian Multinomial Regression" %}
+          <!-- For multinomial regression, show interaction/level combinations -->
+          <div class="dropdown" style="position: relative;">
+            <button type="button" class="btn btn-ghost dropdown-toggle" onclick="checkThreeWayInteraction('multinomial')" style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">+</span> Spotlight Plot
+              <span style="font-size: 12px;">▼</span>
+            </button>
+            <div class="dropdown-menu" id="spotlight-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; min-width: 250px; max-height: 400px; overflow-y: auto;">
+              {% for interaction in interactions %}
+                <div class="dropdown-section" style="border-bottom: 1px solid #e5e7eb; padding: 8px 0;">
+                  <div style="font-weight: 600; color: #374151; padding: 4px 12px; font-size: 12px; text-transform: uppercase;">{{ interaction }}</div>
+                  {% for category in multinomial_categories %}
+                    <button type="button" class="dropdown-item multinomial-plot-item" 
+                            data-interaction="{{ interaction }}" 
+                            data-category="{{ category }}"
+                            onclick="checkThreeWayInteraction('multinomial-item', '{{ interaction }}', '{{ category }}')" 
+                            style="display: block; width: 100%; padding: 8px 12px 8px 24px; text-align: left; border: none; background: none; cursor: pointer; font-size: 14px; color: #6b7280; transition: background-color 0.2s;"
+                            onmouseover="this.style.backgroundColor='#f3f4f6'"
+                            onmouseout="this.style.backgroundColor='transparent'">
+                      {{ category }}
+                    </button>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% elif interactions|length == 1 %}
+          <button type="button" class="btn btn-ghost" onclick="checkThreeWayInteraction('single', '{{ interactions.0 }}')" style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">+</span> Spotlight Plot
+          </button>
+        {% else %}
+          <div class="dropdown" style="position: relative;">
+            <button type="button" class="btn btn-ghost dropdown-toggle" onclick="checkThreeWayInteraction('multiple')" style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">+</span> Spotlight Plot
+              <span style="font-size: 12px;">▼</span>
+            </button>
+            <div class="dropdown-menu" id="spotlight-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; min-width: 200px;">
+              {% for interaction in interactions %}
+                <button type="button" class="dropdown-item" onclick="checkThreeWayInteraction('dropdown-item', '{{ interaction }}')" style="display: block; width: 100%; padding: 8px 12px; text-align: left; border: none; background: none; cursor: pointer; font-size: 14px;">
+                  {{ interaction }}
+                </button>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      {% else %}
+        <div style="padding: 8px 12px; color: #666; font-size: 14px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
+          Spotlight plots unavailable due to model errors. Please fix variable names in the formula.
+        </div>
+      {% endif %}
+    {% endif %}
+    
+    {% if continuous_vars %}
+      <button type="button" class="btn btn-ghost" onclick="addCorrelationHeatmap()" style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 18px;">+</span> Correlation Heatmap
+      </button>
+    {% endif %}
+  </div>
+
+  <!-- Dynamic Plots Container -->
+  <div id="dynamic-plots-container">
+    <!-- Plots will be added here dynamically -->
+  </div>
+
+  <!-- Interactive Spotlight Plot -->
+  {% if spotlight_json %}
+  <section class="card plot-card" id="spotlight-section" style="display: none;">
+    <div class="card-head">
+      <h3 class="card-title">Spotlight plot</h3>
+      <div class="muted small">Moderator lines with optional 95% credible bands</div>
+      <div style="margin-left: auto; display: flex; gap: 8px;">
+        <button type="button" class="btn btn-ghost" onclick="editPlot('spotlight', 'spotlight')" style="font-size: 14px;">✏️ Edit</button>
+        <button type="button" class="btn btn-ghost" onclick="removePlot('spotlight')">×</button>
+      </div>
+    </div>
+    <div id="plot-spotlight" class="plot-container"></div>
+    <script type="application/json" id="plot-spotlight-data">{{ spotlight_json|safe }}</script>
+  </section>
+  {% endif %}
+
+  <script>
+    // Include all the JavaScript functions from the original results.html
+    // (This would be the same JavaScript code as in results.html)
+    
+    // Function to detect three-way interactions
+    function isThreeWayInteraction(interaction) {
+      if (!interaction) return false;
+      
+      // Check for three-way interactions using * notation (e.g., "A*B*C")
+      if (interaction.includes('*')) {
+        const parts = interaction.split('*');
+        return parts.length >= 3;
+      }
+      
+      // Check for three-way interactions using : notation (e.g., "A:B:C")
+      if (interaction.includes(':')) {
+        const parts = interaction.split(':');
+        return parts.length >= 3;
+      }
+      
+      return false;
+    }
+    
+    // Function to check for three-way interactions and handle spotlight button behavior
+    function checkThreeWayInteraction(type, interaction = null, category = null) {
+      let hasThreeWay = false;
+      
+      if (interaction) {
+        hasThreeWay = isThreeWayInteraction(interaction);
+      } else {
+        // Check all interactions for three-way
+        const allInteractions = {{ interactions|safe }};
+        hasThreeWay = allInteractions.some(interaction => isThreeWayInteraction(interaction));
+      }
+      
+      if (hasThreeWay) {
+        // Show custom modal for three-way interactions
+        showThreeWayModal();
+        return;
+      }
+      
+      // If no three-way interactions, proceed with normal behavior
+      if (type === 'single' && interaction) {
+        addSpotlightPlot(interaction);
+      } else if (type === 'ordinal-item' && interaction && category) {
+        addOrdinalSpotlightPlot(interaction, category);
+      } else if (type === 'multinomial-item' && interaction && category) {
+        addMultinomialSpotlightPlot(interaction, category);
+      } else if (type === 'dropdown-item' && interaction) {
+        addSpotlightPlot(interaction);
+      } else {
+        toggleDropdown();
+      }
+    }
+    
+    // Show custom three-way interaction modal
+    function showThreeWayModal() {
+      // Create modal if it doesn't exist
+      let modal = document.getElementById('threeWayModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'threeWayModal';
+        modal.className = 'modal';
+        modal.style.cssText = 'display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);';
+        document.body.appendChild(modal);
+      }
+      
+      // Create modal content
+      modal.innerHTML = `
+        <div class="modal-content" style="background-color: white; margin: 15% auto; padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
+          <div class="modal-header" style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
+            <div style="width: 48px; height: 48px; background-color: #fef3c7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="modal-body" style="text-align: center;">
+            <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Three (or more)-Way Interactions Not Supported</h3>
+            <p style="margin: 0 0 24px 0; color: #6b7280; font-size: 14px; line-height: 1.5;">
+              We cannot visualize three (or more)-way interactions yet! Spotlight plots currently support two-way interactions only.
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+              <button type="button" onclick="closeThreeWayModal()" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px; font-weight: 500; border-radius: 6px; border: none; background-color: #3b82f6; color: white; cursor: pointer; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      modal.style.display = 'block';
+      
+      // Add click-outside-to-close functionality
+      modal.onclick = function(event) {
+        if (event.target === modal) {
+          closeThreeWayModal();
+        }
+      };
+    }
+    
+    // Close three-way modal
+    function closeThreeWayModal() {
+      const modal = document.getElementById('threeWayModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+    
+    // Function to update formula before form submission
+    window.updateFormulaBeforeSubmit = async function(event) {
+      // Prevent default form submission
+      event.preventDefault();
+      
+      try {
+        const currentDatasetId = {{ dataset.id }};
+        const formulaInput = document.querySelector('input[name="formula"]');
+        if (!formulaInput) {
+          // If no formula input, submit normally
+          document.getElementById('bayesianOptionsForm').submit();
+          return false;
+        }
+        
+        const currentFormula = formulaInput.value;
+        console.log('Current formula before update:', currentFormula);
+        
+        // Get current dataset variables
+        const response = await fetch(`/api/dataset/${currentDatasetId}/variables/`);
+        const data = await response.json();
+        
+        if (data.success && data.variables) {
+          const currentVariables = data.variables;
+          console.log('Current dataset variables:', currentVariables);
+          
+          // Check if any variables in the formula are not in the current dataset
+          const formulaVars = extractVariablesFromFormula(currentFormula);
+          console.log('Variables in formula:', formulaVars);
+          
+          const missingVars = formulaVars.filter(varName => !currentVariables.includes(varName));
+          console.log('Missing variables:', missingVars);
+          
+          if (missingVars.length > 0) {
+            // Try to find similar variables for missing ones
+            const renameMap = {};
+            for (const missingVar of missingVars) {
+              const similarVar = findSimilarVariableInList(missingVar, currentVariables);
+              if (similarVar) {
+                renameMap[missingVar] = similarVar;
+              }
+            }
+            
+            if (Object.keys(renameMap).length > 0) {
+              console.log('Found potential renames:', renameMap);
+              
+              // Update the formula
+              let newFormula = currentFormula;
+              for (const [oldName, newName] of Object.entries(renameMap)) {
+                const pattern = new RegExp('\\b' + oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+                newFormula = newFormula.replace(pattern, newName);
+              }
+              
+              if (newFormula !== currentFormula) {
+                console.log('Updating formula:', newFormula);
+                formulaInput.value = newFormula;
+                
+                // Show notification
+                showVariableUpdateNotification(renameMap);
+                
+                // Wait a moment for the notification to be seen, then submit
+                setTimeout(() => {
+                  console.log('Submitting form with updated formula:', newFormula);
+                  document.getElementById('bayesianOptionsForm').submit();
+                }, 1500);
+                
+                return false; // Prevent immediate submission
+              }
+            }
+          }
+        }
+        
+        // If no updates needed, submit immediately
+        console.log('No formula updates needed, submitting form');
+        // Ensure all form data is preserved by submitting the form normally
+        const form = document.getElementById('bayesianOptionsForm');
+        form.submit();
+        return false;
+        
+      } catch (error) {
+        console.error('Error updating formula before submit:', error);
+        // If there's an error, submit anyway
+        const form = document.getElementById('bayesianOptionsForm');
+        form.submit();
+        return false;
+      }
+    };
+    
+    // Helper function to extract variables from formula
+    function extractVariablesFromFormula(formula) {
+      if (!formula) return [];
+      
+      // Split by ~ to get LHS and RHS
+      const parts = formula.split('~');
+      if (parts.length !== 2) return [];
+      
+      const lhs = parts[0].trim();
+      const rhs = parts[1].trim();
+      const variables = [];
+      
+      // Add dependent variable (LHS)
+      if (lhs) {
+        variables.push(lhs);
+      }
+      
+      // Add predictor variables (RHS)
+      if (rhs) {
+        // Split by + to get terms
+        const terms = rhs.split('+').map(t => t.trim()).filter(t => t);
+        
+        for (const term of terms) {
+          // Check if it's an interaction (contains *)
+          if (term.includes('*')) {
+            const interactionVars = term.split('*').map(v => v.trim()).filter(v => v);
+            variables.push(...interactionVars);
+          } else {
+            // Simple term
+            variables.push(term);
+          }
+        }
+      }
+      
+      return variables;
+    }
+    
+    // Helper function to find similar variable in a list
+    function findSimilarVariableInList(target, variableList) {
+      // First try exact match (case insensitive)
+      for (const varName of variableList) {
+        if (varName.toLowerCase() === target.toLowerCase()) {
+          return varName;
+        }
+      }
+      
+      // Then try partial matches
+      for (const varName of variableList) {
+        if (varName.toLowerCase().includes(target.toLowerCase()) || 
+            target.toLowerCase().includes(varName.toLowerCase())) {
+          return varName;
+        }
+      }
+      
+      return null;
+    }
+    
+    // Function to show notification about variable updates
+    function showVariableUpdateNotification(renameMap) {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 10000;
+        background: #3b82f6; color: white; padding: 16px 20px;
+        border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px; max-width: 300px; line-height: 1.4;
+      `;
+      
+      const changes = Object.entries(renameMap).map(([old, new_]) => `${old} → ${new_}`).join(', ');
+      notification.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 4px;">🔄 Variables Updated</div>
+        <div>${changes}</div>
+        <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">Refreshing results...</div>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      // Remove notification after 3 seconds
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 3000);
+    }
+    
+    // Track added interactions
+    let addedInteractions = new Set();
+    
+    // Track added correlation heatmap
+    let correlationHeatmapAdded = false;
+    
+    // Function to move the "Add Plot" section to the end of the dynamic plots container
+    function moveAddPlotSectionToEnd() {
+      const container = document.getElementById('dynamic-plots-container');
+      if (!container) {
+        console.log('Dynamic plots container not found');
+        return;
+      }
+      
+      console.log('Looking for Add Plots section...');
+      
+      // Look for the "Add Plots" card section specifically
+      const addPlotsCards = document.querySelectorAll('.card .card-title');
+      console.log('Found', addPlotsCards.length, 'cards with titles');
+      
+      for (const cardTitle of addPlotsCards) {
+        console.log('Checking card title:', cardTitle.textContent.trim());
+        if (cardTitle.textContent.trim() === 'Add Plots') {
+          const addPlotsSection = cardTitle.closest('.card');
+          console.log('Found Add Plots card:', addPlotsSection);
+          console.log('Parent node:', addPlotsSection.parentNode);
+          console.log('Is in container?', container.contains(addPlotsSection));
+          
+          if (addPlotsSection) {
+            // Move the entire "Add Plots" card to the end of the dynamic plots container
+            container.appendChild(addPlotsSection);
+            console.log('Successfully moved Add Plots section to end of container');
+            return;
+          }
+        }
+      }
+      
+      console.log('Could not find Add Plots section to move');
+    }
+    
+    // Plot management functions
+    function addSpotlightPlot(interaction) {
+      console.log('addSpotlightPlot called with:', interaction);
+      console.log('Interaction type:', typeof interaction);
+      
+      // Ensure interaction is a string
+      if (typeof interaction !== 'string') {
+        console.error('Interaction must be a string, got:', typeof interaction);
+        return;
+      }
+      
+      // Mark interaction as added
+      addedInteractions.add(interaction);
+      
+      // Update dropdown to remove this interaction
+      updateSpotlightDropdown();
+      
+      // Generate spotlight plot for this specific interaction
+      const defaultOptions = {
+        moderatorSeparation: 'mean',
+        moderatorStdDevMultiplier: 1.0
+      };
+      generateSpotlightPlot(interaction, defaultOptions);
+      
+      // Show plot options in sidebar
+      showPlotOptions('spotlight');
+    }
+    
+    function addOrdinalSpotlightPlot(interaction, category) {
+      console.log('addOrdinalSpotlightPlot called with:', interaction, category);
+      
+      // Hide the dropdown item that was clicked
+      const clickedItem = document.querySelector(`[data-interaction="${interaction}"][data-category="${category}"]`);
+      if (clickedItem) {
+        clickedItem.style.display = 'none';
+        clickedItem.classList.add('plotted');
+      }
+      
+      // Update the dropdown visibility
+      updateSpotlightDropdown();
+      
+      // Generate the spotlight plot with the selected category
+      const customOptions = { 
+        ordinal_category: category,
+        moderatorSeparation: 'mean',
+        moderatorStdDevMultiplier: 1.0
+      };
+      generateSpotlightPlot(interaction, customOptions);
+    }
+    
+    function addMultinomialSpotlightPlot(interaction, category) {
+      console.log('Adding multinomial spotlight plot for interaction:', interaction, 'category:', category);
+      
+      // Hide the clicked item
+      const clickedItem = document.querySelector(`[data-interaction="${interaction}"][data-category="${category}"]`);
+      if (clickedItem) {
+        clickedItem.style.display = 'none';
+        clickedItem.classList.add('plotted');
+      }
+      
+      // Generate the plot with the selected category and default settings
+      const customOptions = {
+        multinomial_category: category,
+        moderatorSeparation: 'mean',
+        moderatorStdDevMultiplier: 1.0
+      };
+      
+      generateSpotlightPlot(interaction, customOptions);
+    }
+    
+    function generateSpotlightPlot(interaction, customOptions = {}) {
+      console.log('Generating spotlight plot for interaction:', interaction);
+      console.log('Custom options:', customOptions);
+      
+      // Make AJAX call to generate spotlight plot
+      const formData = new FormData();
+      formData.append('interaction', interaction);
+      
+      // Add custom options if provided
+      if (customOptions.moderatorVar) {
+        formData.append('moderator_var', customOptions.moderatorVar);
+        console.log('Adding moderator_var:', customOptions.moderatorVar);
+      }
+      if (customOptions.xLabel) formData.append('x_name', customOptions.xLabel);
+      if (customOptions.yLabel) formData.append('y_name', customOptions.yLabel);
+      if (customOptions.legendLow) formData.append('legend_low', customOptions.legendLow);
+      if (customOptions.legendHigh) formData.append('legend_high', customOptions.legendHigh);
+      if (customOptions.colorLow) formData.append('color_low', customOptions.colorLow);
+      if (customOptions.colorHigh) formData.append('color_high', customOptions.colorHigh);
+      if (customOptions.lineStyleLow) formData.append('line_style_low', customOptions.lineStyleLow);
+      if (customOptions.lineStyleHigh) formData.append('line_style_high', customOptions.lineStyleHigh);
+      if (customOptions.showCI !== undefined) formData.append('show_ci', customOptions.showCI);
+      if (customOptions.showGrid !== undefined) formData.append('show_grid', customOptions.showGrid);
+      if (customOptions.backgroundColor) formData.append('background_color', customOptions.backgroundColor);
+      if (customOptions.ordinal_category) formData.append('ordinal_category', customOptions.ordinal_category);
+      if (customOptions.multinomial_category) formData.append('multinomial_category', customOptions.multinomial_category);
+      if (customOptions.moderatorSeparation) formData.append('moderator_separation', customOptions.moderatorSeparation);
+      if (customOptions.moderatorStdDevMultiplier !== undefined) {
+        formData.append('moderator_std_dev_multiplier', customOptions.moderatorStdDevMultiplier);
+        console.log('Adding moderator_std_dev_multiplier:', customOptions.moderatorStdDevMultiplier);
+      }
+      
+      const url = `{% url 'generate_spotlight_plot' session.id %}`;
+      
+      // Get CSRF token from cookie or form
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+      
+      fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': csrfToken || ''
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            throw new Error(`HTTP ${response.status}: ${text}`);
+          });
+        }
+        return response.text();
+      })
+      .then(data => {
+        try {
+          const responseData = JSON.parse(data);
+          
+          // Check if this is an ordinal category selection response
+          if (responseData.type === 'ordinal_category_selection') {
+            showOrdinalCategoryModal(responseData, interaction, customOptions);
+            return;
+          }
+          
+          // Check if this is a multinomial category selection response
+          if (responseData.type === 'multinomial_category_selection') {
+            showMultinomialCategoryModal(responseData, interaction, customOptions);
+            return;
+          }
+          
+          // Regular plot data - create spotlight plot
+          const container = document.getElementById('dynamic-plots-container');
+          
+          // Generate unique plot ID with timestamp to prevent replacement
+          const timestamp = Date.now();
+          const plotId = `spotlight-${interaction.replace(/[^a-zA-Z0-9]/g, '-')}-${timestamp}`;
+          
+          // Create new plot section
+          const plotSection = document.createElement('section');
+          plotSection.id = plotId;
+          plotSection.className = 'card plot-card';
+          plotSection.style.marginBottom = '16px';
+          plotSection.innerHTML = `
+            <div class="card-head">
+              <h3 class="card-title">Spotlight Plot: ${interaction}</h3>
+              <div class="muted small">Moderator lines with optional 95% credible bands</div>
+              <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button type="button" class="btn btn-ghost" onclick="editPlot('${plotId}', 'spotlight', '${interaction}')" style="font-size: 14px;">✏️ Edit</button>
+                <button type="button" class="btn btn-ghost" onclick="removeSpotlightPlot('${plotId}', '${interaction}')">×</button>
+              </div>
+            </div>
+            <div class="plot-container" id="plot-${plotId}"></div>
+          `;
+          
+          container.appendChild(plotSection);
+          
+          // Move the "Add Plot" section to the end of the container
+          setTimeout(() => {
+            moveAddPlotSectionToEnd();
+          }, 100);
+          
+          // Render the plot
+          const plotContainer = document.getElementById(`plot-${plotId}`);
+          if (plotContainer && responseData) {
+            Plotly.newPlot(plotContainer, responseData);
+            
+            // Store plot settings for editing (including ordinal category if present)
+            const settingsKey = `spotlight_${plotId}`;
+            plotSettings[settingsKey] = customOptions;
+          }
+        } catch (parseError) {
+          console.error('Error parsing plot data:', parseError);
+          const container = document.getElementById('dynamic-plots-container');
+          const timestamp = Date.now();
+          const plotId = `spotlight-${interaction.replace(/[^a-zA-Z0-9]/g, '-')}-${timestamp}`;
+          const plotSection = document.createElement('section');
+          plotSection.id = plotId;
+          plotSection.className = 'card plot-card';
+          plotSection.style.marginBottom = '16px';
+          plotSection.innerHTML = `
+            <div class="card-head">
+              <h3 class="card-title">Spotlight Plot: ${interaction}</h3>
+              <div class="muted small">Error</div>
+              <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button type="button" class="btn btn-ghost" onclick="removeSpotlightPlot('${plotId}', '${interaction}')">×</button>
+              </div>
+            </div>
+            <div class="plot-container" id="plot-${plotId}">
+              <div class="error">Error parsing plot data: ${parseError.message}</div>
+            </div>
+          `;
+          container.appendChild(plotSection);
+          
+          // Move the "Add Plot" section to the end of the container
+          setTimeout(() => {
+            moveAddPlotSectionToEnd();
+          }, 100);
+        }
+      })
+      .catch(error => {
+        console.error('Error generating spotlight plot:', error);
+        // Show more detailed error message
+        let errorMsg = error.message;
+        if (errorMsg.includes('not found in dataset')) {
+          errorMsg += '\n\nPlease check that the variable name is spelled correctly and exists in your dataset.';
+        }
+        alert(`Failed to generate spotlight plot: ${errorMsg}`);
+      });
+    }
+    
+    function removeSpotlightPlot(plotId, interaction) {
+      // Remove from added interactions
+      addedInteractions.delete(interaction);
+      
+      // Remove the plot section
+      const plotSection = document.getElementById(plotId);
+      if (plotSection) {
+        plotSection.remove();
+      }
+      
+      // For ordinal regression, restore the specific interaction/category combination
+      // Find the ordinal plot item that matches this interaction
+      const ordinalItems = document.querySelectorAll(`.ordinal-plot-item[data-interaction="${interaction}"]`);
+      ordinalItems.forEach(item => {
+        item.style.display = 'block';
+        item.classList.remove('plotted');
+      });
+      
+      // For multinomial regression, restore the specific interaction/category combination
+      // Find the multinomial plot item that matches this interaction
+      const multinomialItems = document.querySelectorAll(`.multinomial-plot-item[data-interaction="${interaction}"]`);
+      multinomialItems.forEach(item => {
+        item.style.display = 'block';
+        item.classList.remove('plotted');
+      });
+      
+      // Update dropdown
+      updateSpotlightDropdown();
+      
+      // Hide plot options in sidebar
+      hidePlotOptions('spotlight');
+    }
+    
+    function addCorrelationHeatmap() {
+      console.log('addCorrelationHeatmap called');
+      
+      // Mark heatmap as added
+      correlationHeatmapAdded = true;
+      
+      // Hide the button
+      const button = document.querySelector('button[onclick="addCorrelationHeatmap()"]');
+      if (button) {
+        button.style.display = 'none';
+      }
+      
+      // Generate correlation heatmap
+      generateCorrelationHeatmap();
+      
+      // Show plot options in sidebar
+      showPlotOptions('correlation');
+    }
+    
+    function generateCorrelationHeatmap(customOptions = {}) {
+      console.log('Generating correlation heatmap');
+      console.log('Custom options:', customOptions);
+      
+      // Get continuous variables from the template
+      const continuousVars = {{ continuous_vars_json|safe }};
+      
+      // Make AJAX call to generate correlation heatmap
+      const formData = new FormData();
+      
+      // Add selected variables (default to all continuous variables)
+      const xVars = customOptions.xVars || continuousVars;
+      const yVars = customOptions.yVars || continuousVars;
+      
+      xVars.forEach(variable => formData.append('x_vars[]', variable));
+      yVars.forEach(variable => formData.append('y_vars[]', variable));
+      
+      // Add custom options if provided
+      if (customOptions.showSignificance !== undefined) {
+        formData.append('show_significance', customOptions.showSignificance);
+      }
+      if (customOptions.colorScheme) {
+        formData.append('color_scheme', customOptions.colorScheme);
+      }
+      
+      const url = `{% url 'generate_correlation_heatmap' session.id %}`;
+      
+      // Get CSRF token from cookie or form
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+      
+      fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': csrfToken || ''
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            throw new Error(`HTTP ${response.status}: ${text}`);
+          });
+        }
+        return response.text();
+      })
+      .then(data => {
+        // Create a new correlation heatmap section
+        const container = document.getElementById('dynamic-plots-container');
+        const timestamp = Date.now();
+        const plotId = `correlation-heatmap-${timestamp}`;
+        
+        // Create new plot section
+        const plotSection = document.createElement('section');
+        plotSection.id = plotId;
+        plotSection.className = 'card plot-card';
+        plotSection.style.marginBottom = '16px';
+        plotSection.innerHTML = `
+          <div class="card-head">
+            <h3 class="card-title">Correlation Heatmap</h3>
+            <div class="muted small">Pearson correlation coefficients with significance levels</div>
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+              <button type="button" class="btn btn-ghost" onclick="editPlot('${plotId}', 'correlation')" style="font-size: 14px;">✏️ Edit</button>
+              <button type="button" class="btn btn-ghost" onclick="removeCorrelationHeatmap()">×</button>
+            </div>
+          </div>
+          <div class="plot-container" id="plot-${plotId}"></div>
+        `;
+        
+        container.appendChild(plotSection);
+        
+        // Move the "Add Plot" section to the end of the container (only once)
+        setTimeout(() => {
+          moveAddPlotSectionToEnd();
+        }, 100);
+        
+        // Render the plot
+        const plotContainer = document.getElementById(`plot-${plotId}`);
+        if (plotContainer && data) {
+          try {
+            const plotData = JSON.parse(data);
+            Plotly.newPlot(plotContainer, plotData);
+          } catch (parseError) {
+            console.error('Error parsing plot data:', parseError);
+            plotContainer.innerHTML = `<div class="error">Error parsing plot data: ${parseError.message}</div>`;
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error generating correlation heatmap:', error);
+        alert(`Failed to generate correlation heatmap: ${error.message}`);
+      });
+    }
+    
+    function removeCorrelationHeatmap() {
+      // Mark heatmap as not added
+      correlationHeatmapAdded = false;
+      
+      // Remove the plot section
+      const plotSection = document.getElementById('correlation-heatmap');
+      if (plotSection) {
+        plotSection.remove();
+      }
+      
+      // Show the button again
+      const button = document.querySelector('button[onclick="addCorrelationHeatmap()"]');
+      if (button) {
+        button.style.display = 'flex';
+      }
+      
+      // Hide plot options in sidebar
+      hidePlotOptions('correlation');
+    }
+    
+    function removePlot(plotType) {
+      const section = document.getElementById(plotType + '-section');
+      if (section) {
+        section.style.display = 'none';
+        
+        // Reset button state
+        const button = document.querySelector(`button[onclick="addPlot('${plotType}')"]`);
+        if (button) {
+          button.style.display = 'flex';
+        }
+        
+        // If it's a spotlight plot, reset interactions
+        if (plotType === 'spotlight') {
+          addedInteractions.clear();
+          
+          // Restore ordinal regression items that were plotted
+          const plottedItems = document.querySelectorAll('.ordinal-plot-item.plotted');
+          plottedItems.forEach(item => {
+            item.style.display = 'block';
+            item.classList.remove('plotted');
+          });
+          
+          updateSpotlightDropdown();
+        }
+        
+        // Hide plot options in sidebar
+        hidePlotOptions(plotType);
+      }
+    }
+    
+    function toggleDropdown() {
+      const dropdown = document.getElementById('spotlight-dropdown');
+      if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+      }
+    }
+    
+    function updateSpotlightDropdown() {
+      const dropdown = document.getElementById('spotlight-dropdown');
+      if (dropdown) {
+        const items = dropdown.querySelectorAll('.dropdown-item');
+        items.forEach(item => {
+          // For ordinal regression items, check if they have the plotted class
+          if (item.classList.contains('ordinal-plot-item')) {
+            // Item is already handled by addOrdinalSpotlightPlot
+            return;
+          } else if (item.classList.contains('multinomial-plot-item')) {
+            // Item is already handled by addMultinomialSpotlightPlot
+            return;
+          } else {
+            // Regular interaction item
+            const interaction = item.textContent.trim();
+            if (interaction && addedInteractions.has(interaction)) {
+              item.style.display = 'none';
+            } else {
+              item.style.display = 'block';
+            }
+          }
+        });
+        
+        // Show/hide dropdown button based on available items
+        const visibleItems = Array.from(items).filter(item => 
+          item.style.display !== 'none' && !item.classList.contains('plotted')
+        );
+        const dropdownButton = document.querySelector('.dropdown-toggle');
+        if (dropdownButton) {
+          if (visibleItems.length === 0) {
+            dropdownButton.style.display = 'none';
+          } else {
+            dropdownButton.style.display = 'flex';
+          }
+        }
+      }
+    }
+    
+    function showPlotOptions(plotType) {
+      // Add plot-specific options to sidebar
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar && !document.getElementById(plotType + '-options')) {
+        const optionsDiv = document.createElement('div');
+        optionsDiv.id = plotType + '-options';
+        optionsDiv.className = 'card';
+        optionsDiv.style.marginBottom = '16px';
+        
+        if (plotType === 'spotlight') {
+          // Get the selected interaction
+          const selectedInteraction = Array.from(addedInteractions)[0] || 'No interaction selected';
+          optionsDiv.innerHTML = `
+            <div class="card-head">
+              <h3 class="card-title">Spotlight Options</h3>
+            </div>
+            <div>
+              <label class="field-label">Selected Interaction</label>
+              <div class="muted small" style="padding: 8px; background: #f9fafb; border-radius: 4px; margin-bottom: 8px;">
+                ${selectedInteraction}
+              </div>
+            </div>
+            <div class="grid-2">
+              <div>
+                <label class="field-label">X label</label>
+                <input class="input" type="text" name="x_name" value="{{session.options.x_name}}" placeholder="X">
+              </div>
+              <div>
+                <label class="field-label">Y label</label>
+                <input class="input" type="text" name="y_name" value="{{session.options.y_name}}" placeholder="Y">
+              </div>
+            </div>
+            <div>
+              <label class="field-label">Moderator label</label>
+              <input class="input" type="text" name="moderator_name" value="{{session.options.moderator_name}}" placeholder="Moderator">
+            </div>
+            <div class="grid-2">
+              <div>
+                <label class="field-label">Low line color</label>
+                <input class="input" type="text" name="plot_color_low" value="{{session.options.plot_color_low}}">
+              </div>
+              <div>
+                <label class="field-label">High line color</label>
+                <input class="input" type="text" name="plot_color_high" value="{{session.options.plot_color_high}}">
+              </div>
+            </div>
+            <div class="grid-2">
+              <div>
+                <label class="field-label">Low line style</label>
+                <select class="input" name="line_style_low">
+                  <option value="solid" {% if session.options.line_style_low == 'solid' %}selected{% endif %}>solid</option>
+                  <option value="dashed" {% if session.options.line_style_low == 'dashed' %}selected{% endif %}>dashed</option>
+                  <option value="dotted" {% if session.options.line_style_low == 'dotted' %}selected{% endif %}>dotted</option>
+                  <option value="dashdot" {% if session.options.line_style_low == 'dashdot' %}selected{% endif %}>dashdot</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">High line style</label>
+                <select class="input" name="line_style_high">
+                  <option value="solid" {% if session.options.line_style_high == 'solid' %}selected{% endif %}>solid</option>
+                  <option value="dashed" {% if session.options.line_style_high == 'dashed' %}selected{% endif %}>dashed</option>
+                  <option value="dotted" {% if session.options.line_style_high == 'dotted' %}selected{% endif %}>dotted</option>
+                  <option value="dashdot" {% if session.options.line_style_high == 'dashdot' %}selected{% endif %}>dashdot</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="switch-col">
+                <label class="field-label">Spotlight 95% band</label>
+                <label class="switch">
+                  <input type="checkbox" name="spotlight_ci" {% if session.options.spotlight_ci %}checked{% endif %}>
+                  <span></span>
+                </label>
+              </div>
+            </div>
+          `;
+        } else if (plotType === 'correlation') {
+          const continuousVars = {{ continuous_vars_json|safe }};
+          optionsDiv.innerHTML = `
+            <div class="card-head">
+              <h3 class="card-title">Correlation Heatmap Options</h3>
+            </div>
+            <div>
+              <label class="field-label">X Variables (columns)</label>
+              <div style="max-height: 150px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+                ${continuousVars.map(variable => `
+                  <label style="display: block; margin-bottom: 4px;">
+                    <input type="checkbox" name="x_vars" value="${variable}" checked style="margin-right: 8px;">
+                    ${variable}
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+            <div>
+              <label class="field-label">Y Variables (rows)</label>
+              <div style="max-height: 150px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+                ${continuousVars.map(variable => `
+                  <label style="display: block; margin-bottom: 4px;">
+                    <input type="checkbox" name="y_vars" value="${variable}" checked style="margin-right: 8px;">
+                    ${variable}
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+            <div>
+              <label class="field-label">Color Scheme</label>
+              <select class="input" name="color_scheme">
+                <option value="RdBu">Red-Blue</option>
+                <option value="RdYlBu">Red-Yellow-Blue</option>
+                <option value="Viridis">Viridis</option>
+                <option value="Plasma">Plasma</option>
+                <option value="Inferno">Inferno</option>
+                <option value="Magma">Magma</option>
+                <option value="Blues">Blues</option>
+                <option value="Reds">Reds</option>
+                <option value="Greens">Greens</option>
+                <option value="Purples">Purples</option>
+                <option value="Oranges">Oranges</option>
+                <option value="Greys">Greys</option>
+                <option value="White">Pure White</option>
+                <option value="White-Blue">White to Blue</option>
+                <option value="White-Red">White to Red</option>
+                <option value="White-Green">White to Green</option>
+                <option value="White-Purple">White to Purple</option>
+                <option value="White-Orange">White to Orange</option>
+              </select>
+            </div>
+            <div class="switch-col">
+              <label class="field-label">Show Significance Asterisks</label>
+              <label class="switch">
+                <input type="checkbox" name="show_significance" checked>
+                <span></span>
+              </label>
+            </div>
+          `;
+        }
+        
+        sidebar.appendChild(optionsDiv);
+      }
+    }
+    
+    function hidePlotOptions(plotType) {
+      const optionsDiv = document.getElementById(plotType + '-options');
+      if (optionsDiv) {
+        optionsDiv.remove();
+      }
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+      const dropdown = document.getElementById('spotlight-dropdown');
+      const dropdownButton = document.querySelector('.dropdown-toggle');
+      if (dropdown && dropdownButton && !dropdown.contains(event.target) && !dropdownButton.contains(event.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+    
+    // Bayesian Loading Management
+    let loadingModal = null;
+    let progressInterval = null;
+    let currentProgress = 0;
+    
+    // Define the expected steps and their progress percentages
+    const bayesianSteps = [
+      { step: "Initializing Bayesian regression analysis...", progress: 5 },
+      { step: "Validating outcome variable...", progress: 10 },
+      { step: "Preparing data and cleaning missing values...", progress: 15 },
+      { step: "Data preparation completed successfully", progress: 20 },
+      { step: "Creating Bayesian model with Bambi...", progress: 25 },
+      { step: "Model created successfully", progress: 30 },
+      { step: "Starting MCMC sampling...", progress: 35 },
+      { step: "Running MCMC chains (this may take several minutes)...", progress: 50 },
+      { step: "MCMC sampling completed successfully", progress: 75 },
+      { step: "Computing posterior summary statistics...", progress: 85 },
+      { step: "Summary statistics computed successfully", progress: 90 },
+      { step: "Formatting results table...", progress: 95 },
+      { step: "Finalizing results and preparing output...", progress: 98 },
+      { step: "Analysis completed successfully!", progress: 100 }
+    ];
+    
+    function showBayesianLoadingModal() {
+      console.log('showBayesianLoadingModal called');
+      loadingModal = document.getElementById('bayesianLoadingModal');
+      console.log('Loading modal element:', loadingModal);
+      
+      if (loadingModal) {
+        console.log('Showing loading modal');
+        loadingModal.style.display = 'block';
+        currentProgress = 0;
+        updateProgress(0, "Initializing Bayesian regression analysis...");
+        
+        // Start progress simulation
+        startProgressSimulation();
+      } else {
+        console.error('Loading modal element not found!');
+      }
+    }
+    
+    function hideBayesianLoadingModal() {
+      if (loadingModal) {
+        loadingModal.style.display = 'none';
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+      }
+    }
+    
+    function updateProgress(progress, step) {
+      const progressBar = document.getElementById('progressBar');
+      const progressPercent = document.getElementById('progressPercent');
+      const currentStep = document.getElementById('currentStep');
+      
+      if (progressBar) {
+        progressBar.style.width = progress + '%';
+      }
+      if (progressPercent) {
+        progressPercent.textContent = progress + '%';
+      }
+      if (currentStep) {
+        currentStep.textContent = step;
+      }
+      
+      currentProgress = progress;
+    }
+    
+    function startProgressSimulation() {
+      let stepIndex = 0;
+      
+      progressInterval = setInterval(() => {
+        if (stepIndex < bayesianSteps.length) {
+          const currentStepData = bayesianSteps[stepIndex];
+          updateProgress(currentStepData.progress, currentStepData.step);
+          stepIndex++;
+        } else {
+          // Keep the last step visible
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+      }, 2000); // Update every 2 seconds
+    }
+    
+    // Function to handle form submission with loading modal
+    function handleBayesianFormSubmission(event) {
+      console.log('handleBayesianFormSubmission called', event);
+      
+      // Prevent default form submission
+      event.preventDefault();
+      
+      // Show loading modal
+      showBayesianLoadingModal();
+      
+      // Disable submit button
+      const submitBtn = event.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Running Analysis...';
+      }
+      
+      // Submit the form after showing the modal
+      setTimeout(() => {
+        console.log('Submitting form after delay');
+        event.target.submit();
+      }, 500); // Small delay to ensure modal is visible
+      
+      return false; // Prevent default submission
+    }
+    
+    // Function to update display options client-side (no server request)
+    function updateDisplayOptions() {
+      console.log('updateDisplayOptions called');
+      
+      // Get all the display option checkboxes
+      const options = {
+        show_mean: document.querySelector('input[name="show_mean"]').checked,
+        show_std: document.querySelector('input[name="show_std"]').checked,
+        show_hpd_low: document.querySelector('input[name="show_hpd_low"]').checked,
+        show_hpd_high: document.querySelector('input[name="show_hpd_high"]').checked,
+        show_rhat: document.querySelector('input[name="show_rhat"]').checked,
+        show_ess: document.querySelector('input[name="show_ess"]').checked,
+        show_min: document.querySelector('input[name="show_min"]').checked,
+        show_max: document.querySelector('input[name="show_max"]').checked,
+        show_range: document.querySelector('input[name="show_range"]').checked,
+        show_variance: document.querySelector('input[name="show_variance"]').checked
+      };
+      
+      console.log('Display options:', options);
+      
+      // Update the Bayesian results table
+      updateBayesianTable(options);
+      
+      // Update the summary table
+      updateSummaryTable(options);
+      
+      // Show success message
+      showUpdateMessage('Display options updated successfully!');
+    }
+    
+    // Function to update Bayesian results table columns
+    function updateBayesianTable(options) {
+      const table = document.querySelector('#bayesianTable');
+      if (!table) return;
+      
+      const headers = table.querySelectorAll('th');
+      const rows = table.querySelectorAll('tbody tr');
+      
+      // Map column names to their indices
+      const columnMap = {};
+      headers.forEach((header, index) => {
+        const text = header.textContent.trim();
+        if (text.includes('Mean')) columnMap.mean = index;
+        else if (text.includes('Std')) columnMap.std = index;
+        else if (text.includes('2.5%')) columnMap.hpd_low = index;
+        else if (text.includes('97.5%')) columnMap.hpd_high = index;
+        else if (text.includes('Rhat')) columnMap.rhat = index;
+        else if (text.includes('ESS')) columnMap.ess = index;
+      });
+      
+      // Show/hide columns based on options
+      Object.entries(columnMap).forEach(([key, index]) => {
+        const shouldShow = options[`show_${key}`];
+        
+        // Hide/show header
+        if (headers[index]) {
+          headers[index].style.display = shouldShow ? '' : 'none';
+        }
+        
+        // Hide/show cells in all rows
+        rows.forEach(row => {
+          const cell = row.children[index];
+          if (cell) {
+            cell.style.display = shouldShow ? '' : 'none';
+          }
+        });
+      });
+    }
+    
+    // Function to update summary table columns
+    function updateSummaryTable(options) {
+      const summarySection = document.querySelector('#summary-table-section');
+      if (!summarySection) return;
+      
+      const table = summarySection.querySelector('table');
+      if (!table) return;
+      
+      // Get all elements with data-column attributes
+      const columnElements = table.querySelectorAll('[data-column]');
+      
+      // Show/hide columns based on options
+      columnElements.forEach(element => {
+        const columnName = element.getAttribute('data-column');
+        const shouldShow = options[`show_${columnName}`];
+        
+        element.style.display = shouldShow ? '' : 'none';
+      });
+    }
+    
+    // Function to show update message
+    function showUpdateMessage(message) {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 10000;
+        background: #10b981; color: white; padding: 12px 16px;
+        border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px; font-weight: 500;
+      `;
+      notification.textContent = message;
+      
+      document.body.appendChild(notification);
+      
+      // Remove notification after 2 seconds
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 2000);
+    }
+    
+    // Function to check if analysis is still running
+    function checkAnalysisStatus() {
+      // Check if we have results loaded
+      const hasResults = document.querySelector('#bayesianTable') !== null;
+      const hasError = document.querySelector('.error') !== null;
+      
+      if (!hasResults && !hasError) {
+        // No results yet, show loading modal
+        showBayesianLoadingModal();
+        
+        // Check periodically for results
+        const checkInterval = setInterval(() => {
+          const nowHasResults = document.querySelector('#bayesianTable') !== null;
+          const nowHasError = document.querySelector('.error') !== null;
+          
+          if (nowHasResults || nowHasError) {
+            hideBayesianLoadingModal();
+            clearInterval(checkInterval);
+          }
+        }, 2000); // Check every 2 seconds
+        
+        // Stop checking after 5 minutes
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          hideBayesianLoadingModal();
+        }, 300000); // 5 minutes
+      }
+    }
+    
+    // Function to cancel Bayesian analysis
+    function cancelBayesianAnalysis() {
+      console.log('Cancelling Bayesian analysis...');
+      
+      // Show modern confirmation dialog
+      showCancelConfirmationModal();
+    }
+    
+    // Function to show modern confirmation modal
+    function showCancelConfirmationModal() {
+      // Create modal if it doesn't exist
+      let modal = document.getElementById('cancelConfirmationModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'cancelConfirmationModal';
+        modal.className = 'modal';
+        modal.style.cssText = 'display: none; position: fixed; z-index: 10001; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6);';
+        document.body.appendChild(modal);
+      }
+      
+      // Create modal content
+      modal.innerHTML = `
+        <div class="modal-content" style="background-color: white; margin: 20% auto; padding: 32px; border-radius: 16px; width: 90%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); animation: slideIn 0.3s ease-out;">
+          <div class="modal-header" style="text-align: center; margin-bottom: 24px;">
+            <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 600;">Cancel Analysis?</h3>
+            <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.5;">
+              Are you sure you want to cancel the Bayesian analysis? This will stop the current analysis and you will need to restart it.
+            </p>
+          </div>
+          
+          <div style="display: flex; gap: 12px; justify-content: center;">
+            <button type="button" onclick="closeCancelConfirmationModal()" class="btn btn-ghost" style="
+              padding: 10px 20px; 
+              font-size: 14px; 
+              font-weight: 500; 
+              border-radius: 8px; 
+              border: 1px solid #e5e7eb; 
+              background-color: #f9fafb; 
+              color: #374151; 
+              cursor: pointer; 
+              transition: all 0.2s ease;
+            " onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='#f9fafb'">
+              Keep Running
+            </button>
+            <button type="button" onclick="confirmCancelAnalysis()" class="btn btn-primary" style="
+              display: flex; 
+              align-items: center; 
+              gap: 8px; 
+              padding: 10px 20px; 
+              font-size: 14px; 
+              font-weight: 600; 
+              border-radius: 8px; 
+              border: none; 
+              background: linear-gradient(135deg, #ef4444, #dc2626); 
+              color: white; 
+              cursor: pointer; 
+              transition: all 0.2s ease;
+              box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            " onmouseover="this.style.background='linear-gradient(135deg, #dc2626, #b91c1c)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'" onmouseout="this.style.background='linear-gradient(135deg, #ef4444, #dc2626)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;">
+                <path d="M6 18L18 6M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Yes, Cancel
+            </button>
+          </div>
+        </div>
+      `;
+      
+      modal.style.display = 'block';
+      
+      // Add click-outside-to-close functionality
+      modal.onclick = function(event) {
+        if (event.target === modal) {
+          closeCancelConfirmationModal();
+        }
+      };
+    }
+    
+    // Function to close confirmation modal
+    function closeCancelConfirmationModal() {
+      const modal = document.getElementById('cancelConfirmationModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+    
+    // Function to confirm cancellation
+    function confirmCancelAnalysis() {
+      closeCancelConfirmationModal();
+      
+      // Hide the loading modal
+      hideBayesianLoadingModal();
+      
+      // Make a request to cancel the analysis
+      fetch('/cancel-bayesian-analysis/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+          session_id: {{ session.id }}
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showUpdateMessage('Analysis cancelled - reverting to previous results');
+          
+          // Revert to previous model parameters and keep previous results
+          setTimeout(() => {
+            // Reload the page to get the previous state
+            window.location.reload();
+          }, 1000);
+        } else {
+          showUpdateMessage('Error cancelling analysis: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(error => {
+        console.error('Error cancelling analysis:', error);
+        showUpdateMessage('Error cancelling analysis. Please try again.');
+      });
+    }
+    
+    // Helper function to get CSRF token from cookie
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Bayesian results page loaded');
+      console.log('Loading modal element:', document.getElementById('bayesianLoadingModal'));
+      console.log('Test button element:', document.querySelector('button[onclick="showBayesianLoadingModal()"]'));
+      
+      // Initialize display options based on current checkbox states
+      initializeDisplayOptions();
+      
+      // Check if analysis is still running
+      checkAnalysisStatus();
+    });
+    
+    // Function to initialize display options on page load
+    function initializeDisplayOptions() {
+      // Get current display option states
+      const options = {
+        show_mean: document.querySelector('input[name="show_mean"]')?.checked ?? true,
+        show_std: document.querySelector('input[name="show_std"]')?.checked ?? true,
+        show_hpd_low: document.querySelector('input[name="show_hpd_low"]')?.checked ?? true,
+        show_hpd_high: document.querySelector('input[name="show_hpd_high"]')?.checked ?? true,
+        show_rhat: document.querySelector('input[name="show_rhat"]')?.checked ?? true,
+        show_ess: document.querySelector('input[name="show_ess"]')?.checked ?? true,
+        show_min: document.querySelector('input[name="show_min"]')?.checked ?? true,
+        show_max: document.querySelector('input[name="show_max"]')?.checked ?? true,
+        show_range: document.querySelector('input[name="show_range"]')?.checked ?? false,
+        show_variance: document.querySelector('input[name="show_variance"]')?.checked ?? false
+      };
+      
+      console.log('Initializing display options:', options);
+      
+      // Apply the current options to both tables
+      updateBayesianTable(options);
+      updateSummaryTable(options);
+    }
+  </script>
+
+<!-- Plot Edit Modal -->
+<div id="plotEditModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+  <div class="modal-content" style="background-color: white; margin: 5% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 500px; max-height: 80vh; overflow-y: auto;">
+    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 id="modalTitle">Edit Plot</h3>
+      <button type="button" onclick="closePlotEditModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="plotEditForm">
+        <div id="plotEditOptions">
+          <!-- Options will be populated dynamically -->
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+          <button type="button" onclick="closePlotEditModal()" class="btn btn-ghost">Cancel</button>
+          <button type="button" onclick="applyPlotChanges()" class="btn btn-primary">Apply Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,1102 @@
+{% extends "engine/base.html" %}
+{% block title %}ANOVA Results — Analysis Assistant{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+  // Set AI chat context when page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof aiChatContext !== 'undefined') {
+      aiChatContext = {
+        session_name: '{% if session %}{{ session.name|escapejs }}{% endif %}',
+        formula: '{{ formula|escapejs }}',
+        module: 'anova',
+        dataset_name: '{{ dataset.name|escapejs }}'
+      };
+    }
+  });
+</script>
+<style>
+  .error-message {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 20px 0;
+  }
+  
+  .stars {
+    font-weight: 600;
+  }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  {% if session %}
+  <a href="/session/{{session.id}}/" class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">Modify</a>
+  {% else %}
+  <a class="btn btn-ghost" href="/app/">Back to Analysis</a>
+  {% endif %}
+  {% if session %}
+  <a href="{% url 'download_session_history' session.id %}?format=text" class="btn btn-ghost" style="margin-left: 8px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+    </svg>
+    Download History
+  </a>
+  {% endif %}
+  <button class="btn" type="button" onclick="toggleAIChatbox()" 
+          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
+          title="Ask AI Assistant">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    Ask AI
+  </button>
+{% endblock %}
+
+{% block sidebar %}
+  <!-- ANOVA Table Column Controls -->
+  {% if results.has_results %}
+  <div class="card">
+    <div class="card-head">
+      <h3 class="card-title">Table Columns</h3>
+    </div>
+    <div class="card-body">
+      <div class="grid-2">
+        <div class="switch-col">
+          <label class="field-label">Sum of Squares</label>
+          <label class="switch">
+            <input type="checkbox" id="show_sum_sq" checked>
+            <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+          <label class="field-label">DF</label>
+          <label class="switch">
+            <input type="checkbox" id="show_df" checked>
+            <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="switch-col">
+          <label class="field-label">Mean Square</label>
+          <label class="switch">
+            <input type="checkbox" id="show_mean_sq" checked>
+            <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+          <label class="field-label">F</label>
+          <label class="switch">
+            <input type="checkbox" id="show_f" checked>
+            <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="switch-col">
+          <label class="field-label">Prob > F</label>
+          <label class="switch">
+            <input type="checkbox" id="show_p_value" checked>
+            <span></span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generate Plot Card -->
+  {% if session %}
+  <div class="card" style="margin-top: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Generate Plot</h3>
+    </div>
+    <div class="card-body">
+      <form id="plotForm" onsubmit="event.preventDefault(); generatePlot();">
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">X Axis Variable</label>
+          <select id="x_var" class="input" required>
+            <option value="">Select X variable</option>
+            {% for var in numeric_vars %}
+              <option value="{{ var }}">{{ var }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">Y Axis Variable</label>
+          <select id="y_var" class="input" required>
+            <option value="">Select Y variable</option>
+            {% for var in numeric_vars %}
+              <option value="{{ var }}">{{ var }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">Group Variable (Optional)</label>
+          <select id="group_var" class="input">
+            <option value="">None</option>
+            {% for var in numeric_vars %}
+              <option value="{{ var }}">{{ var }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div id="x_std_div" style="margin-bottom: 12px;">
+          <label class="field-label">X Split: Standard Deviations</label>
+          <input type="number" id="x_std" class="input" value="1" min="0.1" max="5" step="0.1" placeholder="1.0">
+          <small style="color: var(--muted); font-size: 12px;">Number of std dev from mean to split high/low</small>
+        </div>
+
+        <div id="group_std_div" style="margin-bottom: 12px;">
+          <label class="field-label">Group Split: Standard Deviations</label>
+          <input type="number" id="group_std" class="input" value="1" min="0.1" max="5" step="0.1" placeholder="1.0">
+          <small style="color: var(--muted); font-size: 12px;">Only used if group variable is selected</small>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">Significance Level for Asterisks</label>
+          <select id="sig_level" class="input">
+            <option value="0.05">One * = 5% significant</option>
+            <option value="0.01">One * = 1% significant</option>
+            <option value="0.10">One * = 10% significant</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button type="submit" class="btn" style="flex: 1; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">
+            Generate Plot
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+  <!-- ANOVA Results Header -->
+  <div class="modern-results-header">
+    <div class="header-main">
+      <div class="regression-type-badge">
+        <span class="regression-type">ANOVA Analysis</span>
+      </div>
+      <div class="header-actions">
+        {% if dataset %}
+        <a class="modern-edit-btn" href="{% url 'dataprep_open' dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+          Edit Dataset
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <span class="meta-label">Dataset:</span>
+        <span class="meta-value">{{dataset.name}}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span class="meta-label">Formula:</span>
+        <span class="meta-value">{{formula}}</span>
+      </div>
+    </div>
+  </div>
+
+  {% if not results.has_results %}
+    <!-- Error Message -->
+    <div class="error-message">
+      <h3>Analysis Error</h3>
+      <p>{{ results.error }}</p>
+    </div>
+  {% else %}
+
+    <!-- ANOVA Results Table -->
+    {% for dv, anova_data in results.anova_results.items %}
+    <section class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <h3 class="card-title">ANOVA Table for {{dv}}</h3>
+        <div class="muted small">Signif.: <strong>***</strong> 0.001 · <strong>**</strong> 0.01 · <strong>*</strong> 0.05 · <strong>.</strong> 0.10</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th class="col-sum-sq">Sum of Squares</th>
+              <th class="col-df">DF</th>
+              <th class="col-mean-sq">Mean Square</th>
+              <th class="col-f">F</th>
+              <th class="col-p-value">Prob > F</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in anova_data.anova_table %}
+            <tr>
+              <td><strong>{{ row.source }}</strong></td>
+              <td class="mono col-sum-sq">
+                {% if row.sum_sq != None %}
+                  {{ row.sum_sq|floatformat:4 }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="mono col-df">
+                {% if row.df != None %}
+                  {{ row.df|floatformat:0 }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="mono col-mean-sq">
+                {% if row.mean_sq != None %}
+                  {{ row.mean_sq|floatformat:4 }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="mono col-f">
+                {% if row.F != None %}
+                  {{ row.F|floatformat:4 }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="mono col-p-value">
+                {% if row.PR_F != None %}
+                  {{ row.PR_F|floatformat:4 }}
+                  {% if row.PR_F < 0.001 %}
+                    <span class="stars">***</span>
+                  {% elif row.PR_F < 0.01 %}
+                    <span class="stars">**</span>
+                  {% elif row.PR_F < 0.05 %}
+                    <span class="stars">*</span>
+                  {% elif row.PR_F < 0.10 %}
+                    <span class="stars">.</span>
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endfor %}
+
+  {% endif %}
+
+  <!-- Plot Container -->
+  <section id="plotContainer" class="card plot-card" style="margin-top: 24px; display: none;">
+    <div class="card-head">
+      <div>
+        <h3 class="card-title">ANOVA Plot</h3>
+        <div class="muted small">T-test with significance levels</div>
+      </div>
+      <div class="card-actions">
+        <button id="anovaColorEditorBtn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 8px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+          Customize
+        </button>
+        <button id="anovaDownloadBtn" class="btn" style="padding: 6px 12px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7,10 12,15 17,10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Download
+        </button>
+      </div>
+    </div>
+    <div id="plot-content" class="plot-container"></div>
+  </section>
+
+  <!-- Color Editor Modal -->
+  <div id="anovaColorEditorModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 12px; padding: 24px; min-width: 450px; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 style="margin: 0; font-size: 1.25rem; color: #1f2937;">Customize Plot</h3>
+      <button onclick="hideAnovaColorEditor()" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">×</button>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Y Axis Name</label>
+      <input type="text" id="y_axis_name_modal" class="input" placeholder="Y axis variable name">
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Low X-Axis Label</label>
+      <input type="text" id="low_x_label_modal" class="input" placeholder="Low x-axis label">
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">High X-Axis Label</label>
+      <input type="text" id="high_x_label_modal" class="input" placeholder="High x-axis label">
+    </div>
+    
+    <div id="group_labels_section" style="margin-bottom: 20px; display: none;">
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Low Group Variable Label</label>
+        <input type="text" id="low_group_label_modal" class="input" placeholder="Low group variable label">
+      </div>
+      
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">High Group Variable Label</label>
+        <input type="text" id="high_group_label_modal" class="input" placeholder="High group variable label">
+      </div>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Background Color</label>
+      <input type="color" id="bg_color_modal" value="#ffffff" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Low Group Bar Color</label>
+          <input type="color" id="low_bar_color_modal" value="#cccccc" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Low Group Border Color</label>
+          <input type="color" id="low_bar_border_color_modal" value="#000000" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
+        </div>
+      </div>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">High Group Bar Color</label>
+          <input type="color" id="high_bar_color_modal" value="#333333" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">High Group Border Color</label>
+          <input type="color" id="high_bar_border_color_modal" value="#000000" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
+        </div>
+      </div>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Plot Title (optional)</label>
+      <input type="text" id="plot_title_modal" class="input" placeholder="Custom title">
+    </div>
+    
+    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+      <button onclick="hideAnovaColorEditor()" style="padding: 8px 16px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-size: 0.875rem;">Cancel</button>
+      <button onclick="applyAnovaColors()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 600;">Apply</button>
+    </div>
+  </div>
+</div>
+
+  <!-- Export Modal -->
+  <div id="anovaExportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 12px; padding: 24px; min-width: 450px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0; font-size: 1.25rem; color: #1f2937;">Select Download Quality</h3>
+        <button onclick="hideExportModal()" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">×</button>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 0.875rem;">
+          Choose the quality and resolution for your plot download:
+        </p>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label class="anova-quality-option" data-quality="standard" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="anova-quality" value="standard" checked style="margin-right: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Standard Quality</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">800 × 600 pixels • Good for presentations</div>
+            </div>
+          </label>
+          
+          <label class="anova-quality-option" data-quality="high" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="anova-quality" value="high" style="margin-right: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">High Quality</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">1200 × 900 pixels • Great for reports</div>
+            </div>
+          </label>
+          
+          <label class="anova-quality-option" data-quality="ultra" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="anova-quality" value="ultra" style="margin-right: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Ultra High Quality</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">1600 × 1200 pixels • Perfect for publications</div>
+            </div>
+          </label>
+          
+          <label class="anova-quality-option" data-quality="custom" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="anova-quality" value="custom" style="margin-right: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Custom Resolution</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">Specify your own dimensions</div>
+            </div>
+          </label>
+        </div>
+        
+        <div id="customResolutionInputsAnova" style="display: none; margin-top: 16px; padding: 16px; background: #f9fafb; border-radius: 8px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Width (pixels)</label>
+              <input type="number" id="customWidthAnova" value="1200" min="400" max="4000" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Height (pixels)</label>
+              <input type="number" id="customHeightAnova" value="900" min="300" max="3000" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button onclick="hideExportModal()" style="padding: 8px 16px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-size: 0.875rem;">Cancel</button>
+        <button id="anovaDownloadBtnInModal" style="padding: 8px 16px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 600;">Download Plot</button>
+      </div>
+    </div>
+  </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Store numeric variables for binary detection
+const numericVars = {
+  {% for var in numeric_vars %}
+    '{{ var }}': null,
+  {% endfor %}
+};
+
+async function checkVariableType(variable) {
+  // This would normally require a dataset check, but for now we'll detect binary on client side
+  // We'll send this info when generating the plot
+  return null; // Will be detected server-side
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Column visibility toggles
+  const checkboxes = {
+    'show_sum_sq': 'col-sum-sq',
+    'show_df': 'col-df',
+    'show_mean_sq': 'col-mean-sq',
+    'show_f': 'col-f',
+    'show_p_value': 'col-p-value'
+  };
+  
+  Object.keys(checkboxes).forEach(function(checkboxId) {
+    const checkbox = document.getElementById(checkboxId);
+    const columnClass = checkboxes[checkboxId];
+    
+    if (checkbox) {
+      checkbox.addEventListener('change', function() {
+        const isChecked = this.checked;
+        const elements = document.querySelectorAll('.' + columnClass);
+        
+        elements.forEach(function(element) {
+          element.style.display = isChecked ? '' : 'none';
+        });
+      });
+    }
+  });
+
+  // Handle X variable selection - check if binary and disable std controls
+  const xVarSelect = document.getElementById('x_var');
+  const xStdDiv = document.getElementById('x_std_div');
+  const xStdInput = document.getElementById('x_std');
+  
+  if (xVarSelect) {
+    xVarSelect.addEventListener('change', async function() {
+      if (this.value) {
+        // Disable std input for now, will be enabled/disabled by server response
+        xStdInput.disabled = false;
+        // Will check binary status on server side
+      }
+    });
+  }
+
+  // Handle group variable selection
+  const groupVarSelect = document.getElementById('group_var');
+  const groupStdDiv = document.getElementById('group_std_div');
+  const groupStdInput = document.getElementById('group_std');
+  
+  if (groupVarSelect) {
+    groupVarSelect.addEventListener('change', function() {
+      if (this.value) {
+        groupStdDiv.style.display = 'block';
+        groupStdInput.disabled = false;
+      } else {
+        groupStdDiv.style.display = 'none';
+      }
+    });
+  }
+});
+
+// Generate plot function
+async function generatePlot() {
+  {% if session %}
+  const sessionId = {{ session.id }};
+  {% else %}
+  const sessionId = null;
+  {% endif %}
+  
+  if (!sessionId) {
+    alert('No session available');
+    return;
+  }
+  
+  const xVar = document.getElementById('x_var').value;
+  const yVar = document.getElementById('y_var').value;
+  const groupVar = document.getElementById('group_var').value;
+  const xStd = parseFloat(document.getElementById('x_std').value);
+  const groupStd = parseFloat(document.getElementById('group_std').value);
+  const sigLevel = parseFloat(document.getElementById('sig_level').value);
+  
+  if (!xVar || !yVar) {
+    alert('Please select X and Y variables');
+    return;
+  }
+
+  // Show loading and display plot container
+  const plotSection = document.getElementById('plotContainer');
+  const plotContent = document.getElementById('plot-content');
+  plotContent.innerHTML = '<div style="text-align: center; padding: 20px;">Generating plot...</div>';
+  plotSection.style.display = 'block';
+
+  try {
+    const response = await fetch(`/session/${sessionId}/anova-plot/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
+      },
+      body: JSON.stringify({
+        x_var: xVar,
+        y_var: yVar,
+        group_var: groupVar || null,
+        x_std: xStd,
+        group_std: groupStd,
+        sig_level: sigLevel
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      // Display the plot
+      plotContent.innerHTML = `<div id="anova-plot"></div>`;
+      Plotly.newPlot('anova-plot', data.plot_data.data, data.plot_data.layout);
+    } else {
+      plotContent.innerHTML = `<div style="color: var(--danger); padding: 10px;">Error: ${data.error}</div>`;
+    }
+  } catch (error) {
+    plotContent.innerHTML = `<div style="color: var(--danger); padding: 10px;">Error generating plot: ${error.message}</div>`;
+  }
+}
+
+// Clear plot function
+function clearPlot() {
+  const plotSection = document.getElementById('plotContainer');
+  plotSection.style.display = 'none';
+}
+
+// Apply plot colors
+function applyPlotColors() {
+  const plotContent = document.getElementById('plot-content');
+  const plotDiv = document.getElementById('anova-plot');
+  
+  if (!plotDiv) {
+    alert('Please generate a plot first');
+    return;
+  }
+  
+  if (typeof Plotly === 'undefined') {
+    alert('Plotly not loaded');
+    return;
+  }
+  
+  try {
+    const bgColor = document.getElementById('bg_color').value;
+    const lowColor = document.getElementById('low_bar_color').value;
+    const highColor = document.getElementById('high_bar_color').value;
+    const customTitle = document.getElementById('plot_title').value;
+    
+    // Get current plot data
+    const update = {
+      'layout': {
+        'plot_bgcolor': bgColor,
+        'paper_bgcolor': bgColor
+      }
+    };
+    
+    // Update bar colors - iterate through traces
+    const allUpdates = {
+      'data': [],
+      'layout': {
+        'plot_bgcolor': bgColor,
+        'paper_bgcolor': bgColor
+      }
+    };
+    
+    // Get existing data
+    Plotly.getData('anova-plot').then(data => {
+      // Update colors based on trace type
+      data.forEach((trace, idx) => {
+        if (trace.type === 'bar') {
+          // Determine if this is a low or high group bar
+          // Assuming odd indices are low group and even are high group
+          const isLowGroup = idx % 2 === 0;
+          const color = isLowGroup ? lowColor : highColor;
+          
+          Plotly.restyle('anova-plot', {
+            'marker.color': color
+          }, idx);
+        }
+      });
+      
+      // Update layout colors
+      Plotly.relayout('anova-plot', {
+        'plot_bgcolor': bgColor,
+        'paper_bgcolor': bgColor
+      });
+      
+      // Update title if provided
+      if (customTitle) {
+        Plotly.relayout('anova-plot', {
+          'title.text': customTitle
+        });
+      }
+    });
+    
+    console.log('Colors applied successfully');
+  } catch (error) {
+    console.error('Error applying colors:', error);
+    alert('Error applying colors. See console for details.');
+  }
+}
+
+// Show export modal
+function showExportModal() {
+  const plotDiv = document.getElementById('anova-plot');
+  if (!plotDiv) {
+    alert('Please generate a plot first');
+    return;
+  }
+  
+  document.getElementById('anovaExportModal').style.display = 'block';
+}
+
+// Hide export modal
+function hideExportModal() {
+  document.getElementById('anovaExportModal').style.display = 'none';
+}
+
+// Download plot with quality settings
+function downloadPlot(quality) {
+  const plotDiv = document.getElementById('anova-plot');
+  if (!plotDiv || typeof Plotly === 'undefined') {
+    alert('Plot not available');
+    return;
+  }
+  
+  // If quality not provided, get it from the selected radio button
+  if (!quality) {
+    const selectedQuality = document.querySelector('input[name="anova-quality"]:checked');
+    if (!selectedQuality) {
+      alert('Please select a download quality');
+      return;
+    }
+    quality = selectedQuality.value;
+  }
+  
+  const qualitySettings = {
+    standard: { width: 800, height: 600 },
+    high: { width: 1200, height: 900 },
+    ultra: { width: 1600, height: 1200 }
+  };
+  
+  let settings = qualitySettings[quality];
+  
+  if (quality === 'custom') {
+    const customWidth = parseInt(document.getElementById('customWidthAnova').value);
+    const customHeight = parseInt(document.getElementById('customHeightAnova').value);
+    if (customWidth && customHeight && customWidth >= 400 && customHeight >= 300) {
+      settings = { width: customWidth, height: customHeight };
+    } else {
+      alert('Please enter valid width (400-4000) and height (300-3000)');
+      return;
+    }
+  }
+  
+  if (!settings) {
+    alert('Invalid quality setting selected');
+    return;
+  }
+  
+  try {
+    // Calculate scale for 300 DPI (default is 96 DPI, so scale = 300/96 ≈ 3.125)
+    const dpi = 300;
+    const defaultDpi = 96;
+    const scale = dpi / defaultDpi;
+    
+    Plotly.downloadImage('anova-plot', {
+      format: 'png',
+      width: settings.width,
+      height: settings.height,
+      scale: scale,
+      filename: 'anova_plot'
+    });
+    hideExportModal();
+  } catch (error) {
+    console.error('Download error:', error);
+    alert('Error downloading plot. Please try again.');
+  }
+}
+
+// Initialize quality modal
+document.addEventListener('DOMContentLoaded', function() {
+  const qualityOptions = document.querySelectorAll('.anova-quality-option');
+  
+  qualityOptions.forEach(option => {
+    option.addEventListener('click', function() {
+      const quality = this.dataset.quality;
+      document.getElementById('customResolutionInputsAnova').style.display = quality === 'custom' ? 'block' : 'none';
+    });
+  });
+  
+  // Add event handlers for plot header buttons
+  const anovaColorEditorBtn = document.getElementById('anovaColorEditorBtn');
+  const anovaDownloadBtn = document.getElementById('anovaDownloadBtn');
+  
+  if (anovaColorEditorBtn) {
+    anovaColorEditorBtn.addEventListener('click', function() {
+      showAnovaColorEditor();
+    });
+  }
+  
+  if (anovaDownloadBtn) {
+    anovaDownloadBtn.addEventListener('click', function() {
+      showExportModal();
+    });
+  }
+  
+  // Add event handler for download button in modal
+  const anovaDownloadBtnInModal = document.getElementById('anovaDownloadBtnInModal');
+  if (anovaDownloadBtnInModal) {
+    anovaDownloadBtnInModal.addEventListener('click', function() {
+      downloadPlot(); // Will get quality from selected radio button
+    });
+  }
+});
+
+// Show color editor modal
+function showAnovaColorEditor() {
+  const plotDiv = document.getElementById('anova-plot');
+  if (!plotDiv) {
+    alert('Please generate a plot first');
+    return;
+  }
+  const modal = document.getElementById('anovaColorEditorModal');
+  if (modal) {
+    // Populate fields with current plot values
+    const gd = document.getElementById('anova-plot');
+    
+    if (gd && gd.layout) {
+      // Y axis name
+      const yAxisTitle = gd.layout.yaxis && gd.layout.yaxis.title ? gd.layout.yaxis.title.text : '';
+      document.getElementById('y_axis_name_modal').value = yAxisTitle || '';
+      
+      // X axis labels - get from first trace
+      if (gd.data && gd.data.length > 0 && gd.data[0].x && Array.isArray(gd.data[0].x)) {
+        const xLabels = gd.data[0].x;
+        // For 2-bar case, labels are usually ["Low x_var", "High x_var"]
+        // For 4-bar case, both traces have same x labels
+        if (xLabels.length >= 2) {
+          // Check order - could be ["High x_var", "Low x_var"] or ["Low x_var", "High x_var"]
+          const firstLabel = xLabels[0];
+          const secondLabel = xLabels[1];
+          
+          // Try to determine which is low and which is high
+          // Look for "Low" or "High" prefix
+          if (firstLabel.toLowerCase().includes('low') || firstLabel.toLowerCase().startsWith('low')) {
+            document.getElementById('low_x_label_modal').value = firstLabel;
+            document.getElementById('high_x_label_modal').value = secondLabel;
+          } else if (secondLabel.toLowerCase().includes('low') || secondLabel.toLowerCase().startsWith('low')) {
+            document.getElementById('low_x_label_modal').value = secondLabel;
+            document.getElementById('high_x_label_modal').value = firstLabel;
+          } else {
+            // Default: assume first is high, second is low (common in ANOVA plots)
+            document.getElementById('high_x_label_modal').value = firstLabel;
+            document.getElementById('low_x_label_modal').value = secondLabel;
+          }
+        }
+      }
+      
+      // Group variable labels - check if we have 2 traces (indicating group variable)
+      const groupSection = document.getElementById('group_labels_section');
+      if (gd.data && gd.data.length === 2 && gd.data[0].name && gd.data[1].name) {
+        // Has group variable
+        groupSection.style.display = 'block';
+        
+        // Extract group labels from trace names
+        // Trace names are like "Low group_var" or "High group_var"
+        const name0 = gd.data[0].name;
+        const name1 = gd.data[1].name;
+        
+        // Determine which is low and which is high
+        if (name0.toLowerCase().includes('low') || name0.toLowerCase().startsWith('low')) {
+          document.getElementById('low_group_label_modal').value = name0;
+          document.getElementById('high_group_label_modal').value = name1;
+        } else {
+          document.getElementById('high_group_label_modal').value = name0;
+          document.getElementById('low_group_label_modal').value = name1;
+        }
+      } else {
+        // No group variable
+        groupSection.style.display = 'none';
+      }
+      
+      // Plot title
+      const plotTitle = gd.layout.title && gd.layout.title.text ? gd.layout.title.text : '';
+      document.getElementById('plot_title_modal').value = plotTitle || '';
+    }
+    
+    modal.style.display = 'block';
+  } else {
+    console.error('Color editor modal not found in DOM');
+    alert('Color editor not available');
+  }
+}
+
+// Hide color editor modal
+function hideAnovaColorEditor() {
+  const modal = document.getElementById('anovaColorEditorModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// Apply colors from modal
+function applyAnovaColors() {
+  const plotContent = document.getElementById('plot-content');
+  const plotDiv = document.getElementById('anova-plot');
+  
+  if (!plotDiv) {
+    alert('Please generate a plot first');
+    return;
+  }
+  
+  if (typeof Plotly === 'undefined') {
+    alert('Plotly not loaded');
+    return;
+  }
+  
+  try {
+    const bgColor = document.getElementById('bg_color_modal').value;
+    const lowColor = document.getElementById('low_bar_color_modal').value;
+    const highColor = document.getElementById('high_bar_color_modal').value;
+    const lowBorderColor = document.getElementById('low_bar_border_color_modal').value;
+    const highBorderColor = document.getElementById('high_bar_border_color_modal').value;
+    const customTitle = document.getElementById('plot_title_modal').value;
+    const yAxisName = document.getElementById('y_axis_name_modal').value;
+    const lowXLabel = document.getElementById('low_x_label_modal').value;
+    const highXLabel = document.getElementById('high_x_label_modal').value;
+    const lowGroupLabel = document.getElementById('low_group_label_modal').value;
+    const highGroupLabel = document.getElementById('high_group_label_modal').value;
+    
+    // Get the plot element
+    const gd = document.getElementById('anova-plot');
+    
+    // Update all bar colors
+    if (gd && gd.data) {
+      console.log('Plot data:', gd.data);
+      
+      // Deep copy the data to avoid mutating the original
+      const updatedData = JSON.parse(JSON.stringify(gd.data));
+      
+      // Determine original x-axis label order to maintain it
+      let originalXLabels = [];
+      if (gd.data[0].x && Array.isArray(gd.data[0].x)) {
+        originalXLabels = [...gd.data[0].x];
+      }
+      
+      // Determine which position is low and which is high in original labels
+      let lowXPos = 0;
+      let highXPos = 1;
+      if (originalXLabels.length >= 2) {
+        if (originalXLabels[0].toLowerCase().includes('low') || originalXLabels[0].toLowerCase().startsWith('low')) {
+          lowXPos = 0;
+          highXPos = 1;
+        } else if (originalXLabels[1].toLowerCase().includes('low') || originalXLabels[1].toLowerCase().startsWith('low')) {
+          lowXPos = 1;
+          highXPos = 0;
+        } else {
+          // Default: first is high, second is low (common in ANOVA plots)
+          highXPos = 0;
+          lowXPos = 1;
+        }
+      }
+      
+      // Update X-axis labels in all traces if custom labels provided
+      if (lowXLabel.trim() || highXLabel.trim()) {
+        const newXLabels = [...originalXLabels];
+        if (lowXLabel.trim()) {
+          newXLabels[lowXPos] = lowXLabel.trim();
+        }
+        if (highXLabel.trim()) {
+          newXLabels[highXPos] = highXLabel.trim();
+        }
+        
+        // Apply new x labels to all traces
+        updatedData.forEach(trace => {
+          if (trace.type === 'bar' && trace.x && Array.isArray(trace.x)) {
+            trace.x = newXLabels;
+          }
+        });
+      }
+      
+      // Find all bar traces and update their colors and names
+      gd.data.forEach((trace, traceIdx) => {
+        if (trace.type === 'bar' && trace.x && Array.isArray(trace.x)) {
+          const numBars = trace.x.length;
+          console.log(`Trace ${traceIdx} has ${numBars} bars`);
+          
+          // Build color array for this trace
+          const colors = [];
+          const borderColors = [];
+          
+          for (let i = 0; i < numBars; i++) {
+            let color;
+            let borderColor;
+            
+            if (numBars === 2 && gd.data.length === 2) {
+              // For 4-bar visualization, there are 2 traces each with 2 bars
+              // traceIdx 0 = Low group trace (bars 1 and 3 when rendered)
+              // traceIdx 1 = High group trace (bars 2 and 4 when rendered)
+              if (traceIdx === 0) {
+                // This is the Low group trace, so use low color
+                color = lowColor;
+                borderColor = lowBorderColor;
+              } else {
+                // This is the High group trace, so use high color
+                color = highColor;
+                borderColor = highBorderColor;
+              }
+            } else if (numBars === 2 && gd.data.length === 1) {
+              // Simple 2-bar case (no group variable): first is low, second is high
+              color = i === 0 ? lowColor : highColor;
+              borderColor = i === 0 ? lowBorderColor : highBorderColor;
+            } else {
+              // Default to low color
+              color = lowColor;
+              borderColor = lowBorderColor;
+            }
+            
+            colors.push(color);
+            borderColors.push(borderColor);
+          }
+          
+          console.log('Applying colors array to trace:', colors);
+          console.log('Applying border colors array to trace:', borderColors);
+          
+          // Update colors and border colors in the trace data
+          updatedData[traceIdx].marker.color = colors;
+          if (!updatedData[traceIdx].marker.line) {
+            updatedData[traceIdx].marker.line = {};
+          }
+          updatedData[traceIdx].marker.line.color = borderColors;
+          // Ensure border width is set
+          if (!updatedData[traceIdx].marker.line.width) {
+            updatedData[traceIdx].marker.line.width = 1;
+          }
+          console.log('Updated trace marker colors:', updatedData[traceIdx].marker.color);
+          console.log('Updated trace marker border colors:', updatedData[traceIdx].marker.line.color);
+          
+          // Update group variable labels (trace names) if we have group variable
+          if (gd.data.length === 2) {
+            if (traceIdx === 0 && lowGroupLabel.trim()) {
+              updatedData[traceIdx].name = lowGroupLabel.trim();
+            } else if (traceIdx === 1 && highGroupLabel.trim()) {
+              updatedData[traceIdx].name = highGroupLabel.trim();
+            }
+          }
+        }
+      });
+      
+      // Update layout with new colors, title, and axis labels
+      const updatedLayout = JSON.parse(JSON.stringify(gd.layout));
+      updatedLayout.plot_bgcolor = bgColor;
+      updatedLayout.paper_bgcolor = bgColor;
+      
+      // Add custom title if provided
+      if (customTitle && customTitle.trim()) {
+        updatedLayout.title.text = customTitle;
+      }
+      
+      // Update Y axis name if provided
+      if (yAxisName.trim()) {
+        if (!updatedLayout.yaxis) {
+          updatedLayout.yaxis = {};
+        }
+        if (!updatedLayout.yaxis.title) {
+          updatedLayout.yaxis.title = {};
+        }
+        updatedLayout.yaxis.title.text = yAxisName.trim();
+      }
+      
+      // Redraw with updated data and layout (only once, after all updates)
+      Plotly.react('anova-plot', updatedData, updatedLayout);
+    } else {
+      // If no plot data, just update layout
+      const layoutUpdate = {
+        'plot_bgcolor': bgColor,
+        'paper_bgcolor': bgColor
+      };
+      
+      // Add custom title if provided
+      if (customTitle && customTitle.trim()) {
+        layoutUpdate['title.text'] = customTitle;
+      }
+      
+      // Update Y axis name if provided
+      if (yAxisName.trim()) {
+        layoutUpdate['yaxis.title.text'] = yAxisName.trim();
+      }
+      
+      Plotly.relayout('anova-plot', layoutUpdate);
+    }
+    
+    hideAnovaColorEditor();
+    console.log('Customizations applied successfully');
+  } catch (error) {
+    console.error('Error applying customizations:', error);
+    alert('Error applying customizations. See console for details.');
+  }
+}
+</script>
+{% endblock %}
+

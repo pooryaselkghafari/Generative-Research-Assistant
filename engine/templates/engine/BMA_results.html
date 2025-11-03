@@ -1,0 +1,1223 @@
+{% extends "engine/base.html" %}
+{% block title %}BMA Results — Generative Research Assistant{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+  // Set AI chat context when page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof aiChatContext !== 'undefined') {
+      aiChatContext = {
+        session_name: '{% if session %}{{ session.name|escapejs }}{% endif %}',
+        formula: '{% if session %}{{ session.formula|escapejs }}{% endif %}',
+        module: 'BMA',
+        dataset_name: '{% if dataset %}{{ dataset.name|escapejs }}{% endif %}'
+      };
+    }
+  });
+</script>
+<style>
+  
+  .inclusion-prob-high {
+    color: #059669;
+    font-weight: 600;
+  }
+  
+  .inclusion-prob-medium {
+    color: #d97706;
+    font-weight: 600;
+  }
+  
+  .inclusion-prob-low {
+    color: #dc2626;
+    font-weight: 600;
+  }
+  
+  
+  
+  
+  .error-message {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 20px 0;
+  }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  {% if session %}
+  <a href="/session/{{session.id}}/" class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">Modify</a>
+  {% else %}
+  <a class="btn btn-ghost" href="/app/">Back to Analysis</a>
+  {% endif %}
+  {% if session %}
+  <a href="{% url 'download_session_history' session.id %}?format=text" class="btn btn-ghost" style="margin-left: 8px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+    </svg>
+    Download History
+  </a>
+  {% endif %}
+  <button class="btn" type="button" onclick="toggleAIChatbox()" 
+          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
+          title="Ask AI Assistant">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    Ask AI
+  </button>
+{% endblock %}
+
+{% block sidebar %}
+  <!-- BMA Table Column Controls -->
+  <div class="card">
+    <div class="card-head">
+      <h3 class="card-title">Table Columns</h3>
+    </div>
+    <div class="card-body">
+      <div class="grid-2">
+        <div class="switch-col">
+          <label class="field-label">Posterior Mean</label>
+          <label class="switch">
+            <input type="checkbox" id="show_posterior_mean" checked>
+            <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+          <label class="field-label">Posterior SD</label>
+          <label class="switch">
+            <input type="checkbox" id="show_posterior_sd" checked>
+            <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="switch-col">
+          <label class="field-label">Inclusion Probability</label>
+          <label class="switch">
+            <input type="checkbox" id="show_inclusion_prob" checked>
+            <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+          <label class="field-label">95% CI</label>
+          <label class="switch">
+            <input type="checkbox" id="show_ci">
+            <span></span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <!-- BMA Results Header -->
+  <div class="modern-results-header">
+    <div class="header-main">
+      <div class="regression-type-badge">
+        <span class="regression-type">Bayesian Model Averaging</span>
+      </div>
+      <div class="header-actions">
+        {% if dataset %}
+        <a class="modern-edit-btn" href="{% url 'dataprep_open' dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+          Edit Dataset
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <span class="meta-label">Dataset:</span>
+        <span class="meta-value">{{dataset.name}}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span class="meta-label">Formula:</span>
+        <span class="meta-value">{{formula}}</span>
+      </div>
+    </div>
+  </div>
+
+  {% if not results.has_results %}
+    <!-- Error Message -->
+    <div class="error-message">
+      <h3>Analysis Error</h3>
+      <p>{{ results.error }}</p>
+    </div>
+  {% else %}
+
+    <!-- BMA Summary Table -->
+    <section class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <h3 class="card-title">BMA Summary</h3>
+        <div class="muted small">Posterior inclusion probabilities and coefficient estimates</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table" id="bmaSummaryTable">
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th class="col-posterior-mean">Posterior Mean</th>
+              <th class="col-posterior-sd">Posterior SD</th>
+              <th class="col-inclusion-prob">Inclusion Probability</th>
+              <th class="col-ci" style="display: none;">95% CI</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in results.summary_data %}
+            <tr>
+              <td><strong>{{ row.variable }}</strong></td>
+              <td class="mono col-posterior-mean">{{ row.posterior_mean }}</td>
+              <td class="mono col-posterior-sd">{{ row.posterior_sd }}</td>
+              <td class="mono col-inclusion-prob">
+                <span class="{% if row.inclusion_prob|floatformat:3|add:0 >= 0.8 %}inclusion-prob-high{% elif row.inclusion_prob|floatformat:3|add:0 >= 0.5 %}inclusion-prob-medium{% else %}inclusion-prob-low{% endif %}">
+                  {{ row.inclusion_prob_pct }}
+                </span>
+              </td>
+              <td class="mono col-ci" style="display: none;">{{ row.ci_lower }} - {{ row.ci_upper }}</td>
+            </tr>
+            {% endfor %}
+            
+            <!-- Model Fit Statistics Rows -->
+            {% if results.weighted_R2 or results.best_model_fit %}
+            <tr class="table-stats-row" style="border-top: 2px solid var(--table-stats-border); background-color: var(--table-stats-bg);">
+              <td colspan="5" style="padding: 16px 12px 8px 12px;">
+                <strong style="color: var(--text); font-size: 1rem;">Model Fit Statistics</strong>
+                <!-- Debug: weighted_R2={{ results.weighted_R2|default:"NOT_FOUND" }}, best_model_fit={{ results.best_model_fit|default:"NOT_FOUND" }} -->
+              </td>
+            </tr>
+            
+            {% if results.weighted_R2 %}
+            <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+              <td style="padding-left: 24px; color: var(--text);">Model-Averaged R²</td>
+              <td class="mono" style="font-weight: 600; color: var(--primary);">{{ results.weighted_R2|floatformat:4 }}</td>
+              <td class="mono" style="color: var(--muted);">Weighted average</td>
+              <td class="mono" style="color: var(--muted);">Across all models</td>
+              <td class="mono col-ci" style="display: none; color: var(--muted);">-</td>
+            </tr>
+            {% endif %}
+            
+            {% if results.best_model_fit %}
+            <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+              <td style="padding-left: 24px; color: var(--text);">Best Model Index</td>
+              <td class="mono" style="font-weight: 600; color: var(--good);">{{ results.best_model_fit.model_index }}</td>
+              <td class="mono" style="color: var(--muted);">Selected by</td>
+              <td class="mono" style="color: var(--muted);">Max log likelihood</td>
+              <td class="mono col-ci" style="display: none; color: var(--muted);">-</td>
+            </tr>
+            <tr class="table-stats-row" style="background-color: var(--table-stats-bg);">
+              <td style="padding-left: 24px; color: var(--text);">Best Model R²</td>
+              <td class="mono" style="font-weight: 600; color: var(--good);">{{ results.best_model_fit.R2|floatformat:4 }}</td>
+              <td class="mono" style="color: var(--muted);">Log Marginal</td>
+              <td class="mono" style="color: var(--muted);">{{ results.best_model_fit.log_marginal_likelihood|floatformat:2 }}</td>
+              <td class="mono col-ci" style="display: none; color: var(--muted);">-</td>
+            </tr>
+            {% endif %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Variable Inclusion Probabilities Plot -->
+    {% if results.plot_data %}
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <h3 class="card-title">Variable Inclusion Probabilities</h3>
+        <div class="card-actions">
+          <button id="colorEditorBtn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+            Customize Colors
+          </button>
+          <button id="downloadInclusionBtn" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7,10 12,15 17,10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download Plot
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 0.875rem;">
+          Variables ordered by inclusion probability (highest to lowest)
+        </p>
+        <div id="bma-plot" style="min-height: 500px; background-color: #fafafa; border-radius: 8px; border: 1px solid #e5e7eb;">
+          <div style="padding: 40px; text-align: center; color: #6b7280;">
+            <div style="margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.5;">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+            </div>
+            <p style="margin: 0 0 8px 0; font-weight: 500;">Loading inclusion probabilities plot...</p>
+            <p style="margin: 0; font-size: 0.875rem;">If this message persists, check the browser console for errors.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <h3 class="card-title">Variable Inclusion Probabilities</h3>
+      </div>
+      <div class="card-body">
+        <div style="min-height: 500px; background-color: #fafafa; border-radius: 8px; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center;">
+          <p style="color: #6b7280;">No plot data available. Check the analysis results above.</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Model-Averaged Coefficients Plot -->
+    {% if results.coefficients_plot_data %}
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <h3 class="card-title">Model-Averaged Coefficients with Error Bars</h3>
+        <div class="card-actions">
+          <button id="coefficientsColorEditorBtn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+            Customize Colors
+          </button>
+          <button id="downloadCoefficientsBtn" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7,10 12,15 17,10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download Plot
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 0.875rem;">
+          Vertical bars show coefficient estimates with error bars representing ±1 posterior standard deviation
+        </p>
+        <div id="coefficients-plot" style="min-height: 500px; background-color: #fafafa; border-radius: 8px; border: 1px solid #e5e7eb;">
+          <div style="padding: 40px; text-align: center; color: #6b7280;">
+            <div style="margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.5;">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+            </div>
+            <p style="margin: 0 0 8px 0; font-weight: 500;">Loading coefficients plot...</p>
+            <p style="margin: 0; font-size: 0.875rem;">If this message persists, check the browser console for errors.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <h3 class="card-title">Model-Averaged Coefficients with Error Bars</h3>
+      </div>
+      <div class="card-body">
+        <div style="min-height: 500px; background-color: #fafafa; border-radius: 8px; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center;">
+          <p style="color: #6b7280;">No coefficients plot data available. Check the analysis results above.</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Color Editor Modals -->
+      <!-- Inclusion Probabilities Color Editor Modal -->
+      <div id="colorEditorModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 12px; padding: 24px; min-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 1.25rem; color: #1f2937;">Customize Inclusion Probabilities Colors</h3>
+            <button id="closeColorEditor" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">&times;</button>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">Color Palette:</label>
+            <select id="colorPalette" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+              <option value="blue">Modern Blue</option>
+              <option value="green">Emerald Green</option>
+              <option value="purple">Purple Gradient</option>
+              <option value="orange">Orange Gradient</option>
+              <option value="red">Red Gradient</option>
+              <option value="gray">Gray Scale</option>
+            </select>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">Low Probability Color:</label>
+            <input type="color" id="lowColor" value="#E5E7EB" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px;">
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">High Probability Color:</label>
+            <input type="color" id="highColor" value="#1D4ED8" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px;">
+          </div>
+          
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button id="applyColors" class="btn btn-primary" style="padding: 10px 20px;">Apply Colors</button>
+            <button id="resetColors" class="btn btn-secondary" style="padding: 10px 20px;">Reset to Default</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Coefficients Color Editor Modal -->
+      <div id="coefficientsColorEditorModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 12px; padding: 24px; min-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 1.25rem; color: #1f2937;">Customize Coefficients Colors</h3>
+            <button id="closeCoefficientsColorEditor" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">&times;</button>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">Color Scheme:</label>
+            <select id="coefficientsColorScheme" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+              <option value="red-green">Red-Green (Negative-Positive)</option>
+              <option value="blue-orange">Blue-Orange</option>
+              <option value="purple-yellow">Purple-Yellow</option>
+              <option value="gray-scale">Gray Scale</option>
+            </select>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">Negative Values Color:</label>
+            <input type="color" id="negativeColor" value="#DC2626" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px;">
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">Positive Values Color:</label>
+            <input type="color" id="positiveColor" value="#059669" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 6px;">
+          </div>
+          
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button id="applyCoefficientsColors" class="btn btn-primary" style="padding: 10px 20px;">Apply Colors</button>
+            <button id="resetCoefficientsColors" class="btn btn-secondary" style="padding: 10px 20px;">Reset to Default</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Fit Statistics -->
+    {% if results.weighted_R2 or results.best_model_fit %}
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-head">
+        <h3 class="card-title">Model Fit Statistics</h3>
+        <div class="muted small">Best model and model-averaged performance metrics</div>
+      </div>
+      <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+          {% if results.weighted_R2 %}
+          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+            <h4 style="color: #1f2937; margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 700;">Model-Averaged R²</h4>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 2rem; font-weight: 700; color: #3b82f6;">{{ results.weighted_R2|floatformat:4 }}</span>
+              <span style="color: #6b7280; font-size: 0.875rem;">Weighted average across all models</span>
+            </div>
+            <p style="margin: 12px 0 0 0; color: #6b7280; font-size: 0.875rem;">
+              This represents the expected R² when accounting for model uncertainty.
+            </p>
+          </div>
+          {% endif %}
+          
+          {% if results.best_model_fit %}
+          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981;">
+            <h4 style="color: #1f2937; margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 700;">Best Model</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #6b7280; font-size: 0.875rem;">Model Index:</span>
+                <span style="font-weight: 600; color: #1f2937;">{{ results.best_model_fit.model_index }}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #6b7280; font-size: 0.875rem;">Log Marginal Likelihood:</span>
+                <span style="font-weight: 600; color: #1f2937;">{{ results.best_model_fit.log_marginal_likelihood|floatformat:2 }}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #6b7280; font-size: 0.875rem;">R²:</span>
+                <span style="font-weight: 600; color: #1f2937;">{{ results.best_model_fit.R2|floatformat:4 }}</span>
+              </div>
+            </div>
+            <p style="margin: 12px 0 0 0; color: #6b7280; font-size: 0.875rem;">
+              Selected based on highest log marginal likelihood.
+            </p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Quality Selection Modal -->
+    <div id="qualitySelectionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 12px; padding: 24px; min-width: 450px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0; font-size: 1.25rem; color: #1f2937;">Select Download Quality</h3>
+          <button id="closeQualityModal" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">&times;</button>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 0.875rem;">
+            Choose the quality and resolution for your plot download:
+          </p>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Standard Quality -->
+            <label style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="quality-option" data-quality="standard">
+              <input type="radio" name="quality" value="standard" checked style="margin-right: 12px;">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Standard Quality</div>
+                <div style="font-size: 0.875rem; color: #6b7280;">800 × 600 pixels • Good for presentations</div>
+              </div>
+            </label>
+            
+            <!-- High Quality -->
+            <label style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="quality-option" data-quality="high">
+              <input type="radio" name="quality" value="high" style="margin-right: 12px;">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">High Quality</div>
+                <div style="font-size: 0.875rem; color: #6b7280;">1200 × 900 pixels • Great for reports</div>
+              </div>
+            </label>
+            
+            <!-- Ultra High Quality -->
+            <label style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="quality-option" data-quality="ultra">
+              <input type="radio" name="quality" value="ultra" style="margin-right: 12px;">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Ultra High Quality</div>
+                <div style="font-size: 0.875rem; color: #6b7280;">1600 × 1200 pixels • Perfect for publications</div>
+              </div>
+            </label>
+            
+            <!-- Custom Quality -->
+            <label style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="quality-option" data-quality="custom">
+              <input type="radio" name="quality" value="custom" style="margin-right: 12px;">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Custom Resolution</div>
+                <div style="font-size: 0.875rem; color: #6b7280;">Specify your own dimensions</div>
+              </div>
+            </label>
+          </div>
+          
+          <!-- Custom Resolution Inputs -->
+          <div id="customResolutionInputs" style="display: none; margin-top: 16px; padding: 16px; background: #f9fafb; border-radius: 8px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Width (pixels)</label>
+                <input type="number" id="customWidth" value="1200" min="400" max="4000" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px;">Height (pixels)</label>
+                <input type="number" id="customHeight" value="900" min="300" max="3000" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+              </div>
+            </div>
+            <p style="margin: 8px 0 0 0; font-size: 0.75rem; color: #6b7280;">Recommended: Keep aspect ratio similar to original plot</p>
+          </div>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button id="cancelQualityDownload" style="padding: 8px 16px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-size: 0.875rem;">Cancel</button>
+          <button id="confirmQualityDownload" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 600;">Download Plot</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interpretation Guide -->
+    <div class="card">
+      <div class="card-head">
+        <h3 class="card-title">Interpretation Guide</h3>
+      </div>
+      <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+            <h4 style="color: #1f2937; margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 700;">Inclusion Probabilities</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="display: inline-block; width: 12px; height: 12px; background: #059669; border-radius: 2px;"></span>
+                <span style="color: #374151; font-weight: 500;"><strong>≥ 80%:</strong> Strong evidence for inclusion</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="display: inline-block; width: 12px; height: 12px; background: #d97706; border-radius: 2px;"></span>
+                <span style="color: #374151; font-weight: 500;"><strong>50-80%:</strong> Moderate evidence for inclusion</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="display: inline-block; width: 12px; height: 12px; background: #dc2626; border-radius: 2px;"></span>
+                <span style="color: #374151; font-weight: 500;"><strong>&lt; 50%:</strong> Weak evidence for inclusion</span>
+              </div>
+            </div>
+          </div>
+          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981;">
+            <h4 style="color: #1f2937; margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 700;">Posterior Means</h4>
+            <p style="margin: 0; color: #374151; line-height: 1.6;">
+              Average coefficient value across all models, weighted by model probability. These represent the expected effect size when the variable is included.
+            </p>
+          </div>
+          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #8b5cf6;">
+            <h4 style="color: #1f2937; margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 700;">Model Selection</h4>
+            <p style="margin: 0; color: #374151; line-height: 1.6;">
+              BMA considers all possible model combinations and weights them by their posterior probability, providing a robust approach to model uncertainty.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{{ results.plot_data|json_script:"plot-data" }}
+{{ results.coefficients_plot_data|json_script:"coefficients-plot-data" }}
+<script>
+  console.log('BMA template JavaScript loaded');
+  console.log('Results has_results:', {{ results.has_results|yesno:"true,false" }});
+  console.log('Results has plot_data:', {{ results.plot_data|yesno:"true,false" }});
+  
+  // Test basic functionality
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, checking BMA plot area...');
+    const plotDiv = document.getElementById('bma-plot');
+    console.log('Plot div found:', plotDiv !== null);
+    if (plotDiv) {
+      console.log('Plot div content:', plotDiv.innerHTML);
+    }
+  });
+  
+  // Render the BMA plot if data is available
+  {% if results.has_results and results.plot_data %}
+  function renderBMAPlot() {
+    console.log('BMA plot script loaded');
+    console.log('Plotly available:', typeof Plotly !== 'undefined');
+    
+    const plotDataElement = document.getElementById('plot-data');
+    const plotData = plotDataElement ? JSON.parse(plotDataElement.textContent) : null;
+    console.log('Plot data:', plotData);
+    
+    if (typeof Plotly !== 'undefined' && plotData && plotData.data && plotData.layout) {
+      console.log('Rendering BMA plot...');
+      try {
+        // Clear the loading message
+        const plotDiv = document.getElementById('bma-plot');
+        if (plotDiv) {
+          plotDiv.innerHTML = '';
+        }
+        
+        // Ensure horizontal orientation and improve layout
+        const config = {
+          responsive: true,
+          displayModeBar: true,
+          modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
+          displaylogo: false
+        };
+        
+        // Update layout for better vertical bar chart display
+        const layout = Object.assign({}, plotData.layout, {
+          height: 700, // Increased height for vertical bar chart
+          margin: {
+            l: 80,   // Space for y-axis
+            r: 120,  // Space for colorbar
+            t: 180,  // Increased space for title and outside bar tags
+            b: 180   // Increased space for x-axis variable names and label
+          },
+          xaxis: Object.assign({}, plotData.layout.xaxis, {
+            showgrid: false,
+            automargin: true,
+            title: {
+              text: 'Variables',
+              font: { size: 14, family: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+            },
+            tickangle: -45,  // Rotate variable names for better readability
+            tickfont: { family: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', size: 12 }
+          }),
+          yaxis: Object.assign({}, plotData.layout.yaxis, {
+            showgrid: true,
+            gridcolor: '#f0f0f0',
+            zeroline: true,
+            zerolinecolor: '#d1d5db',
+            automargin: true,
+            title: {
+              text: 'Inclusion Probability (%)',
+              font: { size: 14, family: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+            },
+            tickfont: { family: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', size: 12 }
+          }),
+          // Ensure proper spacing and alignment
+          bargap: 0.3,
+          barmode: 'group'
+        });
+        
+        Plotly.newPlot('bma-plot', plotData.data, layout, config);
+        console.log('BMA plot rendered successfully');
+      } catch (error) {
+        console.error('Error rendering plot:', error);
+        // Show error message
+        const plotDiv = document.getElementById('bma-plot');
+        if (plotDiv) {
+          plotDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #dc2626;"><p>Error rendering plot. Check console for details.</p></div>';
+        }
+        
+        // Fallback: try to render with minimal options
+        try {
+          Plotly.newPlot('bma-plot', plotData.data, plotData.layout);
+          console.log('BMA plot rendered with fallback');
+        } catch (fallbackError) {
+          console.error('Fallback rendering failed:', fallbackError);
+          if (plotDiv) {
+            plotDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #dc2626;"><p>Failed to render plot. Check console for details.</p></div>';
+          }
+        }
+      }
+    } else {
+      console.error('Cannot render plot:', {
+        plotly: typeof Plotly,
+        plotData: plotData,
+        hasData: plotData && plotData.data,
+        hasLayout: plotData && plotData.layout
+      });
+      
+      // Show error message
+      const plotDiv = document.getElementById('bma-plot');
+      if (plotDiv) {
+        plotDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #dc2626;"><p>Cannot render plot. Check console for details.</p></div>';
+      }
+    }
+  }
+  
+  // Try multiple ways to ensure the plot renders
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderBMAPlot);
+  } else {
+    renderBMAPlot();
+  }
+  
+  // Also try after a short delay as a fallback
+  setTimeout(renderBMAPlot, 100);
+  
+  // Color Editor Functionality
+  let currentPlotData = null;
+  
+  // Color palette definitions
+  const colorPalettes = {
+    blue: {
+      low: '#E5E7EB',
+      medium: '#60A5FA', 
+      high: '#1D4ED8'
+    },
+    green: {
+      low: '#D1FAE5',
+      medium: '#34D399',
+      high: '#059669'
+    },
+    purple: {
+      low: '#F3E8FF',
+      medium: '#A78BFA',
+      high: '#7C3AED'
+    },
+    orange: {
+      low: '#FED7AA',
+      medium: '#FB923C',
+      high: '#EA580C'
+    },
+    red: {
+      low: '#FEE2E2',
+      medium: '#F87171',
+      high: '#DC2626'
+    },
+    gray: {
+      low: '#F3F4F6',
+      medium: '#9CA3AF',
+      high: '#374151'
+    }
+  };
+  
+  // Store original plot data
+  function storeOriginalPlotData() {
+    const plotDataElement = document.getElementById('plot-data');
+    if (plotDataElement) {
+      currentPlotData = JSON.parse(plotDataElement.textContent);
+    }
+  }
+  
+  // Update plot colors
+  function updatePlotColors(lowColor, highColor) {
+    if (!currentPlotData) return;
+    
+    const newPlotData = JSON.parse(JSON.stringify(currentPlotData));
+    
+    // Update colorscale
+    newPlotData.data[0].marker.colorscale = [
+      [0.0, lowColor],
+      [0.5, interpolateColor(lowColor, highColor, 0.5)],
+      [1.0, highColor]
+    ];
+    
+    // Re-render plot
+    const plotDiv = document.getElementById('bma-plot');
+    if (plotDiv && typeof Plotly !== 'undefined') {
+      Plotly.react('bma-plot', newPlotData.data, newPlotData.layout, {
+        responsive: true,
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+      });
+    }
+  }
+  
+  // Simple color interpolation
+  function interpolateColor(color1, color2, factor) {
+    const hex1 = color1.replace('#', '');
+    const hex2 = color2.replace('#', '');
+    
+    const r1 = parseInt(hex1.substr(0, 2), 16);
+    const g1 = parseInt(hex1.substr(2, 2), 16);
+    const b1 = parseInt(hex1.substr(4, 2), 16);
+    
+    const r2 = parseInt(hex2.substr(0, 2), 16);
+    const g2 = parseInt(hex2.substr(2, 2), 16);
+    const b2 = parseInt(hex2.substr(4, 2), 16);
+    
+    const r = Math.round(r1 + (r2 - r1) * factor);
+    const g = Math.round(g1 + (g2 - g1) * factor);
+    const b = Math.round(b1 + (b2 - b1) * factor);
+    
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+  
+  // Event listeners for color editor
+  document.addEventListener('DOMContentLoaded', function() {
+    storeOriginalPlotData();
+    
+    const colorEditorBtn = document.getElementById('colorEditorBtn');
+    const colorEditorModal = document.getElementById('colorEditorModal');
+    const closeColorEditor = document.getElementById('closeColorEditor');
+    const colorPalette = document.getElementById('colorPalette');
+    const lowColor = document.getElementById('lowColor');
+    const highColor = document.getElementById('highColor');
+    const applyColors = document.getElementById('applyColors');
+    const resetColors = document.getElementById('resetColors');
+    
+    if (colorEditorBtn) {
+      colorEditorBtn.addEventListener('click', function() {
+        colorEditorModal.style.display = 'block';
+      });
+    }
+    
+    if (closeColorEditor) {
+      closeColorEditor.addEventListener('click', function() {
+        colorEditorModal.style.display = 'none';
+      });
+    }
+    
+    if (colorPalette) {
+      colorPalette.addEventListener('change', function() {
+        const palette = colorPalettes[this.value];
+        if (palette) {
+          lowColor.value = palette.low;
+          highColor.value = palette.high;
+        }
+      });
+    }
+    
+    if (applyColors) {
+      applyColors.addEventListener('click', function() {
+        updatePlotColors(lowColor.value, highColor.value);
+        colorEditorModal.style.display = 'none';
+      });
+    }
+    
+    if (resetColors) {
+      resetColors.addEventListener('click', function() {
+        // Reset to default blue palette
+        colorPalette.value = 'blue';
+        lowColor.value = '#E5E7EB';
+        highColor.value = '#1D4ED8';
+        updatePlotColors('#E5E7EB', '#1D4ED8');
+        colorEditorModal.style.display = 'none';
+      });
+    }
+    
+    // Close modal when clicking outside
+    if (colorEditorModal) {
+      colorEditorModal.addEventListener('click', function(e) {
+        if (e.target === colorEditorModal) {
+          colorEditorModal.style.display = 'none';
+        }
+      });
+    }
+  });
+  
+  // Coefficients Plot Functionality
+  let currentCoefficientsPlotData = null;
+  
+  // Coefficients color schemes
+  const coefficientsColorSchemes = {
+    'red-green': {
+      negative: '#DC2626',
+      zero: '#E5E7EB',
+      positive: '#059669'
+    },
+    'blue-orange': {
+      negative: '#2563EB',
+      zero: '#E5E7EB',
+      positive: '#EA580C'
+    },
+    'purple-yellow': {
+      negative: '#7C3AED',
+      zero: '#E5E7EB',
+      positive: '#EAB308'
+    },
+    'gray-scale': {
+      negative: '#374151',
+      zero: '#E5E7EB',
+      positive: '#6B7280'
+    }
+  };
+  
+  // Store original coefficients plot data
+  function storeOriginalCoefficientsPlotData() {
+    const plotDataElement = document.getElementById('coefficients-plot-data');
+    if (plotDataElement) {
+      currentCoefficientsPlotData = JSON.parse(plotDataElement.textContent);
+    }
+  }
+  
+  // Update coefficients plot colors
+  function updateCoefficientsPlotColors(negativeColor, positiveColor) {
+    if (!currentCoefficientsPlotData) return;
+    
+    const newPlotData = JSON.parse(JSON.stringify(currentCoefficientsPlotData));
+    
+    // Update colorscale
+    newPlotData.data[0].marker.colorscale = [
+      [0.0, negativeColor],
+      [0.5, '#E5E7EB'],
+      [1.0, positiveColor]
+    ];
+    
+    // Re-render plot
+    const plotDiv = document.getElementById('coefficients-plot');
+    if (plotDiv && typeof Plotly !== 'undefined') {
+      Plotly.react('coefficients-plot', newPlotData.data, newPlotData.layout, {
+        responsive: true,
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+      });
+    }
+  }
+  
+  // Render coefficients plot
+  function renderCoefficientsPlot() {
+    console.log('Coefficients plot script loaded');
+    console.log('Plotly available:', typeof Plotly !== 'undefined');
+    
+    const plotDataElement = document.getElementById('coefficients-plot-data');
+    const plotData = plotDataElement ? JSON.parse(plotDataElement.textContent) : null;
+    console.log('Coefficients plot data:', plotData);
+    
+    if (typeof Plotly !== 'undefined' && plotData && plotData.data && plotData.layout) {
+      console.log('Rendering coefficients plot...');
+      try {
+        // Clear the loading message
+        const plotDiv = document.getElementById('coefficients-plot');
+        if (plotDiv) {
+          plotDiv.innerHTML = '';
+        }
+        
+        // Render the plot
+        Plotly.newPlot('coefficients-plot', plotData.data, plotData.layout, {
+          responsive: true,
+          displayModeBar: true,
+          modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+        });
+        
+        console.log('Coefficients plot rendered successfully');
+      } catch (error) {
+        console.error('Error rendering coefficients plot:', error);
+        const plotDiv = document.getElementById('coefficients-plot');
+        if (plotDiv) {
+          plotDiv.innerHTML = '<div style="padding: 40px; text-align: center; color: #dc2626;"><p>Error rendering coefficients plot. Check console for details.</p></div>';
+        }
+      }
+    } else {
+      console.log('Coefficients plot not rendered - conditions not met');
+    }
+  }
+  
+  // Event listeners for coefficients color editor
+  document.addEventListener('DOMContentLoaded', function() {
+    storeOriginalCoefficientsPlotData();
+    
+    const coefficientsColorEditorBtn = document.getElementById('coefficientsColorEditorBtn');
+    const coefficientsColorEditorModal = document.getElementById('coefficientsColorEditorModal');
+    const closeCoefficientsColorEditor = document.getElementById('closeCoefficientsColorEditor');
+    const coefficientsColorScheme = document.getElementById('coefficientsColorScheme');
+    const negativeColor = document.getElementById('negativeColor');
+    const positiveColor = document.getElementById('positiveColor');
+    const applyCoefficientsColors = document.getElementById('applyCoefficientsColors');
+    const resetCoefficientsColors = document.getElementById('resetCoefficientsColors');
+    
+    if (coefficientsColorEditorBtn) {
+      coefficientsColorEditorBtn.addEventListener('click', function() {
+        coefficientsColorEditorModal.style.display = 'block';
+      });
+    }
+    
+    if (closeCoefficientsColorEditor) {
+      closeCoefficientsColorEditor.addEventListener('click', function() {
+        coefficientsColorEditorModal.style.display = 'none';
+      });
+    }
+    
+    if (coefficientsColorScheme) {
+      coefficientsColorScheme.addEventListener('change', function() {
+        const scheme = coefficientsColorSchemes[this.value];
+        if (scheme) {
+          negativeColor.value = scheme.negative;
+          positiveColor.value = scheme.positive;
+        }
+      });
+    }
+    
+    if (applyCoefficientsColors) {
+      applyCoefficientsColors.addEventListener('click', function() {
+        updateCoefficientsPlotColors(negativeColor.value, positiveColor.value);
+        coefficientsColorEditorModal.style.display = 'none';
+      });
+    }
+    
+    if (resetCoefficientsColors) {
+      resetCoefficientsColors.addEventListener('click', function() {
+        // Reset to default red-green scheme
+        coefficientsColorScheme.value = 'red-green';
+        negativeColor.value = '#DC2626';
+        positiveColor.value = '#059669';
+        updateCoefficientsPlotColors('#DC2626', '#059669');
+        coefficientsColorEditorModal.style.display = 'none';
+      });
+    }
+    
+    // Close modal when clicking outside
+    if (coefficientsColorEditorModal) {
+      coefficientsColorEditorModal.addEventListener('click', function(e) {
+        if (e.target === coefficientsColorEditorModal) {
+          coefficientsColorEditorModal.style.display = 'none';
+        }
+      });
+    }
+  });
+  
+  // Try multiple ways to ensure the coefficients plot renders
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderCoefficientsPlot);
+  } else {
+    renderCoefficientsPlot();
+  }
+  
+  // Also try after a short delay as a fallback
+  setTimeout(renderCoefficientsPlot, 100);
+  
+  // Column toggle functionality
+  document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = {
+      'show_posterior_mean': 'col-posterior-mean',
+      'show_posterior_sd': 'col-posterior-sd', 
+      'show_inclusion_prob': 'col-inclusion-prob',
+      'show_ci': 'col-ci'
+    };
+    
+    Object.keys(checkboxes).forEach(function(checkboxId) {
+      const checkbox = document.getElementById(checkboxId);
+      const columnClass = checkboxes[checkboxId];
+      
+      if (checkbox) {
+        checkbox.addEventListener('change', function() {
+          const isChecked = this.checked;
+          const elements = document.querySelectorAll('.' + columnClass);
+          
+          elements.forEach(function(element) {
+            element.style.display = isChecked ? '' : 'none';
+          });
+        });
+      }
+    });
+  });
+  
+  // Quality selection and download functionality
+  document.addEventListener('DOMContentLoaded', function() {
+    let currentPlotType = null; // Track which plot is being downloaded
+    
+    // Quality settings
+    const qualitySettings = {
+      standard: { width: 800, height: 600, font: 12 },
+      high: { width: 1200, height: 900, font: 14 },
+      ultra: { width: 1600, height: 1200, font: 16 },
+      custom: { width: 1200, height: 900, font: 14 } // Will be overridden by user input
+    };
+    
+    // Download button for inclusion probabilities plot
+    const downloadInclusionBtn = document.getElementById('downloadInclusionBtn');
+    if (downloadInclusionBtn) {
+      downloadInclusionBtn.addEventListener('click', function() {
+        currentPlotType = 'inclusion';
+        showQualityModal();
+      });
+    }
+    
+    // Download button for coefficients plot
+    const downloadCoefficientsBtn = document.getElementById('downloadCoefficientsBtn');
+    if (downloadCoefficientsBtn) {
+      downloadCoefficientsBtn.addEventListener('click', function() {
+        currentPlotType = 'coefficients';
+        showQualityModal();
+      });
+    }
+    
+    // Quality modal functionality
+    const qualityModal = document.getElementById('qualitySelectionModal');
+    const closeQualityModal = document.getElementById('closeQualityModal');
+    const cancelQualityDownload = document.getElementById('cancelQualityDownload');
+    const confirmQualityDownload = document.getElementById('confirmQualityDownload');
+    const customResolutionInputs = document.getElementById('customResolutionInputs');
+    const qualityOptions = document.querySelectorAll('.quality-option');
+    
+    function showQualityModal() {
+      if (qualityModal) {
+        qualityModal.style.display = 'block';
+        // Reset to standard quality
+        document.querySelector('input[name="quality"][value="standard"]').checked = true;
+        customResolutionInputs.style.display = 'none';
+      }
+    }
+    
+    function hideQualityModal() {
+      if (qualityModal) {
+        qualityModal.style.display = 'none';
+        currentPlotType = null;
+      }
+    }
+    
+    // Close modal events
+    if (closeQualityModal) {
+      closeQualityModal.addEventListener('click', hideQualityModal);
+    }
+    if (cancelQualityDownload) {
+      cancelQualityDownload.addEventListener('click', hideQualityModal);
+    }
+    
+    // Close modal when clicking outside
+    if (qualityModal) {
+      qualityModal.addEventListener('click', function(e) {
+        if (e.target === qualityModal) {
+          hideQualityModal();
+        }
+      });
+    }
+    
+    // Handle quality option changes
+    qualityOptions.forEach(option => {
+      option.addEventListener('click', function() {
+        const quality = this.dataset.quality;
+        if (quality === 'custom') {
+          customResolutionInputs.style.display = 'block';
+        } else {
+          customResolutionInputs.style.display = 'none';
+        }
+      });
+    });
+    
+    // Confirm download
+    if (confirmQualityDownload) {
+      confirmQualityDownload.addEventListener('click', function() {
+        const selectedQuality = document.querySelector('input[name="quality"]:checked').value;
+        let settings = qualitySettings[selectedQuality];
+        
+        // Handle custom resolution
+        if (selectedQuality === 'custom') {
+          const customWidth = parseInt(document.getElementById('customWidth').value);
+          const customHeight = parseInt(document.getElementById('customHeight').value);
+          if (customWidth && customHeight) {
+            settings = {
+              width: customWidth,
+              height: customHeight,
+              font: Math.max(10, Math.min(20, Math.round(customWidth / 100)))
+            };
+          }
+        }
+        
+        // Download the plot
+        downloadPlot(currentPlotType, settings);
+        hideQualityModal();
+      });
+    }
+    
+    function downloadPlot(plotType, settings) {
+      const plotDiv = plotType === 'inclusion' ? document.getElementById('bma-plot') : document.getElementById('coefficients-plot');
+      const filename = plotType === 'inclusion' ? 'bma_inclusion_probabilities' : 'bma_coefficients';
+      
+      if (plotDiv && window.Plotly) {
+        // Get the plot data
+        const plotData = plotDiv.data;
+        const layout = plotDiv.layout;
+        
+        // Create a new plot with download-friendly settings
+        const downloadLayout = {
+          ...layout,
+          width: settings.width,
+          height: settings.height,
+          margin: { 
+            l: Math.round(settings.width * 0.1), 
+            r: Math.round(settings.width * 0.15), 
+            t: Math.round(settings.height * 0.1), 
+            b: Math.round(settings.height * 0.1) 
+          },
+          font: { size: settings.font }
+        };
+        
+        // Create a temporary div for the download
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        document.body.appendChild(tempDiv);
+        
+        // Render the plot in the temporary div
+        Plotly.newPlot(tempDiv, plotData, downloadLayout, {displayModeBar: false})
+          .then(function() {
+            // Download as PNG
+            Plotly.downloadImage(tempDiv, {
+              format: 'png',
+              width: settings.width,
+              height: settings.height,
+              filename: filename
+            }).then(function() {
+              // Clean up
+              document.body.removeChild(tempDiv);
+            });
+          });
+      }
+    }
+  });
+  
+  {% else %}
+  console.log('BMA plot not rendered - conditions not met');
+  console.log('hasResults:', {{ results.has_results|yesno:"true,false" }});
+  console.log('hasPlotData:', {{ results.plot_data|yesno:"true,false" }});
+  {% endif %}
+</script>
+{% endblock %}
