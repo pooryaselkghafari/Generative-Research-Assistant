@@ -35,6 +35,7 @@ services:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - USE_SSL=${USE_SSL:-False}
       - DB_NAME=statbox
       - DB_USER=postgres
       - DB_PASSWORD=${DB_PASSWORD}
