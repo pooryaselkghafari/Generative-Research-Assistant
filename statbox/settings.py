@@ -14,6 +14,13 @@ if candidate.exists():
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# CSRF trusted origins (required for Django 4.0+ with HTTPS)
+# Automatically set from ALLOWED_HOSTS when USE_SSL is enabled
+USE_SSL = os.environ.get('USE_SSL', 'False').lower() == 'true'
+if USE_SSL:
+    CSRF_TRUSTED_ORIGINS = [f'https://{host}' for host in ALLOWED_HOSTS if host]
+else:
+    CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
 
 # Data Encryption Settings
 # Use a separate encryption key for data encryption (different from SECRET_KEY)
@@ -72,11 +79,13 @@ if not DEBUG:
     SECURE_REDIRECT_EXEMPT = []
     # Only enable SSL redirect if SSL is actually configured
     # Set USE_SSL=True in .env when SSL certificates are set up
-    USE_SSL = os.environ.get('USE_SSL', 'False').lower() == 'true'
+    # USE_SSL is already defined above for CSRF_TRUSTED_ORIGINS
     SECURE_SSL_REDIRECT = USE_SSL
     SESSION_COOKIE_SECURE = USE_SSL
     CSRF_COOKIE_SECURE = USE_SSL
     X_FRAME_OPTIONS = 'DENY'
+    # Trust X-Forwarded-Proto header from nginx (required when behind reverse proxy)
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 
