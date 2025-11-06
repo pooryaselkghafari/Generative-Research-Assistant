@@ -70,9 +70,12 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_REDIRECT_EXEMPT = []
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    # Only enable SSL redirect if SSL is actually configured
+    # Set USE_SSL=True in .env when SSL certificates are set up
+    USE_SSL = os.environ.get('USE_SSL', 'False').lower() == 'true'
+    SECURE_SSL_REDIRECT = USE_SSL
+    SESSION_COOKIE_SECURE = USE_SSL
+    CSRF_COOKIE_SECURE = USE_SSL
     X_FRAME_OPTIONS = 'DENY'
 
 

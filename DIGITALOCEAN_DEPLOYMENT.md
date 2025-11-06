@@ -35,6 +35,8 @@ Before you begin, make sure you have:
 - [ ] SSH access to your computer
 - [ ] A Stripe account (for payment processing)
 - [ ] An email service (Gmail, SendGrid, etc.) for sending emails
+- [ ] Your code pushed to GitHub (see `GITHUB_SETUP.md` for instructions)
+  - **If repository is private**: You'll need to set up SSH keys or use a personal access token (see Step 4.2)
 
 ---
 
@@ -188,6 +190,10 @@ sudo apt install -y git
 
 ### 4.2 Clone Your Repository
 
+#### Option A: Public Repository (Simple)
+
+If your repository is public, you can clone directly:
+
 ```bash
 # Navigate to home directory
 cd ~
@@ -195,12 +201,170 @@ cd ~
 # Clone your repository (replace with your actual repo URL)
 git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git statbox
 cd statbox
-
-# If you're using SSH for git:
-# git clone git@github.com:YOUR_USERNAME/YOUR_REPO.git statbox
 ```
 
-**Note**: If your repository is private, you'll need to set up SSH keys or use a personal access token.
+#### Option B: Private Repository - Using SSH Keys (Recommended)
+
+For private repositories, SSH keys are the most secure and convenient method:
+
+**Step 1: Generate SSH Key on Your Server**
+
+```bash
+# Generate a new SSH key
+ssh-keygen -t ed25519 -C "deploy@statbox"
+
+# Press Enter to accept default location (~/.ssh/id_ed25519)
+# Optionally set a passphrase for extra security, or press Enter for no passphrase
+
+# Start SSH agent
+eval "$(ssh-agent -s)"
+
+# Add your SSH key to the agent
+ssh-add ~/.ssh/id_ed25519
+```
+
+**Step 2: Display Public Key**
+
+```bash
+# Display your public key - copy this entire output
+cat ~/.ssh/id_ed25519.pub
+```
+
+**Step 3: Add SSH Key to GitHub**
+
+1. Go to GitHub: https://github.com/settings/keys
+2. Click "New SSH key"
+3. Title: `statbox-server` (or any descriptive name)
+4. Key: Paste the public key you copied
+5. Click "Add SSH key"
+
+**Step 4: Test SSH Connection**
+
+```bash
+# Test connection to GitHub
+ssh -T git@github.com
+
+# You should see: "Hi USERNAME! You've successfully authenticated..."
+# If you see "Permission denied", the SSH key isn't properly added to GitHub
+```
+
+**⚠️ Important**: If SSH test fails, verify:
+- SSH key was copied correctly (no extra spaces/line breaks)
+- Key was added to GitHub account (Settings → SSH and GPG keys)
+- You're using the correct GitHub account
+
+**Step 5: Verify Git is Using SSH**
+
+Before cloning, make sure you're using the correct SSH URL format:
+
+```bash
+# The URL MUST start with "git@github.com:" NOT "https://github.com/"
+# Correct format: git@github.com:USERNAME/REPO.git
+# Wrong format: https://github.com/USERNAME/REPO.git (this will ask for password)
+```
+
+**Step 6: Clone Repository**
+
+```bash
+# Navigate to home directory
+cd ~
+
+# Clone using SSH (replace YOUR_USERNAME and YOUR_REPO)
+# IMPORTANT: Make sure the URL starts with "git@github.com:"
+git clone git@github.com:YOUR_USERNAME/YOUR_REPO.git statbox
+
+# If it still asks for username/password, check:
+# 1. Is the URL correct? (should be git@github.com:... not https://...)
+# 2. Did SSH test pass? (run ssh -T git@github.com again)
+# 3. Check what URL git is trying to use:
+#    git clone --verbose git@github.com:YOUR_USERNAME/YOUR_REPO.git statbox
+
+cd statbox
+```
+
+**Troubleshooting: If Git Still Asks for Password**
+
+If Git is still asking for username/password after setting up SSH:
+
+```bash
+# 1. Check if you're accidentally using HTTPS URL
+#    Make sure the clone command uses: git@github.com:... 
+#    NOT: https://github.com/...
+
+# 2. Verify SSH is working
+ssh -T git@github.com
+# Should show: "Hi USERNAME! You've successfully authenticated..."
+
+# 3. Check SSH config (optional - create if needed)
+nano ~/.ssh/config
+```
+
+Add this to `~/.ssh/config` if it doesn't exist:
+
+```
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+Save and try cloning again.
+
+**4. If you already cloned with HTTPS, change the remote URL:**
+
+```bash
+# Check current remote URL
+git remote -v
+
+# If it shows https://, change it to SSH:
+git remote set-url origin git@github.com:YOUR_USERNAME/YOUR_REPO.git
+
+# Verify change
+git remote -v
+# Should now show git@github.com:...
+```
+
+#### Option C: Private Repository - Using Personal Access Token
+
+If you prefer HTTPS with a token instead of SSH:
+
+**Step 1: Create Personal Access Token on GitHub**
+
+1. Go to GitHub: https://github.com/settings/tokens
+2. Click "Generate new token" → "Generate new token (classic)"
+3. Give it a name: `statbox-deployment`
+4. Select scopes: Check `repo` (this gives full repository access)
+5. Click "Generate token"
+6. **COPY THE TOKEN IMMEDIATELY** (you won't see it again!)
+
+**Step 2: Clone Using Token**
+
+```bash
+# Navigate to home directory
+cd ~
+
+# Clone using HTTPS with token (replace YOUR_USERNAME, YOUR_REPO, and YOUR_TOKEN)
+git clone https://YOUR_TOKEN@github.com/YOUR_USERNAME/YOUR_REPO.git statbox
+cd statbox
+```
+
+**Alternative**: You can also clone without the token in the URL and enter it when prompted:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git statbox
+# When prompted:
+# Username: YOUR_USERNAME
+# Password: YOUR_TOKEN (paste your token here, not your GitHub password)
+```
+
+**Note**: For security, you might want to store the token in a password manager or use Git credential helper:
+
+```bash
+# Store credentials (one-time setup)
+git config --global credential.helper store
+
+# Next time you clone/pull, it will remember your credentials
+```
 
 ### 4.3 Configure Environment Variables
 
@@ -228,6 +392,9 @@ DB_HOST=db
 DB_PORT=5432
 
 # Stripe Settings
+# See STRIPE_SETUP.md for detailed instructions on finding these keys
+# Test mode keys start with pk_test_/sk_test_ (for development)
+# Live mode keys start with pk_live_/sk_live_ (for production)
 STRIPE_PUBLIC_KEY=pk_live_your_stripe_public_key
 STRIPE_SECRET_KEY=sk_live_your_stripe_secret_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
@@ -255,7 +422,9 @@ python3 -c 'from django.core.management.utils import get_random_secret_key; prin
 - Generate a strong `SECRET_KEY` (use the command above)
 - Create a strong `DB_PASSWORD` (use a password manager)
 - For Gmail, you'll need to generate an "App Password" in your Google Account settings
-- For Stripe keys, use your production keys (starting with `pk_live_` and `sk_live_`)
+- **For Stripe keys**: See `STRIPE_SETUP.md` for detailed instructions on finding your keys
+  - Test mode: Start with `pk_test_` and `sk_test_` (for development)
+  - Live mode: Start with `pk_live_` and `sk_live_` (for production)
 
 Save and exit nano: `Ctrl+X`, then `Y`, then `Enter`
 
@@ -354,13 +523,88 @@ docker-compose up -d db redis web
 # Stop nginx temporarily
 docker-compose stop nginx
 
-# Generate certificates
+# Check if port 80 is free (should show nothing or only docker processes)
+sudo lsof -i :80
+# Or: sudo netstat -tulpn | grep :80
+# Or: sudo ss -tulpn | grep :80
+
+# If port 80 is in use, stop the service using it (see troubleshooting below)
+# Then generate certificates
 sudo certbot certonly --standalone -d your-domain.com -d www.your-domain.com
 
 # Certificates will be saved to:
 # /etc/letsencrypt/live/your-domain.com/fullchain.pem
 # /etc/letsencrypt/live/your-domain.com/privkey.pem
 ```
+
+**⚠️ Troubleshooting: Port 80 Already in Use**
+
+If you get an error: `Could not bind TCP port 80 because it is already in use`:
+
+**Step 1: Identify what's using port 80**
+
+```bash
+# Check what's using port 80
+sudo lsof -i :80
+# Or use:
+sudo netstat -tulpn | grep :80
+# Or:
+sudo ss -tulpn | grep :80
+```
+
+Common culprits:
+- Apache (`apache2` service)
+- Nginx running directly on host (not in Docker)
+- Another Docker container
+- Systemd service
+
+**Step 2: Stop the conflicting service**
+
+```bash
+# If it's Apache:
+sudo systemctl stop apache2
+sudo systemctl disable apache2  # Prevent auto-start
+
+# If it's nginx running on host (not Docker):
+sudo systemctl stop nginx
+sudo systemctl disable nginx
+
+# If it's another Docker container:
+docker ps
+docker stop <container-id-or-name>
+
+# If you can't identify it, kill the process directly:
+# Find the PID from lsof/netstat/ss output, then:
+sudo kill <PID>
+```
+
+**Step 3: Verify port is free**
+
+```bash
+# Should show nothing (port is free)
+sudo lsof -i :80
+```
+
+**Step 4: Continue with certbot**
+
+```bash
+# Now certbot should work
+sudo certbot certonly --standalone -d your-domain.com -d www.your-domain.com
+```
+
+**Alternative: Use nginx plugin instead of standalone**
+
+If you keep having issues with port 80, you can use certbot's nginx plugin:
+
+```bash
+# Start nginx container first
+docker-compose up -d nginx
+
+# Use nginx plugin (certbot modifies nginx config automatically)
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+```
+
+However, this requires nginx to be running and accessible, which may need certificates first (chicken-and-egg problem). The standalone method is usually better for initial setup.
 
 **If you don't have a domain yet:**
 - Skip SSL setup for now
@@ -499,12 +743,15 @@ sudo crontab -e
 
 ### 8.2 Configure Stripe Webhooks
 
-1. Log into Stripe Dashboard
+**See `STRIPE_SETUP.md` for detailed step-by-step instructions.**
+
+Quick steps:
+1. Log into Stripe Dashboard: https://dashboard.stripe.com
 2. Go to Developers → Webhooks
 3. Add endpoint:
    - URL: `https://your-domain.com/accounts/webhook/`
-   - Events to send: Select all payment/subscription events
-4. Copy the webhook signing secret
+   - Events to send: Select all payment/subscription events (see STRIPE_SETUP.md for specific events)
+4. Copy the webhook signing secret (starts with `whsec_...`)
 5. Update your `.env` file with `STRIPE_WEBHOOK_SECRET`
 6. Restart services: `docker-compose restart web`
 
@@ -603,7 +850,11 @@ docker-compose restart web
 cd ~/statbox
 
 # Pull latest changes
+# If using SSH (already configured): Just run git pull
 git pull
+
+# If using HTTPS with token and credentials aren't saved:
+# git pull https://YOUR_TOKEN@github.com/YOUR_USERNAME/YOUR_REPO.git
 
 # Rebuild and restart
 docker-compose down
@@ -649,6 +900,98 @@ docker-compose up -d
    ```bash
    docker-compose logs web
    docker-compose logs nginx
+   ```
+
+### Web Service Not Running
+
+**Problem**: Service "web" is not running or keeps crashing
+
+**Solution**:
+
+1. **Check container status**:
+   ```bash
+   docker-compose ps
+   # See which services are running/stopped
+   ```
+
+2. **Check web service logs**:
+   ```bash
+   # View recent logs
+   docker-compose logs web
+   
+   # Follow logs in real-time
+   docker-compose logs -f web
+   
+   # View last 50 lines
+   docker-compose logs --tail=50 web
+   ```
+
+3. **Common issues and fixes**:
+
+   **Issue: Missing environment variables**
+   ```bash
+   # Verify .env file exists and has all required variables
+   cat .env
+   
+   # Check if variables are set correctly
+   # Make sure SECRET_KEY, DB_PASSWORD, etc. are set
+   ```
+
+   **Issue: Database not ready**
+   ```bash
+   # Check database is running
+   docker-compose ps db
+   
+   # Wait for database to be ready
+   docker-compose up -d db
+   sleep 10
+   
+   # Then start web service
+   docker-compose up -d web
+   ```
+
+   **Issue: Build errors**
+   ```bash
+   # Rebuild the web container
+   docker-compose build web
+   
+   # Start it
+   docker-compose up -d web
+   ```
+
+   **Issue: Import/module errors**
+   ```bash
+   # Check logs for Python import errors
+   docker-compose logs web | grep -i "import\|module\|error"
+   
+   # Try rebuilding
+   docker-compose build --no-cache web
+   docker-compose up -d web
+   ```
+
+4. **Start services in order**:
+   ```bash
+   # Start database first
+   docker-compose up -d db redis
+   
+   # Wait for database
+   sleep 10
+   
+   # Start web service
+   docker-compose up -d web
+   
+   # Check status
+   docker-compose ps
+   ```
+
+5. **If web service still won't start**:
+   ```bash
+   # Try running web service interactively to see errors
+   docker-compose run --rm web python manage.py check
+   
+   # Or try starting it without detaching to see output
+   docker-compose up web
+   # (Press Ctrl+C to stop, then fix issues)
    ```
 
 ### Database Connection Errors
@@ -706,6 +1049,98 @@ If you're on the $12/month plan and experiencing issues:
 3. Optimize Gunicorn workers (edit docker-compose.yml):
    ```yaml
    command: gunicorn --bind 0.0.0.0:8000 --workers 2 --threads 2 statbox.wsgi:application
+   ```
+
+### Port 80 Already in Use
+
+**Problem**: `Could not bind TCP port 80 because it is already in use` when running certbot or starting Docker containers
+
+**Solution**:
+
+1. **Identify what's using port 80**:
+   ```bash
+   sudo lsof -i :80
+   # Or: sudo netstat -tulpn | grep :80
+   # Or: sudo ss -tulpn | grep :80
+   ```
+
+2. **Stop the conflicting service**:
+   ```bash
+   # If Apache:
+   sudo systemctl stop apache2
+   sudo systemctl disable apache2
+   
+   # If nginx (running on host, not Docker):
+   sudo systemctl stop nginx
+   sudo systemctl disable nginx
+   
+   # If another Docker container:
+   docker ps
+   docker stop <container-name>
+   
+   # Kill process directly (use PID from step 1):
+   sudo kill <PID>
+   ```
+
+3. **Verify port is free**:
+   ```bash
+   sudo lsof -i :80  # Should show nothing
+   ```
+
+4. **Continue with your operation** (certbot or docker-compose)
+
+**For Docker port binding issues**:
+```bash
+# Check if Docker container is trying to bind to port 80
+docker-compose ps
+
+# If nginx container is running and causing conflict:
+docker-compose stop nginx
+
+# Then start services one by one:
+docker-compose up -d db redis web
+# Start nginx later after SSL is set up
+```
+
+### Git Authentication Issues (Private Repositories)
+
+**Problem**: `Permission denied` or `Repository not found` when cloning/pulling
+
+1. **For SSH method**:
+   ```bash
+   # Verify SSH key is added
+   cat ~/.ssh/id_ed25519.pub
+   
+   # Test GitHub connection
+   ssh -T git@github.com
+   
+   # If it fails, check:
+   # - SSH key is added to GitHub account
+   # - You have access to the repository
+   # - Repository URL is correct
+   ```
+
+2. **For HTTPS/Token method**:
+   ```bash
+   # Check if credentials are stored
+   cat ~/.git-credentials
+   
+   # If token isn't working:
+   # - Generate a new token in GitHub settings
+   # - Make sure token has 'repo' scope
+   # - Use token as password (not your GitHub password)
+   
+   # Update remote URL with new token
+   git remote set-url origin https://YOUR_TOKEN@github.com/YOUR_USERNAME/YOUR_REPO.git
+   ```
+
+3. **Switching from HTTPS to SSH**:
+   ```bash
+   # Change remote URL to SSH
+   git remote set-url origin git@github.com:YOUR_USERNAME/YOUR_REPO.git
+   
+   # Test
+   git pull
    ```
 
 ---

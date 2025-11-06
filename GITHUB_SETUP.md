@@ -88,14 +88,86 @@ After creating the repository on GitHub, you'll see instructions. Use these comm
 # Add GitHub as remote (replace YOUR_USERNAME with your GitHub username)
 git remote add origin https://github.com/YOUR_USERNAME/statbox.git
 
-# Or if using SSH (requires SSH key setup):
+# Or if using SSH (requires SSH key setup - recommended for private repos):
 # git remote add origin git@github.com:YOUR_USERNAME/statbox.git
 
 # Verify remote was added
 git remote -v
 ```
 
-## Step 6: Push to GitHub
+## Step 6: Set Up Authentication
+
+**⚠️ Important**: GitHub no longer accepts passwords for HTTPS authentication. You need either:
+- **Option A**: Personal Access Token (for HTTPS) - see below
+- **Option B**: SSH keys (see DIGITALOCEAN_DEPLOYMENT.md Step 4.2 for setup)
+
+### Option A: Using Personal Access Token (HTTPS)
+
+If you're using HTTPS (`https://github.com/...`), you'll need a Personal Access Token:
+
+**Step 6.1: Create Personal Access Token**
+
+1. Go to GitHub: https://github.com/settings/tokens
+2. Click **"Generate new token"** → **"Generate new token (classic)"**
+3. Give it a name: `statbox-local-dev` (or any name you prefer)
+4. Select expiration: Choose how long the token should be valid (90 days, 1 year, etc.)
+5. Select scopes: Check **`repo`** (this gives full repository access)
+   - This is required for private repositories
+   - For public repos, you still need `repo` scope for pushing
+6. Click **"Generate token"**
+7. **⚠️ COPY THE TOKEN IMMEDIATELY** - You won't be able to see it again!
+
+**Step 6.2: Use Token for Authentication**
+
+When you push, you'll be prompted for credentials:
+
+```bash
+# Push your code to GitHub
+git push -u origin main
+
+# When prompted:
+# Username: YOUR_GITHUB_USERNAME
+# Password: PASTE_YOUR_TOKEN_HERE (NOT your GitHub password!)
+```
+
+**Alternative: Store Token to Avoid Re-entering**
+
+```bash
+# Configure Git to store credentials
+git config --global credential.helper store
+
+# Now when you push the first time, Git will remember your token
+git push -u origin main
+# Enter username and token once, Git remembers it
+```
+
+**Or use token in URL (one-time, less secure):**
+
+```bash
+# Update remote URL with token (replace YOUR_USERNAME and YOUR_TOKEN)
+git remote set-url origin https://YOUR_TOKEN@github.com/YOUR_USERNAME/statbox.git
+
+# Then push (won't ask for credentials)
+git push -u origin main
+
+# ⚠️ Note: Token will be visible in git remote -v output
+# Use credential helper method above for better security
+```
+
+### Option B: Using SSH (Recommended for Private Repos)
+
+If you prefer SSH (more secure, no tokens needed):
+
+```bash
+# Change remote to SSH
+git remote set-url origin git@github.com:YOUR_USERNAME/statbox.git
+
+# Make sure SSH key is set up (see DIGITALOCEAN_DEPLOYMENT.md Step 4.2)
+# Then push
+git push -u origin main
+```
+
+## Step 7: Push to GitHub
 
 ```bash
 # Push your code to GitHub
@@ -104,9 +176,14 @@ git push -u origin main
 # If you get an error about branch name, try:
 # git branch -M main
 # git push -u origin main
+
+# If you get authentication errors:
+# - Make sure you used a Personal Access Token (not password)
+# - Verify token has 'repo' scope
+# - For SSH: Make sure SSH key is added to GitHub
 ```
 
-## Step 7: Verify Upload
+## Step 8: Verify Upload
 
 1. Go to your GitHub repository: `https://github.com/YOUR_USERNAME/statbox`
 2. You should see all your files (except those in `.gitignore`)
@@ -148,9 +225,14 @@ git commit -m "Initial commit"
 # 4. Add remote (replace YOUR_USERNAME)
 git remote add origin https://github.com/YOUR_USERNAME/statbox.git
 
-# 5. Push to GitHub
+# 5. Create Personal Access Token first (see Step 6 above)
+#    Then push to GitHub (use token as password when prompted)
 git push -u origin main
+# Username: YOUR_USERNAME
+# Password: YOUR_TOKEN (NOT your GitHub password!)
 ```
+
+**⚠️ Remember**: GitHub requires a Personal Access Token (not password) for HTTPS authentication.
 
 ### Regular Updates
 
@@ -228,12 +310,30 @@ git remote remove origin
 git remote add origin https://github.com/YOUR_USERNAME/statbox.git
 ```
 
-### "Authentication failed"
-- Use Personal Access Token instead of password:
-  1. GitHub → Settings → Developer settings → Personal access tokens
-  2. Generate new token (classic)
-  3. Select scopes: `repo` (full control)
-  4. Use token as password when pushing
+### "Authentication failed" or "Username/Password Prompt"
+
+**Problem**: GitHub no longer accepts passwords for HTTPS. You need a Personal Access Token.
+
+**Solution**:
+1. Create a Personal Access Token:
+   - Go to: https://github.com/settings/tokens
+   - Click "Generate new token (classic)"
+   - Name: `statbox-local-dev`
+   - Scopes: Check `repo` (full repository access)
+   - Generate and **copy the token**
+2. Use token instead of password:
+   - Username: Your GitHub username
+   - Password: **Paste your token here** (NOT your GitHub password)
+3. Store credentials to avoid re-entering:
+   ```bash
+   git config --global credential.helper store
+   # Next time, Git will remember your token
+   ```
+4. Or switch to SSH (more secure):
+   ```bash
+   git remote set-url origin git@github.com:YOUR_USERNAME/statbox.git
+   # Requires SSH key setup - see DIGITALOCEAN_DEPLOYMENT.md
+   ```
 
 ### "Branch main does not exist"
 ```bash

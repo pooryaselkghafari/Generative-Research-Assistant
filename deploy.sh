@@ -12,8 +12,9 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-# Load environment variables
-export $(cat .env | grep -v '^#' | xargs)
+# Note: We don't need to export .env variables here because docker-compose
+# automatically reads the .env file. The export line was causing issues with
+# variables like ALLOWED_HOSTS that contain dots or commas.
 
 # Build and start services
 echo "📦 Building Docker containers..."
