@@ -14,7 +14,7 @@ RUN apt-get update \
         build-essential \
         libpq-dev \
         r-base \
-        r-cran-bas \
+        r-base-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
