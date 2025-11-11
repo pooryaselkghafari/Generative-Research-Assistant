@@ -142,7 +142,8 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = USE_SSL
     SESSION_COOKIE_SECURE = USE_SSL
     CSRF_COOKIE_SECURE = USE_SSL
-    X_FRAME_OPTIONS = 'DENY'
+    # Allow same-origin iframes so the cleaner modal can load (SAMEORIGIN allows iframes from same domain)
+    X_FRAME_OPTIONS = 'SAMEORIGIN'
     # Trust X-Forwarded-Proto header from nginx (required when behind reverse proxy)
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
@@ -254,9 +255,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
-# Allow same-origin iframes so the cleaner can load inside the modal
-X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 ROOT_URLCONF = 'statbox.urls'
 
