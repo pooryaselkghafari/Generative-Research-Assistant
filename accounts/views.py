@@ -60,9 +60,25 @@ def register_view(request):
         form = UserRegistrationForm(request.POST)
         if form.is_valid():
             user = form.save(commit=False)
-            # Set user as inactive until email is verified
-            user.is_active = False
-            user.save()
+            
+            # Check if using console email backend (for development/testing)
+            from django.conf import settings
+            using_console_email = 'console' in settings.EMAIL_BACKEND.lower()
+            
+            # Set user as inactive until email is verified (unless using console backend)
+            if using_console_email:
+                # Auto-activate users when using console backend since emails won't be sent
+                user.is_active = True
+                user.save()
+                # Log them in automatically
+                from django.contrib.auth import login
+                login(request, user)
+                messages.success(request, f'Welcome, {user.username}! Your account has been created and activated.')
+                return redirect('index')
+            else:
+                # Normal flow: require email verification
+                user.is_active = False
+                user.save()
             
             # Create user profile with free tier defaults
             profile = UserProfile.objects.create(
@@ -83,14 +99,21 @@ def register_view(request):
             # Send welcome and verification emails (non-blocking)
             try:
                 send_welcome_email(user)
-                send_verification_email(user, request)
-                messages.success(request, 'Account created successfully! Please check your email to verify your account before logging in.')
+                if not using_console_email:
+                    send_verification_email(user, request)
+                messages.success(request, 'Account created successfully! Please check your email to verify your account.')
             except Exception as e:
-                # If email fails, still allow registration but warn user
+                # If email fails, auto-activate user so they can still use the app
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Failed to send registration emails: {e}")
-                messages.warning(request, 'Account created successfully! However, we could not send verification emails. Please contact support if you need to verify your account.')
+                # Auto-activate user if email fails
+                user.is_active = True
+                user.save()
+                from django.contrib.auth import login
+                login(request, user)
+                messages.warning(request, f'Account created! We could not send verification emails, but your account has been activated. Welcome, {user.username}!')
+                return redirect('index')
             
             return redirect('login')
     else:
