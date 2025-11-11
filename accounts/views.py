@@ -80,13 +80,18 @@ def register_view(request):
             except SubscriptionTierSettings.DoesNotExist:
                 pass
             
-            # Send welcome email
-            send_welcome_email(user)
+            # Send welcome and verification emails (non-blocking)
+            try:
+                send_welcome_email(user)
+                send_verification_email(user, request)
+                messages.success(request, 'Account created successfully! Please check your email to verify your account before logging in.')
+            except Exception as e:
+                # If email fails, still allow registration but warn user
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to send registration emails: {e}")
+                messages.warning(request, 'Account created successfully! However, we could not send verification emails. Please contact support if you need to verify your account.')
             
-            # Send verification email
-            send_verification_email(user, request)
-            
-            messages.success(request, 'Account created successfully! Please check your email to verify your account before logging in.')
             return redirect('login')
     else:
         form = UserRegistrationForm()

@@ -34,7 +34,7 @@ def send_welcome_email(user):
             from_email,
             [user.email],
             html_message=html_message,
-            fail_silently=False,
+            fail_silently=True,  # Don't break registration if email fails
         )
         return True
     except Exception as e:
@@ -75,7 +75,7 @@ def send_verification_email(user, request):
             from_email,
             [user.email],
             html_message=html_message,
-            fail_silently=False,
+            fail_silently=True,  # Don't break registration if email fails
         )
         return True
     except Exception as e:
@@ -116,7 +116,7 @@ def send_password_reset_email(user, request):
             from_email,
             [user.email],
             html_message=html_message,
-            fail_silently=False,
+            fail_silently=True,  # Don't break registration if email fails
         )
         return True
     except Exception as e:
