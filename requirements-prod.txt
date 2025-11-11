@@ -37,6 +37,7 @@ django-anymail>=10.0
 # Social Authentication
 django-allauth>=0.57.0
 PyJWT>=2.8.0  # Required for Google OAuth in allauth
+cryptography>=41.0.0  # Required for Google OAuth JWT handling in allauth
 
 # Production Server
 gunicorn>=21.0.0
