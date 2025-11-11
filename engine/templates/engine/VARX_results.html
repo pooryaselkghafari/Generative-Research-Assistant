@@ -1,0 +1,1203 @@
+{% extends "engine/base.html" %}
+{% load engine_extras %}
+{% block title %}VARX Results — Analysis Assistant{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+  // Set AI chat context when page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof aiChatContext !== 'undefined') {
+      aiChatContext = {
+        session_name: '{% if session %}{{ session.name|escapejs }}{% endif %}',
+        formula: '{{ formula|escapejs }}',
+        module: 'varx',
+        dataset_name: '{{ dataset.name|escapejs }}'
+      };
+    }
+  });
+</script>
+<style>
+  .error-message {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 20px 0;
+  }
+  
+  .varx-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin-top: 24px;
+  }
+  
+  .results-container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  
+  .irf-container {
+    min-height: 500px;
+    margin-top: 24px;
+  }
+  
+  .plot-container {
+    min-height: 450px;
+    width: 100%;
+  }
+  
+  #irf-plot-content {
+    min-height: 450px;
+    width: 100%;
+  }
+  
+  #covarianceMatrixSection {
+    display: none !important;
+  }
+  
+  #hideCovarianceBtn {
+    display: none !important;
+  }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  {% if session %}
+  <a href="/session/{{session.id}}/" class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">Modify</a>
+  {% else %}
+  <a class="btn btn-ghost" href="/app/">Back to Analysis</a>
+  {% endif %}
+  {% if session %}
+  <a href="{% url 'download_session_history' session.id %}?format=text" class="btn btn-ghost" style="margin-left: 8px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+    </svg>
+    Download History
+  </a>
+  {% endif %}
+  <button class="btn" type="button" onclick="toggleAIChatbox()" 
+          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
+          title="Ask AI Assistant">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    Ask AI
+  </button>
+{% endblock %}
+
+{% block sidebar %}
+  <!-- Model Settings Card -->
+  {% if session and results.has_results %}
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Model Settings</h3>
+    </div>
+    <div class="card-body">
+      <form id="updateModelForm" method="POST" action="{% url 'run_varx_analysis' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update">
+        <input type="hidden" name="session_id" value="{{ session.id }}">
+        <input type="hidden" name="session_name" value="{{ session.name }}">
+        <input type="hidden" name="module" value="varx">
+        <input type="hidden" name="dataset_id" value="{{ dataset.id }}">
+        <input type="hidden" name="formula" value="{{ formula }}">
+        
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">Max Lags to Test</label>
+          <input type="number" id="max_lags" name="max_lags" class="input" value="{% if results.max_lags %}{{ results.max_lags }}{% else %}10{% endif %}" min="3" max="20" step="1" required>
+          <small style="color: var(--muted); font-size: 12px;">
+            Maximum number of lags to test in lag selection table (default: 10)
+          </small>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">VAR Lag Order</label>
+          <input type="number" id="var_order" name="var_order" class="input" value="{{ results.var_order }}" min="1" max="20" step="1" required>
+          <small style="color: var(--muted); font-size: 12px;">
+            Number of lags for the VAR model
+            {% if results.auto_lag_selection %}
+            <br>(Auto-selected: {{ results.var_order }})
+            {% endif %}
+          </small>
+        </div>
+        
+        <div style="display: flex; gap: 8px;">
+          <button type="submit" class="btn" style="flex: 1; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17,8 21,12 17,16"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Update Analysis
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+  
+  <!-- Generate IRF Plot Card -->
+  {% if session and results.has_results %}
+  <div class="card">
+    <div class="card-head">
+      <h3 class="card-title">Generate IRF Plot</h3>
+    </div>
+    <div class="card-body">
+      <form id="irfForm" onsubmit="event.preventDefault(); generateIRF();">
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">IRF Horizon</label>
+          <input type="number" id="irf_horizon" class="input" value="10" min="1" max="50" step="1" placeholder="10">
+          <small style="color: var(--muted); font-size: 12px;">Number of periods ahead to forecast</small>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">Response Variable</label>
+          <select id="irf_response_var" class="input">
+            <option value="">All Variables</option>
+            {% for var in results.dependent_vars %}
+            <option value="{{ var }}">{{ var }}</option>
+            {% endfor %}
+          </select>
+          <small style="color: var(--muted); font-size: 12px;">Variable to show response of (leave blank for all)</small>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">Shock Variable</label>
+          <select id="irf_shock_var" class="input">
+            <option value="">All Variables</option>
+            {% for var in results.dependent_vars %}
+            <option value="{{ var }}">{{ var }}</option>
+            {% endfor %}
+          </select>
+          <small style="color: var(--muted); font-size: 12px;">Variable to shock (leave blank for all)</small>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">Shock Type</label>
+          <select id="irf_shock_type" class="input">
+            <option value="orthogonal">Orthogonal</option>
+            <option value="generalized">Generalized (Pesaran–Shin)</option>
+          </select>
+          <small style="color: var(--muted); font-size: 12px;">Type of impulse response</small>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="irf_show_ci" style="width: auto; margin: 0;">
+            <span class="field-label" style="margin: 0;">Show 95% Confidence Intervals</span>
+          </label>
+          <small style="color: var(--muted); font-size: 12px; display: block; margin-top: 4px;">Display confidence bands around IRF estimates</small>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button type="submit" class="btn" style="flex: 1; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">
+            Generate IRF
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <!-- VARX Results Header -->
+  <div class="modern-results-header">
+    <div class="header-main">
+      <div class="regression-type-badge">
+        <span class="regression-type">VARX Analysis</span>
+      </div>
+      <div class="header-actions">
+        {% if dataset %}
+        <a class="modern-edit-btn" href="{% url 'dataprep_open' dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+          Edit Dataset
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <span class="meta-label">Dataset:</span>
+        <span class="meta-value">{{dataset.name}}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span class="meta-label">Formula:</span>
+        <span class="meta-value">{{formula}}</span>
+      </div>
+    </div>
+  </div>
+
+  {% if not results.has_results %}
+    <!-- Error Message -->
+    <div class="error-message">
+      <h3>Analysis Error</h3>
+      <p>{{ results.error }}</p>
+    </div>
+  {% else %}
+    <!-- Constant Stationary Variables Warning Modal -->
+    {% if results.constant_stationary_vars and results.constant_stationary_vars|length > 0 %}
+    <div id="constantStationaryWarningModal" style="display:block; position:fixed; inset:0; z-index:2000;">
+      <div style="position:absolute; inset:0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); transition: opacity 0.2s;" onclick="closeConstantStationaryWarning()"></div>
+      <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(540px, 92vw); max-height:90vh; background:#ffffff; border:none; border-radius:16px; box-shadow: 0 20px 60px rgba(0,0,0,.3), 0 0 0 1px rgba(0,0,0,.05); overflow:hidden; animation: modalSlideIn 0.3s ease-out;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #f3f4f6; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:40px; height:40px; border-radius:10px; background: linear-gradient(135deg, #f59e0b, #d97706); display:flex; align-items:center; justify-content:center;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 style="margin:0; padding:0; font-size:18px; font-weight:600; color: #92400e; letter-spacing:-0.01em;">Constant Stationary Variables</h3>
+              <p style="margin:2px 0 0 0; font-size:12px; color: #b45309;">Transformation resulted in constant values</p>
+            </div>
+          </div>
+          <button onclick="closeConstantStationaryWarning()" style="width:32px; height:32px; border-radius:8px; border:none; background:#fef3c7; color:#92400e; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size:18px; line-height:1;" onmouseover="this.style.background='#fde68a';" onmouseout="this.style.background='#fef3c7';">✕</button>
+        </div>
+        <div style="padding:24px;">
+          <div style="background:#fef3c7; border:1px solid #fde68a; border-radius:12px; padding:16px; margin-bottom:24px;">
+            <p style="margin:0; color: #92400e; font-size:14px; line-height:1.6;">
+              After applying transformation, the following variables became constant (all values are the same): <strong style="color: #78350f;">{{ results.constant_stationary_vars|join:", " }}</strong>
+            </p>
+          </div>
+          <div style="margin-bottom:24px;">
+            <p style="margin:0 0 12px 0; color: #374151; font-size:14px; font-weight:600;">What happened?</p>
+            <p style="margin:0; color: #6b7280; font-size:13px; line-height:1.6;">
+              This typically happens when log transformation results in constant values (e.g., all values become 1 after log(1+epsilon)). VAR models require variables with variation.
+            </p>
+          </div>
+          <div style="margin-bottom:24px;">
+            <p style="margin:0 0 12px 0; color: #374151; font-size:14px; font-weight:600;">What was done?</p>
+            <p style="margin:0; color: #6b7280; font-size:13px; line-height:1.6;">
+              The stationary columns were not added to the model. The analysis continues using the original variables instead.
+            </p>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:12px; padding-top:8px; border-top:1px solid #f3f4f6;">
+            <button onclick="closeConstantStationaryWarning()" style="padding:10px 24px; border-radius:10px; border:none; background: linear-gradient(135deg, #f59e0b, #d97706); color:white; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 12px rgba(245,158,11,0.3);" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(245,158,11,0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(245,158,11,0.3)';">
+              OK
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      function closeConstantStationaryWarning() {
+        const modal = document.getElementById('constantStationaryWarningModal');
+        if (modal) modal.style.display = 'none';
+      }
+    </script>
+    {% endif %}
+
+    <!-- VARX Results Layout: Tables on Top, IRF Below -->
+    <div class="varx-layout">
+      <!-- Results Tables (Top) -->
+      <div class="results-container">
+        <!-- Stationarity Test Table -->
+        {% if results.stationarity_results and results.stationarity_results|length > 0 %}
+        <section class="card">
+          <div class="card-head">
+            <h3 class="card-title">Stationarity Test (ADF) - Endogenous Variables</h3>
+            <div class="muted small">Augmented Dickey-Fuller test results. Variables with p-value &lt; 0.05 are considered stationary.</div>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Variable</th>
+                  <th>Test Statistic</th>
+                  <th>p-value</th>
+                  <th>1% Critical</th>
+                  <th>5% Critical</th>
+                  <th>10% Critical</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for stat_result in results.stationarity_results %}
+                <tr>
+                  <td>
+                    <strong>{{ stat_result.variable }}</strong>
+                    {% if stat_result.is_transformed %}
+                    <br><small style="color: #6b7280; font-size: 11px;">(using {{ stat_result.tested_column }})</small>
+                    {% endif %}
+                  </td>
+                  <td>{% if stat_result.test_statistic %}{{ stat_result.test_statistic|floatformat:4 }}{% else %}N/A{% endif %}</td>
+                  <td>{% if stat_result.p_value %}{{ stat_result.p_value|floatformat:6 }}{% else %}N/A{% endif %}</td>
+                  <td>{% if stat_result.critical_value_1pct %}{{ stat_result.critical_value_1pct|floatformat:4 }}{% else %}N/A{% endif %}</td>
+                  <td>{% if stat_result.critical_value_5pct %}{{ stat_result.critical_value_5pct|floatformat:4 }}{% else %}N/A{% endif %}</td>
+                  <td>{% if stat_result.critical_value_10pct %}{{ stat_result.critical_value_10pct|floatformat:4 }}{% else %}N/A{% endif %}</td>
+                  <td>
+                    {% if stat_result.is_stationary %}
+                    <span style="color: #10b981; font-weight: 600;">✓ Stationary</span>
+                    {% else %}
+                    <span style="color: #ef4444; font-weight: 600;">✗ Non-stationary</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if not stat_result.is_stationary %}
+                    <button class="btn" style="padding: 4px 12px; font-size: 12px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none;" 
+                            onclick="openFixStationaryModal('{{ stat_result.variable }}', {{ dataset.id }}, {{ session.id }})">
+                      Fix Stationary
+                    </button>
+                    {% else %}
+                    <span style="color: var(--muted); font-size: 12px;">No action needed</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        {% endif %}
+        
+        <!-- Lag Selection Table (show if table exists) -->
+        {% if results.lag_selection_table and results.lag_selection_table|length > 0 %}
+        <section class="card">
+          <div class="card-head">
+            <h3 class="card-title">Lag Order Selection</h3>
+            <div class="muted small">Model fit statistics for different lag orders. * indicates optimal lag for each criterion.</div>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Lag</th>
+                  <th>AIC{% if results.lag_selection_results and results.lag_selection_results.aic == results.var_order %}*{% endif %}</th>
+                  <th>BIC{% if results.lag_selection_results and results.lag_selection_results.bic == results.var_order %}*{% endif %}</th>
+                  {% if results.lag_selection_table.0.hqic %}
+                  <th>HQIC{% if results.lag_selection_results and results.lag_selection_results.hqic == results.var_order %}*{% endif %}</th>
+                  {% endif %}
+                  <th>Log-Likelihood</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in results.lag_selection_table %}
+                <tr {% if row.lag == results.var_order %}style="background-color: #f0f9ff;"{% endif %}>
+                  <td><strong>{{ row.lag }}{% if row.lag == results.var_order %} (Selected){% endif %}</strong></td>
+                  <td class="mono">{% if row.aic %}{{ row.aic|floatformat:4 }}{% if row.aic_optimal %}*{% endif %}{% else %}—{% endif %}</td>
+                  <td class="mono">{% if row.bic %}{{ row.bic|floatformat:4 }}{% if row.bic_optimal %}*{% endif %}{% else %}—{% endif %}</td>
+                  {% if row.hqic %}
+                  <td class="mono">{% if row.hqic %}{{ row.hqic|floatformat:4 }}{% if row.hqic_optimal %}*{% endif %}{% else %}—{% endif %}</td>
+                  {% endif %}
+                  <td class="mono">{% if row.log_likelihood %}{{ row.log_likelihood|floatformat:4 }}{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <div class="muted small" style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+              <strong>Selected lag order:</strong> {{ results.var_order }}{% if results.auto_lag_selection %} (auto-selected by AIC){% endif %}
+              {% if results.lag_selection_results %}
+              <br><strong>Optimal lags:</strong> AIC={{ results.lag_selection_results.aic }}, BIC={{ results.lag_selection_results.bic }}{% if results.lag_selection_results.hqic %}, HQIC={{ results.lag_selection_results.hqic }}{% endif %}
+              {% endif %}
+            </div>
+          </div>
+        </section>
+        {% endif %}
+
+        <!-- Model Fit Statistics Table -->
+        {% if results.fit_stats %}
+        <section class="card">
+          <div class="card-head">
+            <h3 class="card-title">Model Fit Statistics</h3>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Statistic</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in results.fit_stats %}
+                <tr>
+                  <td><strong>{{ row.Statistic }}</strong></td>
+                  <td class="mono">{{ row.Value }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        {% endif %}
+
+        <!-- Diagnostic Tests Table -->
+        {% if results.diagnostics and results.diagnostics|length > 0 %}
+        <section class="card">
+          <div class="card-head">
+            <h3 class="card-title">Model Diagnostics</h3>
+            <div class="muted small">Diagnostic tests for model adequacy</div>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Test</th>
+                  <th>Value</th>
+                  <th>Interpretation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in results.diagnostics %}
+                <tr>
+                  <td><strong>{{ row.Test }}</strong></td>
+                  <td class="mono">{{ row.Value }}</td>
+                  <td class="small" style="color: {% if 'good' in row.Interpretation|lower or 'normal' in row.Interpretation|lower or 'no' in row.Interpretation|lower and 'correlation' in row.Interpretation|lower or 'stable' in row.Interpretation|lower and 'yes' in row.Interpretation|lower %}#059669{% elif 'concern' in row.Interpretation|lower or 'not' in row.Interpretation|lower or 'unstable' in row.Interpretation|lower or 'present' in row.Interpretation|lower %}#dc2626{% else %}#6b7280{% endif %};">
+                    {{ row.Interpretation }}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="muted small" style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+            <strong>Notes:</strong>
+            <ul style="margin: 8px 0 0 20px; padding: 0;">
+              <li><strong>Durbin-Watson:</strong> Values between 1.5-2.5 indicate no autocorrelation</li>
+              <li><strong>JB p-value:</strong> p > 0.05 suggests residuals are normally distributed</li>
+              <li><strong>SerialCorr p-value:</strong> p > 0.05 suggests no serial correlation</li>
+              <li><strong>Stable System:</strong> All roots should be &lt; 1 for stability</li>
+            </ul>
+          </div>
+        </section>
+        {% endif %}
+
+        <!-- Coefficients Tables - One for each equation -->
+        {% for equation in results.equations %}
+        <section class="card">
+          <div class="card-head">
+            <h3 class="card-title">Equation: {{ equation.dependent_var }}</h3>
+            <div class="muted small" style="margin-top: 8px; line-height: 1.6;">
+              <strong>{{ equation.dependent_var }}</strong> = 
+              {% if equation.intercept %}
+                {{ equation.intercept.coefficient|floatformat:4 }}
+              {% else %}
+                0
+              {% endif %}
+              {% for coef in equation.all_coefficients %}
+                {% if coef.parameter != 'Intercept' %}
+                  {% if coef.coefficient >= 0 %} + {{ coef.coefficient|floatformat:4 }}{% else %} - {{ coef.coefficient|floatformat:4|slice:"1:" }}{% endif %} × {{ coef.parameter }}
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          
+          <!-- Combined Coefficients Table (Intercept + Exogenous + Endogenous) -->
+          <div class="table-wrap" style="margin-top: 16px;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Coefficient</th>
+                  <th>Std. Error</th>
+                  <th>t-Statistic</th>
+                  <th>p-Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Intercept first -->
+                {% if equation.intercept %}
+                <tr>
+                  <td><strong>{{ equation.intercept.parameter }}{{ equation.intercept.significance }}</strong></td>
+                  <td class="mono">{{ equation.intercept.coefficient|floatformat:6 }}</td>
+                  <td class="mono">{% if equation.intercept.std_error %}{{ equation.intercept.std_error|floatformat:6 }}{% else %}—{% endif %}</td>
+                  <td class="mono">{% if equation.intercept.t_statistic %}{{ equation.intercept.t_statistic|floatformat:4 }}{% else %}—{% endif %}</td>
+                  <td class="mono">{% if equation.intercept.p_value %}{{ equation.intercept.p_value|floatformat:4 }}{% else %}—{% endif %}</td>
+                </tr>
+                {% endif %}
+                
+                <!-- Exogenous variables -->
+                {% if equation.exogenous_coefficients and equation.exogenous_coefficients|length > 0 %}
+                  {% for coef in equation.exogenous_coefficients %}
+                  <tr>
+                    <td><strong>{{ coef.parameter }}{{ coef.significance }}</strong></td>
+                    <td class="mono">{{ coef.coefficient|floatformat:6 }}</td>
+                    <td class="mono">{% if coef.std_error %}{{ coef.std_error|floatformat:6 }}{% else %}—{% endif %}</td>
+                    <td class="mono">{% if coef.t_statistic %}{{ coef.t_statistic|floatformat:4 }}{% else %}—{% endif %}</td>
+                    <td class="mono">{% if coef.p_value %}{{ coef.p_value|floatformat:4 }}{% else %}—{% endif %}</td>
+                  </tr>
+                  {% endfor %}
+                {% endif %}
+                
+                <!-- Endogenous variables (lags) -->
+                {% if equation.endogenous_coefficients|length > 0 %}
+                  {% for coef in equation.endogenous_coefficients %}
+                  <tr>
+                    <td><strong>{{ coef.parameter }}{{ coef.significance }}</strong></td>
+                    <td class="mono">{{ coef.coefficient|floatformat:6 }}</td>
+                    <td class="mono">{% if coef.std_error %}{{ coef.std_error|floatformat:6 }}{% else %}—{% endif %}</td>
+                    <td class="mono">{% if coef.t_statistic %}{{ coef.t_statistic|floatformat:4 }}{% else %}—{% endif %}</td>
+                    <td class="mono">{% if coef.p_value %}{{ coef.p_value|floatformat:4 }}{% else %}—{% endif %}</td>
+                  </tr>
+                  {% endfor %}
+                {% endif %}
+                
+                <!-- Show message if no coefficients at all -->
+                {% if not equation.intercept and not equation.exogenous_coefficients and not equation.endogenous_coefficients %}
+                <tr>
+                  <td colspan="5" class="muted small" style="padding: 12px; text-align: center;">
+                    No coefficients found in this equation.
+                    {% if results.independent_vars %}
+                    <br>Expected exogenous variables: {{ results.independent_vars|join:", " }}
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="muted small" style="margin-top: 16px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+            <strong>Significance levels:</strong> * p &lt; 0.05, ** p &lt; 0.01, *** p &lt; 0.001
+          </div>
+        </section>
+        {% endfor %}
+
+        <!-- Covariance Matrix Button -->
+        {% if results.covariance_matrix|length > 0 %}
+        <section class="card">
+          <div class="card-head">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div>
+                <h3 class="card-title">Covariance Matrix</h3>
+                <div class="muted small">Parameter covariance estimates</div>
+              </div>
+              <button id="toggleCovarianceBtn" class="btn" onclick="toggleCovarianceMatrix()" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border: none; padding: 8px 16px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                  <path d="M18 20V10M12 20V4M6 20v-6"/>
+                </svg>
+                Show Covariance Matrix
+              </button>
+            </div>
+          </div>
+        </section>
+        
+        <!-- Covariance Matrix Table (Hidden by default) -->
+        <section id="covarianceMatrixSection" class="card" style="display: none !important;">
+          <div class="card-head">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div>
+                <h3 class="card-title">Covariance Matrix</h3>
+                <div class="muted small">Parameter covariance estimates</div>
+              </div>
+              <button id="hideCovarianceBtn" class="btn" onclick="toggleCovarianceMatrix()" style="display: none !important; background: linear-gradient(135deg, #6b7280, #4b5563); color: white; border: none; padding: 8px 16px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+                Hide
+              </button>
+            </div>
+          </div>
+          <div class="table-wrap" style="overflow-x: auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  {% for col in results.covariance_columns %}
+                  <th class="mono" style="font-size: 0.85rem;">{{ col }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in results.covariance_matrix %}
+                <tr>
+                  <td><strong>{{ row.parameter }}</strong></td>
+                  {% for col in results.covariance_columns %}
+                  <td class="mono" style="font-size: 0.85rem;">{% if row|get_item:col %}{{ row|get_item:col }}{% else %}—{% endif %}</td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        {% endif %}
+      </div>
+      
+      <!-- IRF Plot Container (Below Tables) -->
+      <div class="irf-container">
+        <section id="irfContainer" class="card plot-card" style="display: none;">
+          <div class="card-head">
+            <div>
+              <h3 class="card-title">Impulse Response Functions</h3>
+              <div class="muted small">Response of variables to shocks</div>
+            </div>
+            <div class="card-actions" style="position: relative;">
+              <div style="position: relative; display: inline-block;">
+                <button id="irfExportBtn" class="btn" style="padding: 6px 12px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; display: flex; align-items: center;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7,10 12,15 17,10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Export
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
+                    <polyline points="6,9 12,15 18,9"/>
+                  </svg>
+                </button>
+                <div id="irfExportMenu" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 1000; min-width: 200px; overflow: hidden;">
+                  <div style="padding: 4px;">
+                    <div style="padding: 8px 12px; font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase; border-bottom: 1px solid #e5e7eb;">Export Image</div>
+                    <button class="irf-export-option" onclick="exportIRFImage('png', 1)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21,15 16,10 5,21"/>
+                      </svg>
+                      PNG (Standard)
+                    </button>
+                    <button class="irf-export-option" onclick="exportIRFImage('png', 2)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px; border-top: 1px solid #f3f4f6;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21,15 16,10 5,21"/>
+                      </svg>
+                      PNG (High Quality)
+                    </button>
+                    <button class="irf-export-option" onclick="exportIRFImage('png', 3)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px; border-top: 1px solid #f3f4f6;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21,15 16,10 5,21"/>
+                      </svg>
+                      PNG (Ultra High Quality)
+                    </button>
+                    <div style="padding: 8px 12px; font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; margin-top: 4px;">Export Data</div>
+                    <button class="irf-export-option" onclick="exportIRFData()" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                      </svg>
+                      CSV Data
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="irf-plot-content" class="plot-container"></div>
+        </section>
+      </div>
+    </div>
+
+  {% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Generate IRF plot function
+async function generateIRF() {
+  {% if session %}
+  const sessionId = {{ session.id }};
+  {% else %}
+  const sessionId = null;
+  {% endif %}
+  
+  if (!sessionId) {
+    alert('No session available');
+    return;
+  }
+  
+  const irfHorizon = parseInt(document.getElementById('irf_horizon').value) || 10;
+  const responseVar = document.getElementById('irf_response_var').value || null;
+  const shockVar = document.getElementById('irf_shock_var').value || null;
+  const shockType = document.getElementById('irf_shock_type').value || 'orthogonal';
+  const showCI = document.getElementById('irf_show_ci').checked || false;
+  
+  if (irfHorizon < 1 || irfHorizon > 50) {
+    alert('IRF horizon must be between 1 and 50');
+    return;
+  }
+
+  // Show loading and display plot container
+  const plotSection = document.getElementById('irfContainer');
+  const plotContent = document.getElementById('irf-plot-content');
+  plotContent.innerHTML = '<div style="text-align: center; padding: 20px;">Generating IRF plot...</div>';
+  plotSection.style.display = 'block';
+
+  try {
+    const response = await fetch(`/session/${sessionId}/varx-irf/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
+      },
+      body: JSON.stringify({
+        irf_horizon: irfHorizon,
+        response_var: responseVar,
+        shock_var: shockVar,
+        shock_type: shockType,
+        show_ci: showCI
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      // Display the plot
+      plotContent.innerHTML = `<div id="varx-irf-plot"></div>`;
+      Plotly.newPlot('varx-irf-plot', data.plot_data.data, data.plot_data.layout);
+    } else {
+      plotContent.innerHTML = `<div style="color: var(--danger); padding: 10px;">Error: ${data.error}</div>`;
+    }
+  } catch (error) {
+    plotContent.innerHTML = `<div style="color: var(--danger); padding: 10px;">Error generating IRF plot: ${error.message}</div>`;
+  }
+}
+
+// Toggle covariance matrix visibility
+function toggleCovarianceMatrix() {
+  const covarianceSection = document.getElementById('covarianceMatrixSection');
+  const toggleBtn = document.getElementById('toggleCovarianceBtn');
+  const hideBtn = document.getElementById('hideCovarianceBtn');
+  
+  if (covarianceSection && toggleBtn && hideBtn) {
+    const isHidden = covarianceSection.style.display === 'none' || 
+                     window.getComputedStyle(covarianceSection).display === 'none' ||
+                     !covarianceSection.style.display;
+    
+    if (isHidden) {
+      // Show the matrix
+      covarianceSection.style.display = 'block';
+      toggleBtn.style.display = 'none';
+      hideBtn.style.display = 'block';
+      // Scroll to the matrix
+      setTimeout(() => {
+        covarianceSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    } else {
+      // Hide the matrix
+      covarianceSection.style.display = 'none';
+      toggleBtn.style.display = 'block';
+      hideBtn.style.display = 'none';
+    }
+  }
+}
+
+// Export IRF plot image
+function exportIRFImage(format, quality) {
+  const plotDiv = document.getElementById('varx-irf-plot');
+  if (!plotDiv || typeof Plotly === 'undefined') {
+    alert('Please generate an IRF plot first');
+    return;
+  }
+  
+  // Close the menu
+  const menu = document.getElementById('irfExportMenu');
+  if (menu) menu.style.display = 'none';
+  
+  try {
+    // Quality settings: 1 = standard, 2 = high, 3 = ultra high
+    const qualitySettings = {
+      1: { width: 1200, height: 800, scale: 1 },
+      2: { width: 2400, height: 1600, scale: 2 },
+      3: { width: 3600, height: 2400, scale: 3 }
+    };
+    
+    const settings = qualitySettings[quality] || qualitySettings[1];
+    
+    Plotly.downloadImage('varx-irf-plot', {
+      format: format,
+      width: settings.width,
+      height: settings.height,
+      scale: settings.scale,
+      filename: `varx_irf_plot_${quality === 1 ? 'standard' : quality === 2 ? 'high' : 'ultra'}_quality`
+    });
+  } catch (error) {
+    console.error('Export error:', error);
+    alert('Error exporting plot. Please try again.');
+  }
+}
+
+// Export IRF data as CSV
+async function exportIRFData() {
+  {% if session %}
+  const sessionId = {{ session.id }};
+  {% else %}
+  const sessionId = null;
+  {% endif %}
+  
+  if (!sessionId) {
+    alert('No session available');
+    return;
+  }
+  
+  // Close the menu
+  const menu = document.getElementById('irfExportMenu');
+  if (menu) menu.style.display = 'none';
+  
+  // Get current IRF parameters
+  const irfHorizon = parseInt(document.getElementById('irf_horizon').value) || 10;
+  const responseVar = document.getElementById('irf_response_var').value || null;
+  const shockVar = document.getElementById('irf_shock_var').value || null;
+  const shockType = document.getElementById('irf_shock_type').value || 'orthogonal';
+  const showCI = document.getElementById('irf_show_ci').checked || false;
+  
+  try {
+    const response = await fetch(`/session/${sessionId}/varx-irf-data/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
+      },
+      body: JSON.stringify({
+        irf_horizon: irfHorizon,
+        response_var: responseVar,
+        shock_var: shockVar,
+        shock_type: shockType,
+        show_ci: showCI
+      })
+    });
+    
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `varx_irf_data_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } else {
+      const error = await response.json();
+      alert(`Error exporting data: ${error.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Export data error:', error);
+    alert('Error exporting data. Please try again.');
+  }
+}
+
+// Toggle export menu
+document.addEventListener('DOMContentLoaded', function() {
+  const exportBtn = document.getElementById('irfExportBtn');
+  const exportMenu = document.getElementById('irfExportMenu');
+  
+  if (exportBtn && exportMenu) {
+    exportBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      exportMenu.style.display = exportMenu.style.display === 'none' ? 'block' : 'none';
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!exportBtn.contains(e.target) && !exportMenu.contains(e.target)) {
+        exportMenu.style.display = 'none';
+      }
+    });
+    
+    // Add hover effects to menu options
+    const menuOptions = exportMenu.querySelectorAll('.irf-export-option');
+  }
+});
+
+// Fix Stationary Modal Functions
+function openFixStationaryModal(variableName, datasetId, sessionId) {
+  const modal = document.getElementById('fixStationaryModal');
+  if (!modal) {
+    // Create modal if it doesn't exist
+    createFixStationaryModal();
+  }
+  
+  document.getElementById('fixStationaryVariableName').textContent = variableName;
+  document.getElementById('fixStationaryVariableInput').value = variableName;
+  document.getElementById('fixStationaryDatasetId').value = datasetId;
+  document.getElementById('fixStationarySessionId').value = sessionId;
+  
+  // Reset form
+  document.getElementById('fixStationaryTransformType').value = 'diff';
+  
+  // Show modal
+  document.getElementById('fixStationaryModal').style.display = 'block';
+}
+
+function closeFixStationaryModal() {
+  document.getElementById('fixStationaryModal').style.display = 'none';
+}
+
+function createFixStationaryModal() {
+  const modalHTML = `
+    <div id="fixStationaryModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+      <div style="position:absolute; inset:0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); transition: opacity 0.2s;" onclick="closeFixStationaryModal()"></div>
+      <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(540px, 92vw); max-height:90vh; background:#ffffff; border:none; border-radius:16px; box-shadow: 0 20px 60px rgba(0,0,0,.3), 0 0 0 1px rgba(0,0,0,.05); overflow:hidden; animation: modalSlideIn 0.3s ease-out;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #f3f4f6; background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:40px; height:40px; border-radius:10px; background: linear-gradient(135deg, #3b82f6, #2563eb); display:flex; align-items:center; justify-content:center;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 style="margin:0; padding:0; font-size:18px; font-weight:600; color: #111827; letter-spacing:-0.01em;">Fix Stationarity</h3>
+              <p style="margin:2px 0 0 0; font-size:12px; color: #6b7280;">Transform variable to achieve stationarity</p>
+            </div>
+          </div>
+          <button onclick="closeFixStationaryModal()" style="width:32px; height:32px; border-radius:8px; border:none; background:#f3f4f6; color:#6b7280; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size:18px; line-height:1;" onmouseover="this.style.background='#e5e7eb'; this.style.color='#111827';" onmouseout="this.style.background='#f3f4f6'; this.style.color='#6b7280';">✕</button>
+        </div>
+        <div style="padding:24px;">
+          <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:12px; padding:16px; margin-bottom:24px;">
+            <p style="margin:0; color: #0c4a6e; font-size:14px; line-height:1.6;">
+              Apply transformation to make variable <strong id="fixStationaryVariableName" style="color: #075985; font-weight:600;"></strong> stationary.
+              <br>The transformed variable will be saved as <strong id="fixStationaryVariableName2" style="color: #075985; font-weight:600;"></strong>_stationary.
+            </p>
+          </div>
+          <form id="fixStationaryForm" onsubmit="event.preventDefault(); applyFixStationary();">
+            <input type="hidden" id="fixStationaryVariableInput" name="variable">
+            <input type="hidden" id="fixStationaryDatasetId" name="dataset_id">
+            <input type="hidden" id="fixStationarySessionId" name="session_id">
+            
+            <div style="margin-bottom:24px;">
+              <label style="display:block; font-size:14px; font-weight:600; color: #111827; margin-bottom:8px;">
+                Transformation Type
+              </label>
+              <select id="fixStationaryTransformType" name="transform_type" style="width:100%; padding:12px 16px; border:2px solid #e5e7eb; border-radius:10px; font-size:14px; color:#111827; background:#ffffff; cursor:pointer; transition:all 0.2s; appearance:none; background-image:url('data:image/svg+xml;charset=UTF-8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"12\" viewBox=\"0 0 12 12\"><path fill=\"%23374151\" d=\"M6 9L1 4h10z\"/></svg>'); background-repeat:no-repeat; background-position:right 12px center; background-size:12px;" required onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 3px rgba(59,130,246,0.1)';" onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none';">
+                <option value="diff">Difference (First Difference)</option>
+                <option value="log">Log Transformation</option>
+              </select>
+              <div style="margin-top:12px; padding:14px; background:#f9fafb; border-radius:10px; border-left:3px solid #3b82f6;">
+                <div style="display:flex; align-items:start; gap:10px; margin-bottom:10px;">
+                  <div style="width:24px; height:24px; border-radius:6px; background:#dbeafe; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                    </svg>
+                  </div>
+                  <div style="flex:1;">
+                    <strong style="color: #111827; font-size:13px; display:block; margin-bottom:4px;">Difference:</strong>
+                    <span style="color: #6b7280; font-size:12px; line-height:1.5;">Creates ΔX = X(t) - X(t-1). Removes trend by taking first differences.</span>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:start; gap:10px;">
+                  <div style="width:24px; height:24px; border-radius:6px; background:#dbeafe; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                      <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                  </div>
+                  <div style="flex:1;">
+                    <strong style="color: #111827; font-size:13px; display:block; margin-bottom:4px;">Log:</strong>
+                    <span style="color: #6b7280; font-size:12px; line-height:1.5;">Creates log(X). Use only if all values are positive. Stabilizes variance.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:12px; padding-top:8px; border-top:1px solid #f3f4f6;">
+              <button type="button" onclick="closeFixStationaryModal()" style="padding:10px 20px; border-radius:10px; border:2px solid #e5e7eb; background:#ffffff; color:#374151; font-size:14px; font-weight:500; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.background='#ffffff';">
+                Cancel
+              </button>
+              <button type="submit" style="padding:10px 24px; border-radius:10px; border:none; background: linear-gradient(135deg, #10b981, #059669); color:white; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 12px rgba(16,185,129,0.3); display:flex; align-items:center; gap:8px;" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(16,185,129,0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)';">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Apply Transformation
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <style>
+      @keyframes modalSlideIn {
+        from {
+          opacity: 0;
+          transform: translate(-50%, -48%);
+        }
+        to {
+          opacity: 1;
+          transform: translate(-50%, -50%);
+        }
+      }
+      @keyframes modalSlideOut {
+        from {
+          opacity: 1;
+          transform: translate(-50%, -50%);
+        }
+        to {
+          opacity: 0;
+          transform: translate(-50%, -52%);
+        }
+      }
+    </style>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  // Update the second variable name display
+  const varNameEl = document.getElementById('fixStationaryVariableName');
+  const varNameEl2 = document.getElementById('fixStationaryVariableName2');
+  if (varNameEl && varNameEl2) {
+    varNameEl.addEventListener('DOMSubtreeModified', function() {
+      varNameEl2.textContent = varNameEl.textContent;
+    });
+  }
+}
+
+async function applyFixStationary() {
+  const form = document.getElementById('fixStationaryForm');
+  const formData = new FormData(form);
+  
+  const variable = formData.get('variable');
+  const datasetId = formData.get('dataset_id');
+  const sessionId = formData.get('session_id');
+  const transformType = formData.get('transform_type');
+  
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Applying...';
+  
+  try {
+    const response = await fetch(`/api/dataset/${datasetId}/fix-stationary/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
+      },
+      body: JSON.stringify({
+        variable: variable,
+        transform_type: transformType,
+        session_id: sessionId
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      closeFixStationaryModal();
+      showModernSuccessModal(result.message || 'Transformation applied successfully.');
+      // Reload the page to show updated results after a short delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } else {
+      showModernErrorModal(result.error || 'Failed to apply transformation');
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  } catch (error) {
+    console.error('Fix stationary error:', error);
+    showModernErrorModal('Error applying transformation. Please try again.');
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
+}
+
+// Modern Success Modal
+function showModernSuccessModal(message) {
+  const modal = document.createElement('div');
+  modal.id = 'modernSuccessModal';
+  modal.style.cssText = 'display:block; position:fixed; inset:0; z-index:2001;';
+  
+  modal.innerHTML = `
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); transition: opacity 0.2s;" onclick="closeModernSuccessModal()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(480px, 92vw); background:#ffffff; border:none; border-radius:16px; box-shadow: 0 20px 60px rgba(0,0,0,.3), 0 0 0 1px rgba(0,0,0,.05); overflow:hidden; animation: modalSlideIn 0.3s ease-out;">
+      <div style="padding:32px 24px; text-align:center;">
+        <div style="width:64px; height:64px; border-radius:50%; background: linear-gradient(135deg, #10b981, #059669); display:flex; align-items:center; justify-content:center; margin:0 auto 20px; box-shadow: 0 8px 24px rgba(16,185,129,0.3);">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <h3 style="margin:0 0 12px 0; font-size:20px; font-weight:600; color: #111827; letter-spacing:-0.01em;">Success!</h3>
+        <p style="margin:0 0 24px 0; color: #6b7280; font-size:14px; line-height:1.6;">${message}</p>
+        <button onclick="closeModernSuccessModal()" style="padding:10px 24px; border-radius:10px; border:none; background: linear-gradient(135deg, #10b981, #059669); color:white; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 12px rgba(16,185,129,0.3);" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(16,185,129,0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)';">
+          OK
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+}
+
+// Modern Error Modal
+function showModernErrorModal(message) {
+  const modal = document.createElement('div');
+  modal.id = 'modernErrorModal';
+  modal.style.cssText = 'display:block; position:fixed; inset:0; z-index:2001;';
+  
+  modal.innerHTML = `
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); transition: opacity 0.2s;" onclick="closeModernErrorModal()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(480px, 92vw); background:#ffffff; border:none; border-radius:16px; box-shadow: 0 20px 60px rgba(0,0,0,.3), 0 0 0 1px rgba(0,0,0,.05); overflow:hidden; animation: modalSlideIn 0.3s ease-out;">
+      <div style="padding:32px 24px; text-align:center;">
+        <div style="width:64px; height:64px; border-radius:50%; background: linear-gradient(135deg, #ef4444, #dc2626); display:flex; align-items:center; justify-content:center; margin:0 auto 20px; box-shadow: 0 8px 24px rgba(239,68,68,0.3);">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </div>
+        <h3 style="margin:0 0 12px 0; font-size:20px; font-weight:600; color: #111827; letter-spacing:-0.01em;">Error</h3>
+        <p style="margin:0 0 24px 0; color: #6b7280; font-size:14px; line-height:1.6;">${message}</p>
+        <button onclick="closeModernErrorModal()" style="padding:10px 24px; border-radius:10px; border:none; background: linear-gradient(135deg, #ef4444, #dc2626); color:white; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 12px rgba(239,68,68,0.3);" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(239,68,68,0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(239,68,68,0.3)';">
+          OK
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+}
+
+function closeModernSuccessModal() {
+  const modal = document.getElementById('modernSuccessModal');
+  if (modal) {
+    modal.style.animation = 'modalSlideOut 0.2s ease-out';
+    setTimeout(() => modal.remove(), 200);
+  }
+}
+
+function closeModernErrorModal() {
+  const modal = document.getElementById('modernErrorModal');
+  if (modal) {
+    modal.style.animation = 'modalSlideOut 0.2s ease-out';
+    setTimeout(() => modal.remove(), 200);
+  }
+}
+
+// Initialize menu options hover effects (if not already initialized)
+document.addEventListener('DOMContentLoaded', function() {
+  const menuOptions = document.querySelectorAll('.irf-export-option');
+  menuOptions.forEach(option => {
+    option.addEventListener('mouseenter', function() {
+      this.style.background = '#f3f4f6';
+    });
+    option.addEventListener('mouseleave', function() {
+      this.style.background = 'white';
+    });
+  });
+  
+  // Initialize covariance matrix button states
+  const covarianceSection = document.getElementById('covarianceMatrixSection');
+  const toggleBtn = document.getElementById('toggleCovarianceBtn');
+  const hideBtn = document.getElementById('hideCovarianceBtn');
+  
+  // Ensure initial state: matrix hidden, show button visible, hide button hidden
+  if (covarianceSection) {
+    covarianceSection.style.display = 'none';
+  }
+  if (toggleBtn) {
+    toggleBtn.style.display = 'block';
+  }
+  if (hideBtn) {
+    hideBtn.style.display = 'none';
+  }
+});
+</script>
+{% endblock %}
+

@@ -229,6 +229,15 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 30px;
+            width: 100%;
+            max-width: 100%;
+        }
+        
+        /* Responsive: single column on mobile */
+        @media (max-width: 699px) {
+            .landing-pricing-grid {
+                grid-template-columns: 1fr !important;
+            }
         }
         
         .landing-plan {
@@ -239,6 +248,9 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             position: relative;
+            min-width: 0; /* Prevent grid overflow */
+            display: flex;
+            flex-direction: column;
         }
         
         .landing-plan:hover {
@@ -288,11 +300,13 @@
             list-style: none;
             padding: 0;
             margin: 0 0 32px 0;
+            flex: 1;
         }
         
         .landing-plan-features li {
             padding: 8px 0;
             color: #6b7280;
+            text-align: left;
         }
         
         .landing-plan-features li:before {
@@ -355,6 +369,10 @@
             .landing-plan.featured {
                 transform: none;
             }
+            
+            .landing-pricing-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -389,7 +407,7 @@
         <!-- Features Section -->
         <section id="features" class="landing-features">
             <div class="landing-features-container">
-                <h2>Why Choose Generative Research Assistant?</h2>
+                <h2>Why Choose Generative Research Assistant???</h2>
                 <div class="landing-features-grid">
                     <div class="landing-feature">
                         <div class="landing-feature-icon">📊</div>
@@ -430,6 +448,44 @@
             <div class="landing-pricing-container">
                 <h2>Simple, Transparent Pricing</h2>
                 <div class="landing-pricing-grid">
+                    {% for plan in plans %}
+                    <!-- Plan {{ forloop.counter }} of {{ plans|length }}: {{ plan.name }} -->
+                    {% with tier_settings=plan.get_tier_settings %}
+                    <div class="landing-plan {% if forloop.counter == 2 and plans|length >= 2 %}featured{% endif %}">
+                        {% if forloop.counter == 2 and plans|length >= 2 %}
+                        <div class="landing-plan-badge">Most Popular</div>
+                        {% endif %}
+                        <h3>{{ plan.name }}</h3>
+                        <div class="landing-plan-price">${{ plan.price_monthly|floatformat:0 }}</div>
+                        <div class="landing-plan-period">per month</div>
+                        <ul class="landing-plan-features">
+                            {% if tier_settings %}
+                            <li>{% if tier_settings.max_datasets == -1 %}Unlimited{% else %}{{ tier_settings.max_datasets }}{% endif %} datasets</li>
+                            <li>{% if tier_settings.max_sessions == -1 %}Unlimited{% else %}{{ tier_settings.max_sessions }}{% endif %} analysis sessions</li>
+                            <li>{% if tier_settings.max_file_size_mb == -1 %}Unlimited{% else %}{{ tier_settings.max_file_size_mb }}{% endif %} MB max file size</li>
+                            {% endif %}
+                            {% if plan.features %}
+                            {% for feature in plan.features %}
+                            <li>{{ feature }}</li>
+                            {% endfor %}
+                            {% endif %}
+                            {% if plan.ai_features %}
+                            {% for ai_feature in plan.ai_features %}
+                            <li>🤖 {{ ai_feature }}</li>
+                            {% endfor %}
+                            {% endif %}
+                        </ul>
+                        {% if plan.price_monthly == 0 %}
+                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
+                        {% elif plan.name|lower == 'enterprise' or plan.name|lower == 'high tier' %}
+                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Contact Sales</a>
+                        {% else %}
+                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Free Trial</a>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+                    {% empty %}
+                    <!-- Fallback if no plans in database -->
                     <div class="landing-plan">
                         <h3>Free</h3>
                         <div class="landing-plan-price">$0</div>
@@ -442,33 +498,7 @@
                         </ul>
                         <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
                     </div>
-                    <div class="landing-plan featured">
-                        <div class="landing-plan-badge">Most Popular</div>
-                        <h3>Pro</h3>
-                        <div class="landing-plan-price">$29</div>
-                        <div class="landing-plan-period">per month</div>
-                        <ul class="landing-plan-features">
-                            <li>100 datasets</li>
-                            <li>500 analysis sessions</li>
-                            <li>All analysis types</li>
-                            <li>Advanced visualizations</li>
-                            <li>Priority support</li>
-                        </ul>
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Free Trial</a>
-                    </div>
-                    <div class="landing-plan">
-                        <h3>Enterprise</h3>
-                        <div class="landing-plan-price">$99</div>
-                        <div class="landing-plan-period">per month</div>
-                        <ul class="landing-plan-features">
-                            <li>Unlimited datasets</li>
-                            <li>Unlimited sessions</li>
-                            <li>Custom integrations</li>
-                            <li>Dedicated support</li>
-                            <li>Advanced security</li>
-                        </ul>
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Contact Sales</a>
-                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </section>

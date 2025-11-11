@@ -5,13 +5,22 @@ import json
 import os
 import pandas as pd
 import numpy as np
+from .date_detection import is_date_column
 
 
 def _auto_detect_column_types(df: pd.DataFrame) -> dict:
-    """Automatically detect and assign data types to columns: numeric, binary, categorical, ordinal, or string."""
+    """Automatically detect and assign data types to columns: numeric, binary, categorical, ordinal, date, or string."""
     column_types = {}
     
     for col in df.columns:
+        # First check if it's a date column
+        is_date, date_formats = is_date_column(df[col], threshold=0.5)
+        if is_date:
+            # Store date information in a special format
+            # We'll use 'date' as the type, and store format info separately if needed
+            column_types[col] = 'date'
+            continue
+        
         # Skip if already numeric
         if pd.api.types.is_numeric_dtype(df[col]):
             column_types[col] = 'numeric'

@@ -1103,10 +1103,17 @@
           this.updateStatus(allErrors.join('; '), 'error');
         } else {
           // Count valid terms for success message
-          const rhs = equation.split('~')[1];
-          if (rhs) {
-            const terms = rhs.split('+').map(t => t.trim()).filter(t => t);
-            this.updateStatus(`✓ All variables valid (${terms.length} terms)`, 'success');
+          const parts = equation.split('~');
+          if (parts.length === 2) {
+            const lhs = parts[0].trim();
+            const rhs = parts[1].trim();
+            const lhsTerms = lhs.includes('+') ? lhs.split('+').map(t => t.trim()).filter(t => t) : [lhs];
+            const rhsTerms = rhs.split('+').map(t => t.trim()).filter(t => t);
+            const totalTerms = lhsTerms.length + rhsTerms.length;
+            const message = lhsTerms.length > 1 
+              ? `✓ All variables valid (${lhsTerms.length} endogenous, ${rhsTerms.length} exogenous)`
+              : `✓ All variables valid (${totalTerms} terms)`;
+            this.updateStatus(message, 'success');
           } else {
             this.updateStatus('', '');
           }
@@ -1680,14 +1687,30 @@ Examples
     const lhs = parts[0].trim();
     const rhs = parts[1].trim();
     
-    // Parse LHS (dependent variable) - handle spaces in variable names
-    const lhsResult = parseSimpleTerm(lhs);
-    if (!lhsResult.isValid) {
+    // Parse LHS (dependent variable(s)) - support VARX format with multiple variables
+    // Check if LHS contains + (multiple variables like VARX: "y1 + y2 ~ x1 + x2")
+    // Also check for multiple terms by splitting and counting
+    let lhsResult;
+    const lhsHasMultipleTerms = lhs.includes('+') || (lhs.split(/\s+/).length > 1 && lhs.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) && lhs.match(/[a-zA-Z_][a-zA-Z0-9_]*/g).length > 1);
+    if (lhsHasMultipleTerms) {
+      // Multiple variables on LHS (VARX format)
+      lhsResult = parseLHS(lhs);
+    } else {
+      // Single variable on LHS (standard format)
+      lhsResult = parseSimpleTerm(lhs);
+    }
+    
+    // Handle LHS validation results
+    if (lhsResult.hasErrors || !lhsResult.isValid) {
       result.hasErrors = true;
-      result.hasUnknownVars = result.hasUnknownVars || lhsResult.unknownVars.length > 0;
-      result.hasInvalidElements = result.hasInvalidElements || lhsResult.invalidElements.length > 0;
-      result.unknownVars = result.unknownVars.concat(lhsResult.unknownVars);
-      result.invalidElements = result.invalidElements.concat(lhsResult.invalidElements);
+      result.hasUnknownVars = result.hasUnknownVars || (lhsResult.hasUnknownVars || (lhsResult.unknownVars && lhsResult.unknownVars.length > 0));
+      result.hasInvalidElements = result.hasInvalidElements || (lhsResult.hasInvalidElements || (lhsResult.invalidElements && lhsResult.invalidElements.length > 0));
+      if (lhsResult.unknownVars && lhsResult.unknownVars.length > 0) {
+        result.unknownVars = result.unknownVars.concat(lhsResult.unknownVars);
+      }
+      if (lhsResult.invalidElements && lhsResult.invalidElements.length > 0) {
+        result.invalidElements = result.invalidElements.concat(lhsResult.invalidElements);
+      }
     }
     
     // Parse RHS (predictors) using new logic
@@ -1701,11 +1724,87 @@ Examples
       result.syntaxErrors = result.syntaxErrors.concat(rhsResult.syntaxErrors);
       result.unknownVars = result.unknownVars.concat(rhsResult.unknownVars);
       result.invalidElements = result.invalidElements.concat(rhsResult.invalidElements);
-      result.fixedEquation = `${lhs} ~ ${rhsResult.fixedEquation}`;
+      // Update fixed equation with corrected LHS if needed
+      const fixedLHS = lhsResult.fixedEquation || lhs;
+      result.fixedEquation = `${fixedLHS} ~ ${rhsResult.fixedEquation}`;
+    } else if (lhsResult && lhsResult.fixedEquation && lhsResult.fixedEquation !== lhs) {
+      // LHS had errors and was fixed
+      result.fixedEquation = `${lhsResult.fixedEquation} ~ ${rhs}`;
     }
     
     return result;
   };
+  
+  // Parse LHS (dependent variables) - supports VARX format with multiple variables
+  function parseLHS(lhs) {
+    const result = {
+      isValid: true,
+      hasErrors: false,
+      hasUnknownVars: false,
+      hasInvalidElements: false,
+      unknownVars: [],
+      invalidElements: [],
+      fixedEquation: lhs
+    };
+    
+    // Split by + to get multiple dependent variables
+    // Handle both explicit + and spaces between variable names
+    let lhsTerms;
+    if (lhs.includes('+')) {
+      lhsTerms = lhs.split('+').map(term => term.trim()).filter(term => term);
+    } else {
+      // If no + but multiple words, try splitting by spaces (less common but possible)
+      lhsTerms = lhs.split(/\s+/).filter(term => term && term.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/));
+      // If that doesn't work, treat as single term
+      if (lhsTerms.length <= 1) {
+        lhsTerms = [lhs.trim()];
+      }
+    }
+    
+    const validTerms = [];
+    const unknownVars = [];
+    const invalidElements = [];
+    
+    for (let i = 0; i < lhsTerms.length; i++) {
+      const term = lhsTerms[i].trim();
+      
+      // Skip empty terms
+      if (!term) continue;
+      
+      // Parse each term (no interactions allowed on LHS)
+      const termResult = parseSimpleTerm(term);
+      
+      if (termResult.isValid) {
+        validTerms.push(termResult.term);
+      } else {
+        result.isValid = false;
+        result.hasErrors = true;
+        // Only add unknown vars if they exist and are not empty
+        if (termResult.unknownVars && termResult.unknownVars.length > 0) {
+          unknownVars.push(...termResult.unknownVars.filter(v => v && v.trim()));
+        }
+        if (termResult.invalidElements && termResult.invalidElements.length > 0) {
+          invalidElements.push(...termResult.invalidElements);
+        }
+      }
+    }
+    
+    if (unknownVars.length > 0) {
+      result.hasUnknownVars = true;
+      result.unknownVars = [...new Set(unknownVars)];
+    }
+    
+    if (invalidElements.length > 0) {
+      result.hasInvalidElements = true;
+      result.invalidElements = invalidElements;
+    }
+    
+    if (validTerms.length > 0) {
+      result.fixedEquation = validTerms.join(' + ');
+    }
+    
+    return result;
+  }
   
   // Parse RHS (predictors) using the new structure-based logic
   function parseRHS(rhs) {

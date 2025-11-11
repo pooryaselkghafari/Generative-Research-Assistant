@@ -494,14 +494,55 @@
           </svg>
           Customize
         </button>
-        <button id="spotlightDownloadBtn" class="btn" style="padding: 6px 12px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;" onclick="showSpotlightExportModal('plot-spotlight')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7,10 12,15 17,10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Download
-        </button>
+        <div style="position: relative; display: inline-block;">
+          <button id="spotlightExportBtn" class="btn" style="padding: 6px 12px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; display: flex; align-items: center;" onclick="event.stopPropagation(); toggleSpotlightExportMenu('plot-spotlight')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7,10 12,15 17,10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
+              <polyline points="6,9 12,15 18,9"/>
+            </svg>
+          </button>
+          <div id="spotlightExportMenu" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 1000; min-width: 200px; overflow: hidden;">
+            <div style="padding: 4px;">
+              <div style="padding: 8px 12px; font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase; border-bottom: 1px solid #e5e7eb;">Export Image</div>
+              <button class="spotlight-export-option" onclick="exportSpotlightImage('plot-spotlight', 'png', 1)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21,15 16,10 5,21"/>
+                </svg>
+                PNG (Standard)
+              </button>
+              <button class="spotlight-export-option" onclick="exportSpotlightImage('plot-spotlight', 'png', 2)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px; border-top: 1px solid #f3f4f6;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21,15 16,10 5,21"/>
+                </svg>
+                PNG (High Quality)
+              </button>
+              <button class="spotlight-export-option" onclick="exportSpotlightImage('plot-spotlight', 'png', 3)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px; border-top: 1px solid #f3f4f6;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21,15 16,10 5,21"/>
+                </svg>
+                PNG (Ultra High Quality)
+              </button>
+              <div style="padding: 8px 12px; font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; margin-top: 4px;">Export Data</div>
+              <button class="spotlight-export-option" onclick="exportSpotlightData('plot-spotlight')" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                </svg>
+                CSV Data
+              </button>
+            </div>
+          </div>
+        </div>
         <button type="button" class="btn btn-ghost" onclick="removePlot('spotlight')">×</button>
       </div>
     </div>
@@ -1230,14 +1271,55 @@
                   </svg>
                   Customize
                 </button>
-                <button class="btn" style="padding: 6px 12px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;" onclick="showSpotlightExportModal('plot-${plotId}')">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7,10 12,15 17,10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                  </svg>
-                  Download
-                </button>
+                <div style="position: relative; display: inline-block;">
+                  <button class="btn spotlight-export-btn" data-plot-id="plot-${plotId}" style="padding: 6px 12px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; display: flex; align-items: center;" onclick="event.stopPropagation(); toggleSpotlightExportMenu('plot-${plotId}')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7,10 12,15 17,10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Export
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
+                      <polyline points="6,9 12,15 18,9"/>
+                    </svg>
+                  </button>
+                  <div class="spotlight-export-menu" data-plot-id="plot-${plotId}" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 1000; min-width: 200px; overflow: hidden;">
+                    <div style="padding: 4px;">
+                      <div style="padding: 8px 12px; font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase; border-bottom: 1px solid #e5e7eb;">Export Image</div>
+                      <button class="spotlight-export-option" onclick="exportSpotlightImage('plot-${plotId}', 'png', 1)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                          <circle cx="8.5" cy="8.5" r="1.5"/>
+                          <polyline points="21,15 16,10 5,21"/>
+                        </svg>
+                        PNG (Standard)
+                      </button>
+                      <button class="spotlight-export-option" onclick="exportSpotlightImage('plot-${plotId}', 'png', 2)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px; border-top: 1px solid #f3f4f6;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                          <circle cx="8.5" cy="8.5" r="1.5"/>
+                          <polyline points="21,15 16,10 5,21"/>
+                        </svg>
+                        PNG (High Quality)
+                      </button>
+                      <button class="spotlight-export-option" onclick="exportSpotlightImage('plot-${plotId}', 'png', 3)" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px; border-top: 1px solid #f3f4f6;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                          <circle cx="8.5" cy="8.5" r="1.5"/>
+                          <polyline points="21,15 16,10 5,21"/>
+                        </svg>
+                        PNG (Ultra High Quality)
+                      </button>
+                      <div style="padding: 8px 12px; font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; margin-top: 4px;">Export Data</div>
+                      <button class="spotlight-export-option" onclick="exportSpotlightData('plot-${plotId}')" style="width: 100%; padding: 10px 12px; text-align: left; border: none; background: white; cursor: pointer; font-size: 0.875rem; color: #374151; display: flex; align-items: center; gap: 8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                        </svg>
+                        CSV Data
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 <button type="button" class="btn btn-ghost" onclick="removeSpotlightPlot('${plotId}', '${interaction}')">×</button>
               </div>
             </div>
@@ -2499,96 +2581,309 @@
       }
     });
 
-    // Store current spotlight plot ID for download
-    let currentSpotlightPlotId = null;
+    // Toggle spotlight export menu
+    function toggleSpotlightExportMenu(plotId) {
+      // Close all other menus first
+      document.querySelectorAll('.spotlight-export-menu').forEach(menu => {
+        if (menu.dataset.plotId !== plotId) {
+          menu.style.display = 'none';
+        }
+      });
+      
+      const menu = document.querySelector(`.spotlight-export-menu[data-plot-id="${plotId}"]`) || 
+                   document.getElementById('spotlightExportMenu');
+      
+      if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+      }
+    }
 
-    // Show export modal for spotlight plot
-    function showSpotlightExportModal(plotId) {
+    // Export spotlight plot image
+    function exportSpotlightImage(plotId, format, quality) {
       const plotDiv = document.getElementById(plotId);
-      if (!plotDiv) {
-        alert('Plot not available');
+      if (!plotDiv || typeof Plotly === 'undefined') {
+        alert('Please generate a spotlight plot first');
         return;
       }
-
-      // Check if Plotly is available
-      if (typeof Plotly === 'undefined') {
-        alert('Plotly library not loaded');
-        return;
+      
+      // Close the menu
+      const menu = document.querySelector(`.spotlight-export-menu[data-plot-id="${plotId}"]`) || 
+                   document.getElementById('spotlightExportMenu');
+      if (menu) menu.style.display = 'none';
+      
+      try {
+        // Quality settings: 1 = standard, 2 = high, 3 = ultra high
+        const qualitySettings = {
+          1: { width: 1200, height: 800, scale: 1 },
+          2: { width: 2400, height: 1600, scale: 2 },
+          3: { width: 3600, height: 2400, scale: 3 }
+        };
+        
+        const settings = qualitySettings[quality] || qualitySettings[1];
+        
+        Plotly.downloadImage(plotId, {
+          format: format,
+          width: settings.width,
+          height: settings.height,
+          scale: settings.scale,
+          filename: `spotlight_plot_${quality === 1 ? 'standard' : quality === 2 ? 'high' : 'ultra'}_quality`
+        });
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Error exporting plot. Please try again.');
       }
-
-      currentSpotlightPlotId = plotId;
-      document.getElementById('spotlightExportModal').style.display = 'block';
     }
 
-    // Hide export modal
-    function hideSpotlightExportModal() {
-      document.getElementById('spotlightExportModal').style.display = 'none';
-      currentSpotlightPlotId = null;
-    }
-
-    // Download spotlight plot with quality settings
-    function downloadSpotlightPlot() {
-      if (!currentSpotlightPlotId) {
-        alert('Plot ID not set');
-        return;
-      }
-
-      const plotDiv = document.getElementById(currentSpotlightPlotId);
+    // Export spotlight data as CSV
+    async function exportSpotlightData(plotId) {
+      const plotDiv = document.getElementById(plotId);
       if (!plotDiv || typeof Plotly === 'undefined') {
         alert('Plot not available');
         return;
       }
-
-      // Get selected quality
-      const selectedQuality = document.querySelector('input[name="spotlight-quality"]:checked');
-      if (!selectedQuality) {
-        alert('Please select a download quality');
-        return;
-      }
-
-      const quality = selectedQuality.value;
-
-      const qualitySettings = {
-        standard: { width: 800, height: 600 },
-        high: { width: 1200, height: 900 },
-        ultra: { width: 1600, height: 1200 }
-      };
-
-      let settings = qualitySettings[quality];
-
-      if (quality === 'custom') {
-        const customWidth = parseInt(document.getElementById('customWidthSpotlight').value);
-        const customHeight = parseInt(document.getElementById('customHeightSpotlight').value);
-        if (customWidth && customHeight && customWidth >= 400 && customHeight >= 300) {
-          settings = { width: customWidth, height: customHeight };
+      
+      // Close the menu
+      const menu = document.querySelector(`.spotlight-export-menu[data-plot-id="${plotId}"]`) || 
+                   document.getElementById('spotlightExportMenu');
+      if (menu) menu.style.display = 'none';
+      
+      try {
+        // Try to get data from the plot div's internal Plotly structure
+        let plotData = null;
+        let plotLayout = null;
+        
+        // Method 1: Try to get from Plotly's internal structure
+        if (plotDiv._fullData) {
+          plotData = plotDiv._fullData;
+          plotLayout = plotDiv._fullLayout;
+        } else if (plotDiv.data) {
+          plotData = plotDiv.data;
+          plotLayout = plotDiv.layout;
         } else {
-          alert('Please enter valid width (400-4000) and height (300-3000)');
+          // Method 2: Try to get from the JSON data script tag
+          const dataScriptId = plotId + '-data';
+          const dataScript = document.getElementById(dataScriptId);
+          if (dataScript) {
+            try {
+              const figureJson = JSON.parse(dataScript.textContent);
+              plotData = figureJson.data || figureJson;
+              plotLayout = figureJson.layout;
+            } catch (e) {
+              console.error('Failed to parse JSON data:', e);
+            }
+          }
+          
+          // Method 3: Use Plotly's API to get the figure
+          if (!plotData) {
+            try {
+              const figure = await new Promise((resolve, reject) => {
+                Plotly.toImage(plotDiv, {format: 'json'})
+                  .then(data => {
+                    // Parse the JSON string
+                    const fig = JSON.parse(data);
+                    resolve(fig);
+                  })
+                  .catch(reject);
+              });
+              plotData = figure.data || figure;
+              plotLayout = figure.layout;
+            } catch (e) {
+              console.error('Failed to get figure from Plotly:', e);
+            }
+          }
+        }
+        
+        if (!plotData || (Array.isArray(plotData) && plotData.length === 0)) {
+          console.error('No plot data found. plotDiv:', plotDiv);
+          alert('No data available in plot. Please check the console for details.');
           return;
         }
-      }
-
-      if (!settings) {
-        alert('Invalid quality setting selected');
-        return;
-      }
-
-      try {
-        // Calculate scale for 300 DPI (default is 96 DPI, so scale = 300/96 ≈ 3.125)
-        const dpi = 300;
-        const defaultDpi = 96;
-        const scale = dpi / defaultDpi;
-
-        Plotly.downloadImage(currentSpotlightPlotId, {
-          format: 'png',
-          width: settings.width,
-          height: settings.height,
-          scale: scale,
-          filename: 'spotlight_plot'
+        
+        // Ensure plotData is an array
+        if (!Array.isArray(plotData)) {
+          if (plotData.data && Array.isArray(plotData.data)) {
+            plotData = plotData.data;
+          } else {
+            plotData = [plotData];
+          }
+        }
+        
+        // Get axis labels from layout
+        const xAxisLabel = (plotLayout && plotLayout.xaxis && plotLayout.xaxis.title && plotLayout.xaxis.title.text) || 'X';
+        const yAxisLabel = (plotLayout && plotLayout.yaxis && plotLayout.yaxis.title && plotLayout.yaxis.title.text) || 'Y';
+        
+        // Filter out CI band traces and get main traces only
+        const mainTraces = [];
+        for (let i = 0; i < plotData.length; i++) {
+          const trace = plotData[i];
+          // Skip CI band traces
+          if (!trace.fill || (trace.fill !== 'tonexty' && trace.fill !== 'tozeroy')) {
+            mainTraces.push(trace);
+          }
+        }
+        
+        if (mainTraces.length === 0) {
+          alert('No main traces found in plot.');
+          return;
+        }
+        
+        // Get X data (should be the same for all traces)
+        let xData = mainTraces[0].x;
+        
+        // Handle different data structures
+        if (xData === undefined || xData === null) {
+          xData = [];
+        } else if (!Array.isArray(xData)) {
+          // If it's not an array, check if it's a typed array or similar
+          if (xData.length !== undefined && typeof xData.length === 'number') {
+            // Convert array-like object to array
+            xData = Array.from(xData);
+          } else {
+            xData = [xData];
+          }
+        }
+        
+        // Get Y data for each trace (Low and High moderator)
+        const yDataArrays = [];
+        const traceNames = [];
+        
+        for (let i = 0; i < mainTraces.length; i++) {
+          const trace = mainTraces[i];
+          const traceName = trace.name || trace.legendgroup || `Trace_${i + 1}`;
+          let yData = trace.y;
+          
+          // Handle different data structures
+          if (yData === undefined || yData === null) {
+            yData = [];
+          } else if (!Array.isArray(yData)) {
+            // If it's not an array, check if it's a typed array or similar
+            if (yData.length !== undefined && typeof yData.length === 'number') {
+              // Convert array-like object to array
+              yData = Array.from(yData);
+            } else {
+              yData = [yData];
+            }
+          }
+          
+          traceNames.push(traceName);
+          yDataArrays.push(yData);
+        }
+        
+        // Debug logging
+        console.log('X data:', xData);
+        console.log('X data length:', xData ? xData.length : 0);
+        console.log('X data type:', typeof xData, Array.isArray(xData));
+        console.log('X data first element:', xData[0]);
+        console.log('X data first element type:', typeof xData[0], Array.isArray(xData[0]));
+        console.log('Y data arrays:', yDataArrays);
+        console.log('Y data arrays lengths:', yDataArrays.map(arr => arr ? arr.length : 0));
+        console.log('Y data first array first element:', yDataArrays[0] ? yDataArrays[0][0] : 'N/A');
+        console.log('Y data first array first element type:', yDataArrays[0] ? typeof yDataArrays[0][0] : 'N/A');
+        console.log('Trace names:', traceNames);
+        
+        // Ensure xData is a proper array
+        if (!Array.isArray(xData) || xData.length === 0) {
+          console.error('X data is not a valid array:', xData);
+          alert('Could not extract X-axis data from plot. Please check the console.');
+          return;
+        }
+        
+        // Check if xData elements are themselves arrays (nested arrays)
+        if (xData.length > 0 && Array.isArray(xData[0])) {
+          console.warn('X data contains nested arrays! Flattening...');
+          xData = xData.flat();
+        }
+        
+        // Check if yData elements are nested arrays
+        yDataArrays.forEach((yData, idx) => {
+          if (yData && yData.length > 0 && Array.isArray(yData[0])) {
+            console.warn(`Y data array ${idx} contains nested arrays! Flattening...`);
+            yDataArrays[idx] = yData.flat();
+          }
         });
-        hideSpotlightExportModal();
+        
+        // Build CSV with structure: X, Y_Low, Y_High
+        const csvRows = [];
+        
+        // Create headers: X axis label, then Y axis labels for each trace
+        const headers = [xAxisLabel];
+        traceNames.forEach(name => {
+          headers.push(`${yAxisLabel} (${name})`);
+        });
+        csvRows.push(headers.join(','));
+        
+        // Find the maximum length to ensure all data is included
+        const yLengths = yDataArrays.map(arr => arr && Array.isArray(arr) ? arr.length : 0);
+        const maxLen = Math.max(xData.length, ...yLengths);
+        
+        console.log('Max length:', maxLen);
+        console.log('First few X values:', xData.slice(0, 5));
+        console.log('First few Y values (trace 0):', yDataArrays[0] ? yDataArrays[0].slice(0, 5) : 'N/A');
+        
+        // Write data rows - one row per X value
+        for (let j = 0; j < maxLen; j++) {
+          const rowParts = [];
+          
+          // Add X value - ensure it's a single value, not an array
+          let xVal = xData[j];
+          if (xVal === undefined || xVal === null) {
+            rowParts.push('');
+          } else {
+            // Convert to string, handling arrays
+            if (Array.isArray(xVal)) {
+              xVal = xVal[0];
+            }
+            // Convert to string (handle any remaining object types)
+            rowParts.push(String(xVal));
+          }
+          
+          // Add Y values for each trace - ensure each is a single value
+          yDataArrays.forEach((yData, idx) => {
+            if (!yData || !Array.isArray(yData)) {
+              rowParts.push('');
+              return;
+            }
+            let yVal = yData[j];
+            if (yVal === undefined || yVal === null) {
+              rowParts.push('');
+            } else {
+              // Convert to string, handling arrays
+              if (Array.isArray(yVal)) {
+                yVal = yVal[0];
+              }
+              // Convert to string (handle any remaining object types)
+              rowParts.push(String(yVal));
+            }
+          });
+          
+          // Join row with commas and add to csvRows
+          const rowString = rowParts.join(',');
+          csvRows.push(rowString);
+        }
+        
+        console.log('Total CSV rows:', csvRows.length);
+        console.log('First few CSV rows:', csvRows.slice(0, 5));
+        
+        if (csvRows.length <= 1) {
+          alert('No data extracted from plot. The plot may not be fully loaded yet.');
+          return;
+        }
+        
+        // Create and download CSV
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `spotlight_plot_data_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
       } catch (error) {
-        console.error('Download error:', error);
-        alert('Error downloading plot. Please try again.');
+        console.error('Export data error:', error);
+        console.error('Error stack:', error.stack);
+        alert('Error exporting data: ' + error.message + '. Please check the console for details.');
       }
     }
 

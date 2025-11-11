@@ -1,7 +1,9 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import UserCreationForm, PasswordResetForm, SetPasswordForm
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -9,8 +11,35 @@ from django.utils.decorators import method_decorator
 from django.views.generic import View
 from django.conf import settings
 from django.utils import timezone
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
+from django import forms
 from datetime import timedelta
 import json
+
+from .email_service import send_welcome_email, send_verification_email, send_password_reset_email
+
+
+class UserRegistrationForm(UserCreationForm):
+    """Custom registration form that includes email field."""
+    email = forms.EmailField(required=True, help_text='Required. Enter a valid email address.')
+    
+    class Meta:
+        model = User
+        fields = ('username', 'email', 'password1', 'password2')
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError('A user with this email already exists.')
+        return email
+    
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data['email']
+        if commit:
+            user.save()
+        return user
 
 # Optional Stripe import - only if available
 try:
@@ -28,16 +57,39 @@ if STRIPE_AVAILABLE:
 
 def register_view(request):
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = UserRegistrationForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            # Create user profile
-            UserProfile.objects.create(user=user)
-            login(request, user)
-            messages.success(request, 'Account created successfully!')
-            return redirect('index')
+            user = form.save(commit=False)
+            # Set user as inactive until email is verified
+            user.is_active = False
+            user.save()
+            
+            # Create user profile with free tier defaults
+            profile = UserProfile.objects.create(
+                user=user,
+                subscription_type='free',
+                ai_tier='none'
+            )
+            
+            # Update AI tier from tier settings if available
+            from engine.models import SubscriptionTierSettings
+            try:
+                tier_settings = SubscriptionTierSettings.objects.get(tier='free')
+                profile.ai_tier = tier_settings.ai_tier
+                profile.save()
+            except SubscriptionTierSettings.DoesNotExist:
+                pass
+            
+            # Send welcome email
+            send_welcome_email(user)
+            
+            # Send verification email
+            send_verification_email(user, request)
+            
+            messages.success(request, 'Account created successfully! Please check your email to verify your account before logging in.')
+            return redirect('login')
     else:
-        form = UserCreationForm()
+        form = UserRegistrationForm()
     
     return render(request, 'accounts/register.html', {'form': form})
 
@@ -50,6 +102,11 @@ def login_view(request):
         # Handle AJAX requests for modal login
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             if user is not None:
+                if not user.is_active:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'Your account is not activated. Please check your email for the verification link.'
+                    }, status=400)
                 login(request, user)
                 return JsonResponse({
                     'success': True,
@@ -64,6 +121,9 @@ def login_view(request):
         
         # Regular form submission (non-AJAX)
         if user is not None:
+            if not user.is_active:
+                messages.error(request, 'Your account is not activated. Please check your email for the verification link.')
+                return render(request, 'accounts/login.html')
             login(request, user)
             messages.success(request, f'Welcome back, {user.username}!')
             return redirect('index')
@@ -89,7 +149,17 @@ def profile_view(request):
 @login_required
 def subscription_view(request):
     profile = request.user.profile
-    plans = SubscriptionPlan.objects.filter(is_active=True)
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly')
+    
+    # Update user's AI tier based on subscription type
+    from engine.models import SubscriptionTierSettings
+    try:
+        tier_settings = SubscriptionTierSettings.objects.get(tier=profile.subscription_type)
+        if profile.ai_tier != tier_settings.ai_tier:
+            profile.ai_tier = tier_settings.ai_tier
+            profile.save()
+    except SubscriptionTierSettings.DoesNotExist:
+        pass
     
     context = {
         'profile': profile,
@@ -189,12 +259,50 @@ def stripe_webhook(request):
 
 def handle_successful_payment(session):
     try:
+        from engine.models import SubscriptionPlan, SubscriptionTierSettings
+        from datetime import timedelta
+        
         customer_id = session['customer']
         subscription_id = session['subscription']
         
         profile = UserProfile.objects.get(stripe_customer_id=customer_id)
         profile.stripe_subscription_id = subscription_id
-        profile.subscription_type = 'basic'  # Update based on plan
+        
+        # Get the plan from Stripe subscription or line items
+        plan = None
+        if 'line_items' in session and session['line_items'].get('data'):
+            price_id = session['line_items']['data'][0]['price']['id']
+            # Find plan by Stripe price ID
+            plan = SubscriptionPlan.objects.filter(
+                stripe_price_id_monthly=price_id
+            ).first()
+            if not plan:
+                plan = SubscriptionPlan.objects.filter(
+                    stripe_price_id_yearly=price_id
+                ).first()
+        
+        # Update subscription type based on plan's tier_key
+        if plan and plan.tier_key:
+            profile.subscription_type = plan.tier_key
+        elif plan:
+            # Fallback: try to match plan name to tier
+            plan_name_lower = plan.name.lower()
+            if 'free' in plan_name_lower:
+                profile.subscription_type = 'free'
+            elif 'low' in plan_name_lower or 'basic' in plan_name_lower:
+                profile.subscription_type = 'low'
+            elif 'mid' in plan_name_lower or 'pro' in plan_name_lower:
+                profile.subscription_type = 'mid'
+            elif 'high' in plan_name_lower or 'enterprise' in plan_name_lower:
+                profile.subscription_type = 'high'
+        
+        # Update AI tier from tier settings
+        try:
+            tier_settings = SubscriptionTierSettings.objects.get(tier=profile.subscription_type)
+            profile.ai_tier = tier_settings.ai_tier
+        except SubscriptionTierSettings.DoesNotExist:
+            pass
+        
         profile.subscription_start = timezone.now()
         profile.subscription_end = timezone.now() + timedelta(days=30)
         profile.save()
@@ -203,9 +311,30 @@ def handle_successful_payment(session):
 
 def handle_subscription_update(subscription):
     try:
+        from engine.models import SubscriptionPlan, SubscriptionTierSettings
+        
         profile = UserProfile.objects.get(stripe_subscription_id=subscription['id'])
         if subscription['status'] == 'active':
             profile.is_active = True
+            # Try to update tier from plan if available
+            if 'items' in subscription and subscription['items'].get('data'):
+                price_id = subscription['items']['data'][0]['price']['id']
+                plan = SubscriptionPlan.objects.filter(
+                    stripe_price_id_monthly=price_id
+                ).first()
+                if not plan:
+                    plan = SubscriptionPlan.objects.filter(
+                        stripe_price_id_yearly=price_id
+                    ).first()
+                
+                if plan and plan.tier_key:
+                    profile.subscription_type = plan.tier_key
+                    # Update AI tier
+                    try:
+                        tier_settings = SubscriptionTierSettings.objects.get(tier=plan.tier_key)
+                        profile.ai_tier = tier_settings.ai_tier
+                    except SubscriptionTierSettings.DoesNotExist:
+                        pass
         else:
             profile.is_active = False
         profile.save()
@@ -221,3 +350,72 @@ def handle_subscription_cancellation(subscription):
         profile.save()
     except Exception as e:
         print(f"Error handling subscription cancellation: {e}")
+
+
+def verify_email_view(request, uidb64, token):
+    """
+    Verify user's email address using the token from the verification email.
+    """
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+    
+    if user is not None and default_token_generator.check_token(user, token):
+        user.is_active = True
+        user.save()
+        messages.success(request, 'Your email has been verified! You can now log in.')
+        return redirect('login')
+    else:
+        messages.error(request, 'Invalid or expired verification link. Please request a new one.')
+        return redirect('login')
+
+
+def password_reset_request_view(request):
+    """
+    Handle password reset request form submission.
+    """
+    if request.method == 'POST':
+        form = PasswordResetForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+            try:
+                user = User.objects.get(email=email)
+                send_password_reset_email(user, request)
+                messages.success(request, 'Password reset link has been sent to your email address.')
+                return redirect('login')
+            except User.DoesNotExist:
+                # Don't reveal if email exists or not (security best practice)
+                messages.success(request, 'If an account exists with that email, a password reset link has been sent.')
+                return redirect('login')
+    else:
+        form = PasswordResetForm()
+    
+    return render(request, 'accounts/password_reset_request.html', {'form': form})
+
+
+def password_reset_confirm_view(request, uidb64, token):
+    """
+    Handle password reset confirmation with new password.
+    """
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+    
+    if user is not None and default_token_generator.check_token(user, token):
+        if request.method == 'POST':
+            form = SetPasswordForm(user, request.POST)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Your password has been reset successfully. You can now log in with your new password.')
+                return redirect('login')
+        else:
+            form = SetPasswordForm(user)
+        
+        return render(request, 'accounts/password_reset_confirm.html', {'form': form})
+    else:
+        messages.error(request, 'Invalid or expired password reset link. Please request a new one.')
+        return redirect('password_reset_request')

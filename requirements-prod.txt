@@ -17,6 +17,9 @@ scikit-learn>=1.3.0
 plotly>=5.0.0
 matplotlib>=3.7.0
 
+# Date parsing
+python-dateutil>=2.8.0
+
 # Statistical Analysis
 statsmodels>=0.14.0
 bambi>=0.12.0
@@ -30,6 +33,9 @@ stripe>=6.0.0
 
 # Email
 django-anymail>=10.0
+
+# Social Authentication
+django-allauth>=0.57.0
 
 # Production Server
 gunicorn>=21.0.0

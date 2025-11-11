@@ -2,14 +2,24 @@
 import os
 import uuid
 import json
+import numpy as np
 from django.conf import settings
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import HttpResponse, FileResponse
+from django.http import HttpResponse, FileResponse, JsonResponse
 import pandas as pd
 from pandas.api.types import CategoricalDtype
 
 from engine.models import Dataset
 from .loader import load_dataframe_any
+import sys
+import os
+import json
+from django.http import JsonResponse
+
+# Add parent directory to path to import date_detection
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
+from data_prep.date_detection import detect_date_formats, convert_date_column, standardize_date_column
+from models.VARX import adf_check
 
 PREVIEW_ROWS = 50
 
@@ -20,6 +30,7 @@ VAR_TYPES = [
     ("categorical", "Categorical"),
     ("ordinal", "Ordinal"),
     ("count", "Count (non-negative int)"),
+    ("date", "Date / Time"),
 ]
 
 def _dataset_path(ds: Dataset) -> str:
@@ -70,16 +81,36 @@ def open_cleaner(request, dataset_id):
     # Use detected column types as default, then override with existing schema
     existing_types = column_types.copy()
     existing_orders = {}
+    
+    # Load schema once for both type overrides and date standardization check
+    schema_path = os.path.splitext(path)[0] + ".schema.json"
+    standardized_dates = {}
     try:
-        schema_path = os.path.splitext(path)[0] + ".schema.json"
         if os.path.exists(schema_path):
             with open(schema_path, 'r', encoding='utf-8') as f:
                 schema = json.load(f)
             # Override detected types with schema types if they exist
             existing_types.update(schema.get('types', {}))
             existing_orders = schema.get('orders', {})
+            # Get standardized dates info
+            standardized_dates = schema.get('date_standardized', {})
     except Exception:
         pass
+    
+    # Detect date columns with multiple formats
+    # Skip columns that have already been standardized
+    date_columns_with_formats = {}
+    for col in columns:
+        # Skip if this column has already been standardized
+        if col in standardized_dates and standardized_dates[col].get('standardized', False):
+            continue
+            
+        if column_types.get(col) == 'date':
+            # Check for multiple date formats
+            formats = detect_date_formats(df_sample[col], sample_size=100)
+            if len(formats) > 1:
+                # Multiple formats detected - user needs to choose
+                date_columns_with_formats[col] = formats
     # convert each row to a dict keyed by column name for rendering only
     def _to_str(v):
         try:
@@ -126,6 +157,7 @@ def open_cleaner(request, dataset_id):
         "existing_orders": existing_orders,
         "total_rows": total_rows,
         "is_large_dataset": total_rows > 10000,
+        "date_columns_with_formats_json": json.dumps(date_columns_with_formats),
     }
     return render(request, "dataprep/cleaner.html", ctx)
 
@@ -193,6 +225,12 @@ def _apply_types(df: pd.DataFrame, new_types: dict, orders: dict) -> pd.DataFram
                 df[col] = df[col].astype(str)
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
             df[col] = df[col].clip(lower=0).round().astype("int64")
+        elif t == "date":
+            # Date columns are kept as strings in standardized format
+            # Conversion to datetime objects can be done later if needed for analysis
+            # For now, we just ensure they're strings
+            if not pd.api.types.is_string_dtype(df[col]):
+                df[col] = df[col].astype(str)
     return df
 
 def apply_cleaning(request, dataset_id: int):
@@ -847,3 +885,296 @@ def drop_columns(request, dataset_id):
         error_msg = str(e)
         traceback.print_exc()
         return HttpResponse(json.dumps({"error": f"Failed to drop columns: {error_msg}"}), status=500, content_type="application/json")
+
+
+def detect_date_formats_api(request, dataset_id):
+    """API endpoint to detect date formats in a specific column."""
+    if request.method != 'POST':
+        return HttpResponse('POST only', status=405)
+    
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    path = _dataset_path(dataset)
+    if not path:
+        return HttpResponse(json.dumps({"error": "Dataset has no file path"}), status=400, content_type="application/json")
+    
+    try:
+        import json as json_module
+        data = json_module.loads(request.body)
+        column_name = data.get('column')
+        
+        if not column_name:
+            return HttpResponse(json.dumps({"error": "Column name required"}), status=400, content_type="application/json")
+        
+        # Load dataset
+        df, _ = load_dataframe_any(path, preview_rows=1000)
+        
+        if column_name not in df.columns:
+            return HttpResponse(json.dumps({"error": f"Column '{column_name}' not found"}), status=400, content_type="application/json")
+        
+        # Detect date formats
+        formats = detect_date_formats(df[column_name], sample_size=100)
+        
+        return HttpResponse(json.dumps({
+            "success": True,
+            "column": column_name,
+            "formats": formats
+        }), content_type="application/json")
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return HttpResponse(json.dumps({"error": str(e)}), status=500, content_type="application/json")
+
+
+def convert_date_format_api(request, dataset_id):
+    """API endpoint to convert a date column to a selected format."""
+    if request.method != 'POST':
+        return HttpResponse('POST only', status=405)
+    
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    path = _dataset_path(dataset)
+    if not path:
+        return HttpResponse(json.dumps({"error": "Dataset has no file path"}), status=400, content_type="application/json")
+    
+    try:
+        import json as json_module
+        data = json_module.loads(request.body)
+        column_name = data.get('column')
+        target_format = data.get('target_format')
+        original_format = data.get('original_format')  # The format user selected (for reference)
+        
+        # The target_format should be the format the user wants to convert TO
+        # If not provided, use the selected format (unless it's 'dateutil', then use YYYY-MM-DD)
+        if not target_format:
+            if original_format and original_format != 'dateutil':
+                target_format = original_format
+            else:
+                target_format = '%Y-%m-%d'
+        
+        # Log for debugging
+        print(f"DEBUG: Converting date column '{column_name}' to format '{target_format}' (selected: {original_format})")
+        
+        # For parsing, we should use dateutil since dates might be in different formats
+        # The original_format is just for reference - we'll parse flexibly
+        parse_format = 'dateutil'  # Always use flexible parsing since dates are mixed
+        
+        if not column_name:
+            return HttpResponse(json.dumps({"error": "Column name required"}), status=400, content_type="application/json")
+        
+        # Load full dataset
+        df, _ = load_dataframe_any(path)
+        
+        if column_name not in df.columns:
+            return HttpResponse(json.dumps({"error": f"Column '{column_name}' not found"}), status=400, content_type="application/json")
+        
+        # Store original sample for verification
+        original_sample = df[column_name].head(10).tolist()
+        
+        # Convert date column
+        # Use dateutil for parsing (since dates are in mixed formats)
+        # Then convert all to the selected target format
+        df = standardize_date_column(df, column_name, target_format, 'dateutil')
+        
+        # Verify conversion (check a few values)
+        converted_sample = df[column_name].head(10).tolist()
+        
+        # Save the updated dataset
+        orig_ext = os.path.splitext(path)[1][1:]
+        if orig_ext in ("csv", ""):
+            df.to_csv(path, index=False)
+        elif orig_ext in ("xlsx", "xls"):
+            df.to_excel(path, index=False)
+        elif orig_ext == "tsv":
+            df.to_csv(path, index=False, sep="\t")
+        elif orig_ext == "json":
+            df.to_json(path, orient="records")
+        else:
+            df.to_csv(path, index=False)
+        
+        # Update schema to mark this column as date (standardized)
+        # This prevents the modal from showing again
+        schema_path = os.path.splitext(path)[0] + ".schema.json"
+        schema = {}
+        try:
+            if os.path.exists(schema_path):
+                with open(schema_path, 'r', encoding='utf-8') as f:
+                    schema = json_module.load(f)
+        except Exception:
+            pass
+        
+        # Ensure types dict exists
+        if 'types' not in schema:
+            schema['types'] = {}
+        
+        # Mark column as date type (standardized)
+        schema['types'][column_name] = 'date'
+        
+        # Store metadata that this column has been standardized
+        if 'date_standardized' not in schema:
+            schema['date_standardized'] = {}
+        schema['date_standardized'][column_name] = {
+            'original_format': original_format,
+            'target_format': target_format,
+            'standardized': True,
+            'standardized_to': target_format  # Store the format we converted to
+        }
+        
+        # Save updated schema
+        try:
+            with open(schema_path, 'w', encoding='utf-8') as f:
+                json_module.dump(schema, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            # Log but don't fail if schema update fails
+            print(f"Warning: Failed to update schema: {e}")
+        
+        return HttpResponse(json.dumps({
+            "success": True,
+            "column": column_name,
+            "target_format": target_format,
+            "message": f"Successfully converted '{column_name}' to format {target_format}",
+            "original_sample": [str(v) for v in original_sample[:3]],
+            "converted_sample": [str(v) for v in converted_sample[:3]]
+        }), content_type="application/json")
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return HttpResponse(json.dumps({"error": str(e)}), status=500, content_type="application/json")
+
+
+def fix_stationary(request, dataset_id):
+    """API endpoint to fix stationarity by applying transformation (diff or log) to a variable."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    
+    try:
+        import json as json_module
+        data = json_module.loads(request.body)
+        variable_name = data.get('variable')
+        transform_type = data.get('transform_type', 'diff')  # 'diff' or 'log'
+        
+        if not variable_name:
+            return JsonResponse({'error': 'Variable name required'}, status=400)
+        
+        if transform_type not in ['diff', 'log']:
+            return JsonResponse({'error': 'Transform type must be "diff" or "log"'}, status=400)
+        
+        # Get dataset
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        path = _dataset_path(dataset)
+        if not path:
+            return JsonResponse({'error': 'Dataset has no file path'}, status=400)
+        
+        # Load dataset
+        df, _ = load_dataframe_any(path)
+        
+        if variable_name not in df.columns:
+            return JsonResponse({'error': f'Variable "{variable_name}" not found in dataset'}, status=400)
+        
+        # Determine new column name
+        new_column_name = f'{variable_name}_stationary'
+        
+        # Check if column already exists (for overwriting)
+        column_exists = new_column_name in df.columns
+        
+        # Apply transformation
+        if transform_type == 'diff':
+            # First difference: ΔX = X(t) - X(t-1)
+            df[new_column_name] = df[variable_name].diff()
+            # First value will be NaN, we can keep it or fill with 0
+            # For VARX, it's better to keep NaN and drop it later
+        elif transform_type == 'log':
+            # Log transformation: log(X)
+            # Check if any values are negative
+            if (df[variable_name] < 0).any():
+                negative_count = (df[variable_name] < 0).sum()
+                return JsonResponse({
+                    'error': f'Cannot apply log transformation: variable "{variable_name}" contains {negative_count} negative value(s). Log transformation requires all values to be non-negative. Please use difference transformation instead or remove negative values from your data.'
+                }, status=400)
+            
+            # Check if any values are zero
+            if (df[variable_name] == 0).any():
+                zero_count = (df[variable_name] == 0).sum()
+                # Add a small number (epsilon) to avoid log(0) error
+                # Use a very small value relative to the data scale
+                epsilon = 1e-10
+                # Add epsilon to all values to shift them slightly
+                df[new_column_name] = np.log(df[variable_name] + epsilon)
+                # Warn user about the adjustment (this will be in the response message)
+            else:
+                # All values are positive, can apply log directly
+                df[new_column_name] = np.log(df[variable_name])
+        
+        # Save updated dataset
+        orig_ext = os.path.splitext(path)[1][1:]
+        if orig_ext in ("csv", ""):
+            df.to_csv(path, index=False)
+        elif orig_ext in ("xlsx", "xls"):
+            df.to_excel(path, index=False)
+        elif orig_ext == "tsv":
+            df.to_csv(path, index=False, sep="\t")
+        elif orig_ext == "json":
+            df.to_json(path, orient="records")
+        else:
+            df.to_csv(path, index=False)
+        
+        # Re-run ADF test on the new column
+        adf_result = adf_check(df[new_column_name], new_column_name)
+        
+        # Prepare response
+        message = f'Transformation applied successfully. '
+        if column_exists:
+            message += f'Column "{new_column_name}" was overwritten. '
+        else:
+            message += f'New column "{new_column_name}" was created. '
+        
+        # Add warning about zero values if log transformation was used
+        if transform_type == 'log' and (df[variable_name] == 0).any():
+            zero_count = (df[variable_name] == 0).sum()
+            message += f'Note: Variable contained {zero_count} zero value(s). Added small epsilon (1e-10) before log transformation to avoid log(0) error. '
+        
+        message += f'ADF test on transformed variable: '
+        if adf_result.get('is_stationary'):
+            p_val = adf_result.get('p_value')
+            if p_val is not None and isinstance(p_val, (int, float)):
+                message += f'Stationary (p-value: {p_val:.6f})'
+            else:
+                message += f'Stationary (p-value: N/A)'
+        else:
+            p_val = adf_result.get('p_value')
+            if p_val is not None and isinstance(p_val, (int, float)):
+                message += f'Non-stationary (p-value: {p_val:.6f}). You may need to apply another transformation.'
+            else:
+                message += f'Non-stationary (p-value: N/A). You may need to apply another transformation.'
+        
+        # Convert adf_result to JSON-serializable format
+        # Handle numpy bool types and ensure all values are JSON-serializable
+        import json as json_lib
+        adf_result_serializable = {}
+        for key, value in adf_result.items():
+            if value is None:
+                adf_result_serializable[key] = None
+            elif isinstance(value, bool):
+                # Python bool - JsonResponse handles this fine
+                adf_result_serializable[key] = value
+            elif hasattr(value, 'item'):  # numpy scalar types
+                # Convert numpy scalar to Python native type
+                adf_result_serializable[key] = value.item()
+            elif isinstance(value, (int, float)):
+                adf_result_serializable[key] = value
+            else:
+                adf_result_serializable[key] = str(value)
+        
+        return JsonResponse({
+            'success': True,
+            'message': message,
+            'variable': variable_name,
+            'new_column': new_column_name,
+            'transform_type': transform_type,
+            'adf_result': adf_result_serializable
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)

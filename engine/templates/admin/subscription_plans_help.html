@@ -1,0 +1,24 @@
+<div style="background: #f0f9ff; border: 1px solid #0f6b72; border-radius: 8px; padding: 16px; margin: 16px 0;">
+    <h3 style="margin-top: 0; color: #0f6b72;">📋 How to Add Subscription Plans to Your Landing Page</h3>
+    <p><strong>Method 1: Using the Button (Recommended)</strong></p>
+    <ol>
+        <li>In the content editor, place your cursor where you want the subscription plans to appear</li>
+        <li>Click the <strong>"Insert Subscription Plans"</strong> button in the toolbar (look for the price tag icon)</li>
+        <li>The subscription plans will automatically be inserted and will update whenever you change plans in the admin</li>
+    </ol>
+    
+    <p><strong>Method 2: Manual Insertion</strong></p>
+    <p>If the button doesn't appear, you can manually add this code in the editor (switch to "Source" view):</p>
+    <pre style="background: white; padding: 12px; border-radius: 4px; overflow-x: auto;"><code>{% load subscription_tags %}
+{% subscription_plans %}</code></pre>
+    
+    <p><strong>Customization Options:</strong></p>
+    <ul>
+        <li>To change which plan is "featured" (highlighted), use: <code>{% subscription_plans featured_plan_index=3 %}</code></li>
+        <li>The plans will automatically display all active subscription plans from your database</li>
+        <li>Features, prices, and limits are pulled directly from your SubscriptionPlan and SubscriptionTierSettings models</li>
+    </ul>
+    
+    <p style="margin-bottom: 0;"><strong>💡 Tip:</strong> The subscription plans section will automatically update when you modify plans in the admin, so you don't need to edit the page content again!</p>
+</div>
+

@@ -1,0 +1,116 @@
+{% extends "engine/base.html" %}
+{% load static %}
+
+{% block title %}Terms of Service - StatBox{% endblock %}
+
+{% block content %}
+<div class="legal-page-container">
+    <div class="legal-page-content">
+        <div class="legal-header">
+            <h1>Terms of Service</h1>
+            {% if terms %}
+            <p class="version-info">Version {{ terms.version }} - Effective {{ terms.effective_date|date:"F d, Y" }}</p>
+            {% endif %}
+        </div>
+        
+        <div class="legal-body">
+            {% if terms %}
+                {{ terms.content|safe }}
+            {% else %}
+                <p>Terms of service content is not available. Please contact the administrator.</p>
+            {% endif %}
+        </div>
+        
+        <div class="legal-footer">
+            <p><a href="{% url 'privacy_policy' %}">View Privacy Policy</a></p>
+            <p><a href="{% url 'index' %}">Back to Home</a></p>
+        </div>
+    </div>
+</div>
+
+<style>
+.legal-page-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.legal-page-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 40px;
+}
+
+.legal-header {
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
+
+.legal-header h1 {
+    margin: 0 0 8px 0;
+    color: #1f2937;
+    font-size: 32px;
+    font-weight: 700;
+}
+
+.version-info {
+    margin: 0;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.legal-body {
+    line-height: 1.8;
+    color: #374151;
+    font-size: 16px;
+}
+
+.legal-body h2 {
+    color: #1f2937;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    font-size: 24px;
+}
+
+.legal-body h3 {
+    color: #374151;
+    margin-top: 25px;
+    margin-bottom: 12px;
+    font-size: 20px;
+}
+
+.legal-body p {
+    margin-bottom: 16px;
+}
+
+.legal-body ul, .legal-body ol {
+    margin-bottom: 16px;
+    padding-left: 30px;
+}
+
+.legal-body li {
+    margin-bottom: 8px;
+}
+
+.legal-footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+}
+
+.legal-footer a {
+    color: #3b82f6;
+    text-decoration: none;
+    margin: 0 15px;
+    font-weight: 500;
+}
+
+.legal-footer a:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}
+

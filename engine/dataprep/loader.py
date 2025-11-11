@@ -2,6 +2,12 @@
 from pathlib import Path
 import json
 import pandas as pd
+import sys
+import os
+
+# Add parent directory to path to import date_detection
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
+from data_prep.date_detection import is_date_column
 
 def _sanitize_columns_inplace(df: pd.DataFrame) -> None:
     def _clean(s):
@@ -12,10 +18,16 @@ def _sanitize_columns_inplace(df: pd.DataFrame) -> None:
     df.rename(columns=_clean, inplace=True)
 
 def _auto_detect_column_types(df: pd.DataFrame) -> dict:
-    """Automatically detect and assign data types to columns: numeric, binary, categorical, ordinal, or string."""
+    """Automatically detect and assign data types to columns: numeric, binary, categorical, ordinal, date, or string."""
     column_types = {}
     
     for col in df.columns:
+        # First check if it's a date column (before other checks)
+        is_date, date_formats = is_date_column(df[col], threshold=0.5)
+        if is_date:
+            column_types[col] = 'date'
+            continue
+        
         # First check if it's binary (exactly 2 unique values) - this applies to ALL variables
         unique_values = df[col].dropna().nunique()
         if unique_values == 2:

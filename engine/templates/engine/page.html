@@ -59,6 +59,28 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    {% if is_landing %}
+    {# Include subscription plans CSS for landing pages #}
+    <style>
+        /* Subscription Plans Grid Styles - dynamic based on number of plans */
+        .subscription-plans-grid,
+        .landing-pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            width: 100%;
+            max-width: 100%;
+        }
+        
+        /* Responsive: single column on mobile */
+        @media (max-width: 699px) {
+            .subscription-plans-grid,
+            .landing-pricing-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    {% endif %}
     <style>
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -454,7 +476,9 @@
         });
     </script>
     
+    {% load subscription_tags %}
     <div class="landing-container">
+        {# Content is processed through template engine in the view to render dynamic tags #}
         {{ page.content|safe }}
     </div>
     {% else %}

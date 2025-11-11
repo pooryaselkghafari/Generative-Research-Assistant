@@ -24,7 +24,7 @@ os.makedirs(DATASET_DIR, exist_ok=True)
 def landing_view(request):
     """Landing page for Generative Research Assistant - shown to non-authenticated users
     Checks for dynamic landing page content from Page model first"""
-    from .models import Page
+    from .models import Page, SubscriptionPlan
     
     # Check if there's a custom landing page
     landing_page = Page.objects.filter(
@@ -34,14 +34,76 @@ def landing_view(request):
     ).first()
     
     if landing_page:
+        # Process page content through template engine to render dynamic tags
+        from django.template import Context, Template
+        from django.template.loader import get_template
+        from django.template import engines
+        
+        # Load subscription plans for context
+        plans = list(SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly'))
+        
+        # ALWAYS process content through template engine to ensure dynamic updates
+        # This ensures subscription plans update when changed in admin
+        processed_content = landing_page.content
+        try:
+            # Use Django's template engine to properly render template tags
+            from django.template import engines
+            django_engine = engines['django']
+            
+            # Wrap content in a template that loads subscription_tags if not already loaded
+            # This ensures the template tag library is available
+            template_content = landing_page.content
+            if '{% load subscription_tags %}' not in template_content and 'subscription_plans' in template_content:
+                # Add the load tag if subscription_plans is used but load tag is missing
+                template_content = '{% load subscription_tags %}\n' + template_content
+            
+            template = django_engine.from_string(template_content)
+            context = {
+                'request': request,
+                'plans': plans,
+            }
+            processed_content = template.render(context, request)
+        except Exception as e:
+            # If template rendering fails, use original content
+            import traceback
+            print(f"Warning: Failed to process template tags in page content: {e}")
+            print(traceback.format_exc())
+            processed_content = landing_page.content
+        
+        # Create a modified page object with processed content
+        class ProcessedPage:
+            def __init__(self, page, processed_content):
+                # Copy all model fields
+                for field in page._meta.get_fields():
+                    if hasattr(page, field.name):
+                        setattr(self, field.name, getattr(page, field.name))
+                # Override content with processed version
+                self.content = processed_content
+                # Copy the model instance reference
+                self._meta = page._meta
+                self.pk = page.pk
+        
+        processed_page = ProcessedPage(landing_page, processed_content)
+        
         # Render dynamic landing page
         return render(request, 'engine/page.html', {
-            'page': landing_page,
-            'is_landing': True
+            'page': processed_page,
+            'is_landing': True,
+            'plans': plans,  # Pass plans to template context
         })
     
-    # Fallback to default static landing page
-    return render(request, 'engine/landing.html')
+    # Get active subscription plans for pricing section
+    plans = list(SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly'))
+    
+    # Debug: Print plans count
+    print(f"DEBUG: Landing page - Found {len(plans)} active plans")
+    for plan in plans:
+        print(f"  - {plan.name}: features={plan.features}, ai_features={plan.ai_features}")
+    
+    # Fallback to default static landing page with dynamic plans
+    return render(request, 'engine/landing.html', {
+        'plans': plans
+    })
 
 def page_view(request, slug):
     """View for rendering dynamic pages"""
@@ -56,6 +118,54 @@ def page_view(request, slug):
     except Page.DoesNotExist:
         from django.http import Http404
         raise Http404("Page not found")
+
+def privacy_policy_view(request):
+    """Display the current active privacy policy"""
+    from .models import PrivacyPolicy
+    
+    policy = PrivacyPolicy.objects.filter(is_active=True).order_by('-effective_date').first()
+    
+    if not policy:
+        # Fallback to default content
+        default_content = """
+        <h1>Privacy Policy</h1>
+        <p>Privacy policy content will be available here. Please contact the administrator.</p>
+        """
+        return render(request, 'engine/page.html', {
+            'page': type('Page', (), {
+                'title': 'Privacy Policy',
+                'content': default_content,
+                'meta_description': 'Privacy Policy for StatBox',
+            })()
+        })
+    
+    return render(request, 'engine/privacy_policy.html', {
+        'policy': policy
+    })
+
+def terms_of_service_view(request):
+    """Display the current active terms of service"""
+    from .models import TermsOfService
+    
+    terms = TermsOfService.objects.filter(is_active=True).order_by('-effective_date').first()
+    
+    if not terms:
+        # Fallback to default content
+        default_content = """
+        <h1>Terms of Service</h1>
+        <p>Terms of service content will be available here. Please contact the administrator.</p>
+        """
+        return render(request, 'engine/page.html', {
+            'page': type('Page', (), {
+                'title': 'Terms of Service',
+                'content': default_content,
+                'meta_description': 'Terms of Service for StatBox',
+            })()
+        })
+    
+    return render(request, 'engine/terms_of_service.html', {
+        'terms': terms
+    })
 
 def robots_txt(request):
     """Generate robots.txt dynamically based on pages"""
@@ -247,6 +357,34 @@ def upload_dataset(request):
         return HttpResponse('POST only', status=405)
     if 'dataset' not in request.FILES:
         return HttpResponse('No dataset file provided', status=400)
+    
+    # Check user authentication and limits
+    user = request.user if request.user.is_authenticated else None
+    if user:
+        profile = user.profile
+        limits = profile.get_limits()
+        
+        # Check dataset count limit
+        if limits['datasets'] != -1:  # -1 means unlimited
+            current_count = user.datasets.count()
+            if current_count >= limits['datasets']:
+                error_msg = f"You have reached your dataset limit ({limits['datasets']} datasets). Please delete some datasets or upgrade your plan."
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': error_msg}, status=403)
+                from django.contrib import messages
+                messages.error(request, error_msg)
+                return redirect('index')
+        
+        # Check file size limit
+        file_size_mb = request.FILES['dataset'].size / (1024 * 1024)
+        if limits['file_size'] != -1 and file_size_mb > limits['file_size']:
+            error_msg = f"File size ({file_size_mb:.2f} MB) exceeds your plan limit ({limits['file_size']} MB). Please upgrade your plan."
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_msg}, status=403)
+            from django.contrib import messages
+            messages.error(request, error_msg)
+            return redirect('index')
+    
     name = request.POST.get('dataset_name') or request.FILES['dataset'].name
     f = request.FILES['dataset']
     safe = f.name.replace(' ', '_')
@@ -259,9 +397,6 @@ def upload_dataset(request):
     with open(path, 'wb') as dest:
         for chunk in f.chunks():
             dest.write(chunk)
-    
-    # Associate dataset with user if authenticated
-    user = request.user if request.user.is_authenticated else None
     
     # Use get_or_create with user to handle unique_together constraint
     if user:
@@ -415,6 +550,22 @@ def run_analysis(request):
 
     session_name = request.POST.get('session_name') or f"Session {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
+    # Check session limits for new sessions (not updates)
+    if action == 'new' and request.user.is_authenticated:
+        profile = request.user.profile
+        limits = profile.get_limits()
+        
+        # Check session count limit
+        if limits['sessions'] != -1:  # -1 means unlimited
+            current_count = request.user.sessions.count()
+            if current_count >= limits['sessions']:
+                error_msg = f"You have reached your session limit ({limits['sessions']} sessions). Please delete some sessions or upgrade your plan."
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': error_msg}, status=403)
+                from django.contrib import messages
+                messages.error(request, error_msg)
+                return redirect('index')
+
     # Special handling for BMA analysis
     if module_name == 'bma':
         # Redirect to BMA analysis
@@ -424,6 +575,11 @@ def run_analysis(request):
     if module_name == 'anova':
         # Redirect to ANOVA analysis
         return run_anova_analysis(request)
+    
+    # Special handling for VARX analysis
+    if module_name == 'varx':
+        # Redirect to VARX analysis
+        return run_varx_analysis(request)
     
     job_id = str(uuid.uuid4())[:8]
     outdir = os.path.join(settings.MEDIA_ROOT, job_id)
@@ -1763,8 +1919,24 @@ def run_bma_analysis(request):
             session.save()
         else:
             print(f"DEBUG: Creating new BMA session (action: {action}, session_id: {session_id})")
-            # Associate session with user if authenticated
+            # Check session limits for new sessions
             user = request.user if request.user.is_authenticated else None
+            if user:
+                profile = user.profile
+                limits = profile.get_limits()
+                if limits['sessions'] != -1:
+                    current_count = user.sessions.count()
+                    if current_count >= limits['sessions']:
+                        return render(request, 'engine/BMA_results.html', {
+                            'dataset': dataset,
+                            'session': None,
+                            'formula': formula,
+                            'results': {
+                                'has_results': False,
+                                'error': f"You have reached your session limit ({limits['sessions']} sessions). Please delete some sessions or upgrade your plan."
+                            }
+                        })
+            # Associate session with user if authenticated
             session = AnalysisSession(
                 name=session_name,
                 module='bma',
@@ -1911,8 +2083,24 @@ def run_anova_analysis(request):
             session.save()
         else:
             print(f"DEBUG: Creating new ANOVA session (action: {action}, session_id: {session_id})")
-            # Associate session with user if authenticated
+            # Check session limits for new sessions
             user = request.user if request.user.is_authenticated else None
+            if user:
+                profile = user.profile
+                limits = profile.get_limits()
+                if limits['sessions'] != -1:
+                    current_count = user.sessions.count()
+                    if current_count >= limits['sessions']:
+                        return render(request, 'engine/ANOVA_results.html', {
+                            'dataset': dataset,
+                            'session': None,
+                            'formula': formula,
+                            'results': {
+                                'has_results': False,
+                                'error': f"You have reached your session limit ({limits['sessions']} sessions). Please delete some sessions or upgrade your plan."
+                            }
+                        })
+            # Associate session with user if authenticated
             session = AnalysisSession(
                 name=session_name,
                 module='anova',
@@ -1961,6 +2149,868 @@ def run_anova_analysis(request):
             'results': {'has_results': False, 'error': str(e)},
             'numeric_vars': []
         })
+
+
+def run_varx_analysis(request):
+    """Handle VARX analysis requests"""
+    if request.method != 'POST':
+        return HttpResponse('POST only', status=405)
+    
+    try:
+        # Get parameters from request
+        action = request.POST.get('action', 'new')  # 'new' or 'update'
+        session_id = request.POST.get('session_id')
+        dataset_id = request.POST.get('dataset_id')
+        formula = request.POST.get('formula', '')
+        session_name = request.POST.get('session_name') or f"VARX Analysis {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        if not dataset_id:
+            return HttpResponse('Please select a dataset', status=400)
+        
+        if not formula:
+            return HttpResponse('Please enter a formula', status=400)
+        
+        # Get dataset
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        
+        # Import VARX module
+        from models.VARX import VARXModule
+        
+        # Create VARX module instance
+        varx_module = VARXModule()
+        
+        # Prepare options (get VAR order from request)
+        # If var_order is not provided or is 'auto', use automatic selection
+        var_order_input = request.POST.get('var_order', None)
+        max_lags_input = request.POST.get('max_lags', 10)
+        
+        # Get max_lags (default to 10)
+        try:
+            max_lags = int(max_lags_input)
+        except (ValueError, TypeError):
+            max_lags = 10
+        
+        if var_order_input and var_order_input != 'auto' and var_order_input != '0':
+            try:
+                var_order = int(var_order_input)
+                options = {'var_order': var_order, 'max_lags': max_lags}
+            except (ValueError, TypeError):
+                options = {'var_order': 'auto', 'max_lags': max_lags}  # Use auto-selection
+        else:
+            # Use automatic lag selection
+            options = {'var_order': 'auto', 'max_lags': max_lags}
+        
+        # Run VARX analysis
+        result = varx_module.run(df, formula, None, None, options, column_types, schema_orders)
+        
+        if not result.get('has_results', False):
+            return render(request, 'engine/VARX_results.html', {
+                'dataset': dataset,
+                'session': get_object_or_404(AnalysisSession, pk=session_id) if (action == 'update' and session_id) else None,
+                'formula': formula,
+                'results': {'has_results': False, 'error': result.get('error', 'Unknown error')}
+            })
+        
+        # Update existing session or create new one
+        if action == 'update' and session_id:
+            print(f"DEBUG: Updating existing VARX session {session_id}")
+            session = get_object_or_404(AnalysisSession, pk=session_id)
+            session.name = session_name
+            session.module = 'varx'
+            session.formula = formula
+            session.analysis_type = 'varx'
+            session.options = options
+            session.dataset = dataset
+            # Ensure user is set if not already set
+            if not session.user and request.user.is_authenticated:
+                session.user = request.user
+            session.save()
+        else:
+            print(f"DEBUG: Creating new VARX session (action: {action}, session_id: {session_id})")
+            # Check session limits for new sessions
+            user = request.user if request.user.is_authenticated else None
+            if user:
+                profile = user.profile
+                limits = profile.get_limits()
+                if limits['sessions'] != -1:
+                    current_count = user.sessions.count()
+                    if current_count >= limits['sessions']:
+                        return render(request, 'engine/VARX_results.html', {
+                            'dataset': dataset,
+                            'session': None,
+                            'formula': formula,
+                            'results': {
+                                'has_results': False,
+                                'error': f"You have reached your session limit ({limits['sessions']} sessions). Please delete some sessions or upgrade your plan."
+                            }
+                        })
+            # Associate session with user if authenticated
+            session = AnalysisSession(
+                name=session_name,
+                module='varx',
+                formula=formula,
+                analysis_type='varx',
+                options=options,
+                dataset=dataset,
+                user=user
+            )
+            session.save()
+        
+        # Store model results for IRF generation (pickle the results object)
+        try:
+            import pickle
+            if result.get('model_results'):
+                session.fitted_model = pickle.dumps({
+                    'model_results': result['model_results'],
+                    'endog_data': result.get('endog_data'),
+                    'dependent_vars': result.get('dependent_vars'),
+                    'independent_vars': result.get('independent_vars')
+                })
+                session.save()
+        except Exception as e:
+            print(f"Failed to store VARX model for IRF: {e}")
+        
+        # Track VARX analysis in history
+        try:
+            iteration_type = 'update' if action == 'update' and session_id else 'initial'
+            # Get var_order from result or options
+            var_order_for_history = result.get('var_order') or options.get('var_order') or 'auto'
+            track_session_iteration(
+                session_id=session.id,
+                iteration_type=iteration_type,
+                equation=formula,
+                analysis_type='varx',
+                results_data=result,
+                plots_added=[],
+                modifications={
+                    'module': 'varx',
+                    'var_order': var_order_for_history
+                },
+                notes="VARX analysis completed successfully"
+            )
+        except Exception as e:
+            print(f"Failed to track VARX session history: {e}")
+        
+        return render(request, 'engine/VARX_results.html', {
+            'dataset': dataset,
+            'session': session,
+            'formula': formula,
+            'results': result
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return render(request, 'engine/VARX_results.html', {
+            'dataset': None,
+            'session': None,
+            'formula': request.POST.get('formula', ''),
+            'results': {'has_results': False, 'error': str(e)}
+        })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def generate_varx_irf_view(request, session_id):
+    """Generate VARX IRF plot"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    
+    try:
+        session = get_object_or_404(AnalysisSession, pk=session_id)
+        
+        # Parse JSON body
+        import json
+        data = json.loads(request.body)
+        
+        irf_horizon = int(data.get('irf_horizon', 10))
+        
+        if irf_horizon < 1 or irf_horizon > 50:
+            return JsonResponse({'success': False, 'error': 'IRF horizon must be between 1 and 50'}, status=400)
+        
+        # Load stored model results
+        if not session.fitted_model:
+            return JsonResponse({'success': False, 'error': 'No fitted model found. Please run VARX analysis first.'}, status=400)
+        
+        try:
+            import pickle
+            model_data = pickle.loads(session.fitted_model)
+            model_results = model_data['model_results']
+            endog_data = model_data['endog_data']
+            dependent_vars = model_data['dependent_vars']
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'Failed to load model: {str(e)}'}, status=400)
+        
+        # Get IRF parameters from request
+        response_var = data.get('response_var', None)  # Which variable responds
+        shock_var = data.get('shock_var', None)  # Which variable is shocked
+        shock_type = data.get('shock_type', 'orthogonal')  # 'orthogonal' or 'generalized'
+        show_ci = data.get('show_ci', False)  # Whether to show 95% CI bands
+        
+        # Generate IRF
+        try:
+            # VAR uses irf() method, not impulse_responses()
+            # For orthogonal shocks, use orth_irfs
+            # For generalized (Pesaran-Shin), use irfs
+            irf_obj = model_results.irf(irf_horizon)
+            
+            if shock_type == 'orthogonal':
+                # Orthogonalized IRF
+                irf = irf_obj.orth_irfs
+            else:
+                # Generalized IRF (Pesaran-Shin)
+                irf = irf_obj.irfs
+            
+            # Store original IRF before filtering (for CI calculation)
+            irf_full = irf.copy() if hasattr(irf, 'copy') else irf
+            
+            # If specific shock_var is selected, filter to that shock
+            # irf shape is (steps+1, n_vars, n_vars) where [step, response, shock]
+            # Store whether we filtered, but keep track for CI indexing
+            shock_idx_filtered = None
+            if shock_var and shock_var in dependent_vars:
+                shock_idx_filtered = dependent_vars.index(shock_var)
+                # Extract only the columns for this shock: irf[:, :, shock_idx]
+                irf = irf[:, :, shock_idx_filtered]
+            
+            # If specific response_var is selected, filter to that response
+            # Store whether we filtered for CI indexing
+            response_idx_filtered = None
+            if response_var and response_var in dependent_vars:
+                response_idx_filtered = dependent_vars.index(response_var)
+                # If irf is 3D, extract response: irf[:, response_idx, :]
+                # If irf is 2D (after shock filtering), extract response: irf[:, response_idx]
+                if len(irf.shape) == 3:
+                    irf = irf[:, response_idx_filtered, :]
+                elif len(irf.shape) == 2:
+                    irf = irf[:, response_idx_filtered:response_idx_filtered+1]  # Keep 2D shape
+            
+            # IRF shape: (steps+1, n_vars, n_vars) or (steps+1, n_vars) if impulse is specified
+            # If impulse is specified, shape is (steps+1, n_vars) - each column is response of one variable
+            # If impulse is None, shape is (steps+1, n_vars, n_vars) - [step, response_var, shock_var]
+            
+            # Calculate confidence intervals if requested
+            # IMPORTANT: Calculate CI on the FULL IRF array (before filtering) to get CIs for all variables
+            irf_ci_lower = None
+            irf_ci_upper = None
+            if show_ci:
+                try:
+                    import scipy.stats as stats
+                    import numpy as np
+                    import pandas as pd
+                    
+                    # Try to get standard errors from IRF object
+                    # Note: statsmodels VAR IRF may not have direct stderr attributes
+                    irf_stderr = None
+                    
+                    # Check if IRF object has standard error methods
+                    if hasattr(irf_obj, 'stderr_orth_irfs') and shock_type == 'orthogonal':
+                        try:
+                            irf_stderr = irf_obj.stderr_orth_irfs
+                            print(f"DEBUG: Using stderr_orth_irfs, shape: {irf_stderr.shape}")
+                        except:
+                            pass
+                    elif hasattr(irf_obj, 'stderr_irfs') and shock_type != 'orthogonal':
+                        try:
+                            irf_stderr = irf_obj.stderr_irfs
+                            print(f"DEBUG: Using stderr_irfs, shape: {irf_stderr.shape}")
+                        except:
+                            pass
+                    
+                    # If standard errors not available, use approximation based on parameter SEs
+                    if irf_stderr is None:
+                        print("DEBUG: Standard errors not available from IRF object, using approximation")
+                        # Get parameter standard errors
+                        param_std = model_results.bse
+                        if isinstance(param_std, (pd.DataFrame, pd.Series)):
+                            # Get mean of all parameter standard errors
+                            avg_std = float(param_std.values.mean()) if len(param_std) > 0 else 0.1
+                        else:
+                            avg_std = float(np.mean(param_std)) if len(param_std) > 0 else 0.1
+                        
+                        # Convert FULL IRF to numpy array (before filtering) for CI calculation
+                        irf_array_temp = np.asarray(irf_full)
+                        
+                        # Approximate uncertainty: increases with horizon
+                        # Use a conservative approximation: std_err = avg_param_std * sqrt(horizon + 1)
+                        std_approx = avg_std * np.sqrt(np.arange(irf_horizon + 1) + 1)
+                        
+                        # Create stderr array with same shape as FULL IRF (before filtering)
+                        if len(irf_array_temp.shape) == 2:
+                            # 2D: (steps+1, n_vars)
+                            irf_stderr = std_approx[:, np.newaxis]
+                        elif len(irf_array_temp.shape) == 3:
+                            # 3D: (steps+1, n_vars, n_vars)
+                            irf_stderr = std_approx[:, np.newaxis, np.newaxis]
+                        else:
+                            irf_stderr = std_approx
+                        
+                        print(f"DEBUG: Using approximated stderr, shape: {irf_stderr.shape}, avg_std: {avg_std}")
+                    
+                    # Calculate CI on FULL IRF array (before filtering) to get CIs for all variables
+                    if irf_stderr is not None:
+                        # Calculate 95% CI: ±1.96 * std_err
+                        z_critical = stats.norm.ppf(0.975)  # 1.96 for 95% CI
+                        
+                        # Convert FULL IRF to numpy array for calculations
+                        irf_array_temp = np.asarray(irf_full)
+                        irf_stderr_array = np.asarray(irf_stderr)
+                        
+                        # Ensure shapes match (broadcast if needed)
+                        if irf_array_temp.shape != irf_stderr_array.shape:
+                            print(f"DEBUG: Shape mismatch - Full IRF: {irf_array_temp.shape}, stderr: {irf_stderr_array.shape}")
+                            try:
+                                # Try to broadcast stderr to match IRF shape
+                                irf_stderr_array = np.broadcast_to(irf_stderr_array, irf_array_temp.shape).copy()
+                                print(f"DEBUG: After broadcasting, stderr shape: {irf_stderr_array.shape}")
+                            except Exception as e:
+                                print(f"DEBUG: Could not broadcast stderr: {e}")
+                                irf_stderr = None
+                        
+                        if irf_stderr is not None:
+                            # Calculate CI bounds on FULL IRF (before filtering)
+                            irf_ci_lower = irf_array_temp - z_critical * irf_stderr_array
+                            irf_ci_upper = irf_array_temp + z_critical * irf_stderr_array
+                            print(f"DEBUG: CI calculated on full IRF successfully")
+                            print(f"DEBUG: CI shapes - lower: {irf_ci_lower.shape}, upper: {irf_ci_upper.shape}")
+                            
+                            # Now apply same filtering to CI arrays as was applied to IRF
+                            if shock_idx_filtered is not None:
+                                if len(irf_ci_lower.shape) == 3:
+                                    irf_ci_lower = irf_ci_lower[:, :, shock_idx_filtered]
+                                    irf_ci_upper = irf_ci_upper[:, :, shock_idx_filtered]
+                                    print(f"DEBUG: After shock filtering CI, shape: {irf_ci_lower.shape}")
+                            if response_idx_filtered is not None:
+                                if len(irf_ci_lower.shape) == 3:
+                                    irf_ci_lower = irf_ci_lower[:, response_idx_filtered, :]
+                                    irf_ci_upper = irf_ci_upper[:, response_idx_filtered, :]
+                                    print(f"DEBUG: After response filtering CI (3D), shape: {irf_ci_lower.shape}")
+                                elif len(irf_ci_lower.shape) == 2:
+                                    irf_ci_lower = irf_ci_lower[:, response_idx_filtered:response_idx_filtered+1]
+                                    irf_ci_upper = irf_ci_upper[:, response_idx_filtered:response_idx_filtered+1]
+                                    print(f"DEBUG: After response filtering CI (2D), shape: {irf_ci_lower.shape}")
+                        else:
+                            print("DEBUG: Could not calculate CI - stderr is None after filtering")
+                    else:
+                        print("DEBUG: Could not calculate CI - stderr is None")
+                        
+                except Exception as e:
+                    print(f"Warning: Could not calculate CI for IRF: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    irf_ci_lower = None
+                    irf_ci_upper = None
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'success': False, 'error': f'Failed to generate IRF: {str(e)}'}, status=400)
+        
+        # Create Plotly figures
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+        
+        # Determine which variables to plot
+        response_vars_to_plot = [response_var] if response_var and response_var in dependent_vars else dependent_vars
+        shock_vars_to_plot = [shock_var] if shock_var and shock_var in dependent_vars else dependent_vars
+        
+        # Create subplots - one for each response variable
+        n_response_vars = len(response_vars_to_plot)
+        fig = make_subplots(
+            rows=n_response_vars, cols=1,
+            subplot_titles=[f'Response of {var} to Shocks' for var in response_vars_to_plot],
+            vertical_spacing=0.1
+        )
+        
+        periods = list(range(irf_horizon + 1))
+        
+        # Handle different IRF array shapes
+        # Convert to numpy array for easier manipulation
+        import numpy as np
+        irf_array = np.asarray(irf)
+        
+        print(f"DEBUG: IRF shape: {irf_array.shape}, n_vars: {len(dependent_vars)}, steps: {irf_horizon}")
+        
+        if len(irf_array.shape) == 2:
+            # Shape: (steps+1, n_vars) - impulse was specified
+            # Each column is the response of one variable to the specified shock
+            # irf[step, response_var_idx]
+            for i, response_var_name in enumerate(dependent_vars):
+                if response_var_name in response_vars_to_plot:
+                    row_idx = response_vars_to_plot.index(response_var_name) + 1
+                    try:
+                        # Access as irf[step, variable_index]
+                        response_data = irf_array[:, i] if i < irf_array.shape[1] else irf_array[:, 0]
+                        response_list = response_data.tolist() if hasattr(response_data, 'tolist') else list(response_data)
+                        
+                        # Add main IRF line
+                        fig.add_trace(
+                            go.Scatter(
+                                x=periods,
+                                y=response_list,
+                                mode='lines+markers',
+                                name=f'Response to {shock_var or "shock"}',
+                                line=dict(width=2),
+                                marker=dict(size=4)
+                            ),
+                            row=row_idx, col=1
+                        )
+                        
+                        # Add CI bands if requested
+                        if show_ci and irf_ci_lower is not None and irf_ci_upper is not None:
+                            # Determine correct index for CI arrays
+                            # If response_var was filtered, CI arrays only have 1 column (index 0)
+                            # Otherwise, CI arrays have all variables (use index i)
+                            if response_idx_filtered is not None:
+                                # Response was filtered - CI arrays only have the filtered variable
+                                ci_idx = 0
+                            else:
+                                # Response was not filtered - CI arrays have all variables
+                                ci_idx = i if i < irf_ci_lower.shape[1] else 0
+                            
+                            # Handle different CI array shapes
+                            if len(irf_ci_lower.shape) == 2:
+                                # 2D: (steps+1, n_vars) or (steps+1, 1) if filtered
+                                ci_lower = irf_ci_lower[:, ci_idx] if ci_idx < irf_ci_lower.shape[1] else irf_ci_lower[:, 0]
+                                ci_upper = irf_ci_upper[:, ci_idx] if ci_idx < irf_ci_upper.shape[1] else irf_ci_upper[:, 0]
+                            elif len(irf_ci_lower.shape) == 1:
+                                # 1D: (steps+1) - single variable after filtering
+                                ci_lower = irf_ci_lower
+                                ci_upper = irf_ci_upper
+                            else:
+                                # Unexpected shape, skip CI for this variable
+                                print(f"DEBUG: Unexpected CI shape for variable {i}: {irf_ci_lower.shape}")
+                                continue
+                            
+                            ci_lower_list = ci_lower.tolist() if hasattr(ci_lower, 'tolist') else list(ci_lower)
+                            ci_upper_list = ci_upper.tolist() if hasattr(ci_upper, 'tolist') else list(ci_upper)
+                            
+                            print(f"DEBUG: Adding CI for variable {i} ({response_var_name}), ci_idx={ci_idx}, CI shape: {irf_ci_lower.shape}")
+                            
+                            # Add upper CI band
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=periods,
+                                    y=ci_upper_list,
+                                    mode='lines',
+                                    name='95% CI Upper',
+                                    line=dict(width=0),
+                                    showlegend=(row_idx == 1),  # Only show legend for first subplot
+                                    hoverinfo='skip'
+                                ),
+                                row=row_idx, col=1
+                            )
+                            
+                            # Add lower CI band with fill
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=periods,
+                                    y=ci_lower_list,
+                                    mode='lines',
+                                    name='95% CI',
+                                    line=dict(width=0),
+                                    fill='tonexty',
+                                    fillcolor='rgba(0, 100, 255, 0.2)',
+                                    showlegend=False,
+                                    hoverinfo='skip'
+                                ),
+                                row=row_idx, col=1
+                            )
+                    except (IndexError, TypeError) as e:
+                        print(f"Warning: Could not access irf[:, {i}], shape: {irf_array.shape}, error: {e}")
+                        continue
+            
+            # Add zero line for each subplot
+            for row_idx in range(1, n_response_vars + 1):
+                fig.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.5, row=row_idx, col=1)
+            
+            # Update y-axis labels
+            for row_idx in range(1, n_response_vars + 1):
+                fig.update_yaxes(title_text="Response", row=row_idx, col=1)
+        elif len(irf_array.shape) == 3:
+            # Shape: (steps+1, n_vars, n_vars) - all combinations
+            # irf[step, response_var_idx, shock_var_idx]
+            for i, response_var_name in enumerate(dependent_vars):
+                if response_var_name in response_vars_to_plot:
+                    row_idx = response_vars_to_plot.index(response_var_name) + 1
+                    
+                    # Plot response to each shock variable
+                    for j, shock_var_name in enumerate(dependent_vars):
+                        if shock_var_name in shock_vars_to_plot:
+                            try:
+                                # Access as irf[step, response_idx, shock_idx]
+                                if i < irf_array.shape[1] and j < irf_array.shape[2]:
+                                    response_data = irf_array[:, i, j]
+                                    response_list = response_data.tolist() if hasattr(response_data, 'tolist') else list(response_data)
+                                    
+                                    # Add main IRF line
+                                    fig.add_trace(
+                                        go.Scatter(
+                                            x=periods,
+                                            y=response_list,
+                                            mode='lines+markers',
+                                            name=f'Response to {shock_var_name}',
+                                            line=dict(width=2),
+                                            marker=dict(size=4)
+                                        ),
+                                        row=row_idx, col=1
+                                    )
+                                    
+                                    # Add CI bands if requested
+                                    if show_ci and irf_ci_lower is not None and irf_ci_upper is not None:
+                                        # Determine correct indices based on filtering
+                                        # Use the stored filtered indices to determine what was filtered
+                                        if len(irf_ci_lower.shape) == 3:
+                                            # 3D: (steps+1, n_vars, n_vars) - no filtering or only partial
+                                            # Use original indices i and j
+                                            if i < irf_ci_lower.shape[1] and j < irf_ci_lower.shape[2]:
+                                                ci_lower = irf_ci_lower[:, i, j]
+                                                ci_upper = irf_ci_upper[:, i, j]
+                                            else:
+                                                # Index out of bounds, skip CI for this combination
+                                                print(f"DEBUG: CI index out of bounds: i={i}, j={j}, shape={irf_ci_lower.shape}")
+                                                continue
+                                        elif len(irf_ci_lower.shape) == 2:
+                                            # 2D: (steps+1, n_vars) - filtered by shock or response
+                                            # Determine which dimension was filtered
+                                            if response_idx_filtered is not None and shock_idx_filtered is not None:
+                                                # Both filtered - should be 1D, but handle 2D case
+                                                ci_idx = 0
+                                            elif response_idx_filtered is not None:
+                                                # Response filtered - CI has shape (steps+1, n_shocks)
+                                                # Use shock index j
+                                                ci_idx = j if j < irf_ci_lower.shape[1] else 0
+                                            elif shock_idx_filtered is not None:
+                                                # Shock filtered - CI has shape (steps+1, n_responses)
+                                                # Use response index i
+                                                ci_idx = i if i < irf_ci_lower.shape[1] else 0
+                                            else:
+                                                # Shouldn't happen - no filtering but 2D shape
+                                                ci_idx = i if i < irf_ci_lower.shape[1] else 0
+                                            
+                                            ci_lower = irf_ci_lower[:, ci_idx] if ci_idx < irf_ci_lower.shape[1] else irf_ci_lower[:, 0]
+                                            ci_upper = irf_ci_upper[:, ci_idx] if ci_idx < irf_ci_upper.shape[1] else irf_ci_upper[:, 0]
+                                        elif len(irf_ci_lower.shape) == 1:
+                                            # 1D: (steps+1) - both filtered, use directly
+                                            ci_lower = irf_ci_lower
+                                            ci_upper = irf_ci_upper
+                                        else:
+                                            # Unexpected shape, skip CI
+                                            print(f"DEBUG: Unexpected CI shape: {irf_ci_lower.shape}")
+                                            continue
+                                        
+                                        ci_lower_list = ci_lower.tolist() if hasattr(ci_lower, 'tolist') else list(ci_lower)
+                                        ci_upper_list = ci_upper.tolist() if hasattr(ci_upper, 'tolist') else list(ci_upper)
+                                        
+                                        print(f"DEBUG: Adding CI for response={i} ({response_var_name}), shock={j} ({shock_var_name}), CI shape: {irf_ci_lower.shape}")
+                                        
+                                        # Add upper CI band
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=periods,
+                                                y=ci_upper_list,
+                                                mode='lines',
+                                                name='95% CI Upper',
+                                                line=dict(width=0),
+                                                showlegend=(row_idx == 1 and j == 0),  # Only show legend once
+                                                hoverinfo='skip'
+                                            ),
+                                            row=row_idx, col=1
+                                        )
+                                        
+                                        # Add lower CI band with fill
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=periods,
+                                                y=ci_lower_list,
+                                                mode='lines',
+                                                name='95% CI',
+                                                line=dict(width=0),
+                                                fill='tonexty',
+                                                fillcolor='rgba(0, 100, 255, 0.2)',
+                                                showlegend=False,
+                                                hoverinfo='skip'
+                                            ),
+                                            row=row_idx, col=1
+                                        )
+                            except (IndexError, TypeError) as e:
+                                print(f"Warning: Could not access irf[:, {i}, {j}], shape: {irf_array.shape}, error: {e}")
+                                continue
+        else:
+            # Unexpected shape - try to handle gracefully
+            print(f"Warning: Unexpected IRF shape: {irf_array.shape}")
+            return JsonResponse({'success': False, 'error': f'Unexpected IRF array shape: {irf_array.shape}'}, status=400)
+        
+        # Add zero line for each subplot (for 3D case)
+        if len(irf_array.shape) == 3:
+            for row_idx in range(1, n_response_vars + 1):
+                fig.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.5, row=row_idx, col=1)
+            
+            # Update y-axis labels
+            for row_idx in range(1, n_response_vars + 1):
+                fig.update_yaxes(title_text="Response", row=row_idx, col=1)
+        
+        # Update x-axis label for bottom subplot
+        fig.update_xaxes(title_text="Periods", row=n_response_vars, col=1)
+        
+        # Update layout
+        shock_type_label = "Orthogonal" if shock_type == 'orthogonal' else "Generalized (Pesaran-Shin)"
+        
+        # Calculate appropriate Y-axis range to include CI bands if shown
+        if show_ci and irf_ci_lower is not None and irf_ci_upper is not None:
+            # Find the min and max across all CI bounds and IRF values
+            import numpy as np
+            irf_array = np.asarray(irf)
+            ci_lower_array = np.asarray(irf_ci_lower)
+            ci_upper_array = np.asarray(irf_ci_upper)
+            
+            # Get overall min and max
+            all_min = min(float(np.nanmin(irf_array)), float(np.nanmin(ci_lower_array)))
+            all_max = max(float(np.nanmax(irf_array)), float(np.nanmax(ci_upper_array)))
+            
+            # Add padding (10% on each side)
+            y_range = all_max - all_min
+            y_padding = y_range * 0.1 if y_range > 0 else 0.1
+            y_min = all_min - y_padding
+            y_max = all_max + y_padding
+            
+            # Update Y-axis for all subplots to include CI bands
+            for row_idx in range(1, n_response_vars + 1):
+                fig.update_yaxes(range=[y_min, y_max], row=row_idx, col=1)
+        
+        # Increase plot height and adjust margins for better visibility
+        fig.update_layout(
+            height=400 * n_response_vars,  # Increased from 300 to 400
+            showlegend=True,
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            title_text=f"Impulse Response Functions ({shock_type_label})",
+            title_x=0.5,
+            margin=dict(l=60, r=40, t=80, b=60),  # Add more margins for better spacing
+            autosize=True
+        )
+        
+        # Convert to dict for JSON response
+        plot_data = fig.to_dict()
+        
+        return JsonResponse({
+            'success': True,
+            'plot_data': plot_data
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def generate_varx_irf_data_view(request, session_id):
+    """Export VARX IRF data as CSV"""
+    if request.method != 'POST':
+        return HttpResponse('POST only', status=405)
+    
+    try:
+        session = get_object_or_404(AnalysisSession, pk=session_id)
+        
+        # Parse JSON body
+        import json
+        data = json.loads(request.body)
+        
+        irf_horizon = int(data.get('irf_horizon', 10))
+        response_var = data.get('response_var', None)
+        shock_var = data.get('shock_var', None)
+        shock_type = data.get('shock_type', 'orthogonal')
+        show_ci = data.get('show_ci', False)
+        
+        if irf_horizon < 1 or irf_horizon > 50:
+            return HttpResponse('IRF horizon must be between 1 and 50', status=400)
+        
+        # Load stored model results
+        if not session.fitted_model:
+            return HttpResponse('No fitted model found. Please run VARX analysis first.', status=400)
+        
+        try:
+            import pickle
+            model_data = pickle.loads(session.fitted_model)
+            model_results = model_data['model_results']
+            dependent_vars = model_data['dependent_vars']
+        except Exception as e:
+            return HttpResponse(f'Failed to load model: {str(e)}', status=400)
+        
+        # Generate IRF
+        try:
+            # VAR uses irf() method, not impulse_responses()
+            irf_obj = model_results.irf(irf_horizon)
+            
+            if shock_type == 'orthogonal':
+                # Orthogonalized IRF
+                irf = irf_obj.orth_irfs
+            else:
+                # Generalized IRF (Pesaran-Shin)
+                irf = irf_obj.irfs
+            
+            # If specific shock_var is selected, filter to that shock
+            if shock_var and shock_var in dependent_vars:
+                shock_idx = dependent_vars.index(shock_var)
+                irf = irf[:, :, shock_idx]
+            
+            # If specific response_var is selected, filter to that response
+            if response_var and response_var in dependent_vars:
+                response_idx = dependent_vars.index(response_var)
+                if len(irf.shape) == 3:
+                    irf = irf[:, response_idx, :]
+                elif len(irf.shape) == 2:
+                    irf = irf[:, response_idx:response_idx+1]
+            
+            # Calculate CI if requested
+            irf_ci_lower = None
+            irf_ci_upper = None
+            if show_ci:
+                try:
+                    import scipy.stats as stats
+                    import numpy as np
+                    import pandas as pd
+                    
+                    # Try to get standard errors from IRF object
+                    irf_stderr = None
+                    
+                    if hasattr(irf_obj, 'stderr_orth_irfs') and shock_type == 'orthogonal':
+                        try:
+                            irf_stderr = irf_obj.stderr_orth_irfs
+                        except:
+                            pass
+                    elif hasattr(irf_obj, 'stderr_irfs') and shock_type != 'orthogonal':
+                        try:
+                            irf_stderr = irf_obj.stderr_irfs
+                        except:
+                            pass
+                    
+                    # If standard errors not available, use approximation
+                    if irf_stderr is None:
+                        param_std = model_results.bse
+                        if isinstance(param_std, (pd.DataFrame, pd.Series)):
+                            avg_std = float(param_std.values.mean()) if len(param_std) > 0 else 0.1
+                        else:
+                            avg_std = float(np.mean(param_std)) if len(param_std) > 0 else 0.1
+                        
+                        irf_array_temp = np.asarray(irf)
+                        std_approx = avg_std * np.sqrt(np.arange(irf_horizon + 1) + 1)
+                        
+                        if len(irf_array_temp.shape) == 2:
+                            irf_stderr = std_approx[:, np.newaxis]
+                        elif len(irf_array_temp.shape) == 3:
+                            irf_stderr = std_approx[:, np.newaxis, np.newaxis]
+                        else:
+                            irf_stderr = std_approx
+                    
+                    # Apply same filtering as IRF
+                    if irf_stderr is not None:
+                        if shock_var and shock_var in dependent_vars:
+                            shock_idx = dependent_vars.index(shock_var)
+                            if len(irf_stderr.shape) == 3:
+                                irf_stderr = irf_stderr[:, :, shock_idx]
+                        if response_var and response_var in dependent_vars:
+                            response_idx = dependent_vars.index(response_var)
+                            if len(irf_stderr.shape) == 3:
+                                irf_stderr = irf_stderr[:, response_idx, :]
+                            elif len(irf_stderr.shape) == 2:
+                                irf_stderr = irf_stderr[:, response_idx:response_idx+1]
+                        
+                        z_critical = stats.norm.ppf(0.975)
+                        irf_array_temp = np.asarray(irf)
+                        irf_stderr_array = np.asarray(irf_stderr)
+                        
+                        # Ensure shapes match
+                        if irf_array_temp.shape != irf_stderr_array.shape:
+                            try:
+                                irf_stderr_array = np.broadcast_to(irf_stderr_array, irf_array_temp.shape).copy()
+                            except:
+                                irf_stderr = None
+                        
+                        if irf_stderr is not None:
+                            irf_ci_lower = irf_array_temp - z_critical * irf_stderr_array
+                            irf_ci_upper = irf_array_temp + z_critical * irf_stderr_array
+                except Exception as e:
+                    print(f"Warning: Could not calculate CI for IRF: {e}")
+                    pass
+            
+        except Exception as e:
+            return HttpResponse(f'Failed to generate IRF: {str(e)}', status=400)
+        
+        # Convert IRF to CSV format
+        import numpy as np
+        from io import StringIO
+        
+        irf_array = np.asarray(irf)
+        periods = list(range(irf_horizon + 1))
+        
+        # Build CSV data
+        csv_rows = []
+        
+        if len(irf_array.shape) == 2:
+            # 2D case: (steps+1, n_vars)
+            # Columns: Period, Response_Var, IRF_Value, CI_Lower (if available), CI_Upper (if available)
+            headers = ['Period']
+            for i, var in enumerate(dependent_vars):
+                headers.append(f'{var}_IRF')
+                if show_ci and irf_ci_lower is not None:
+                    headers.append(f'{var}_CI_Lower')
+                    headers.append(f'{var}_CI_Upper')
+            
+            csv_rows.append(','.join(headers))
+            
+            for period_idx, period in enumerate(periods):
+                row = [str(period)]
+                for i, var in enumerate(dependent_vars):
+                    if i < irf_array.shape[1]:
+                        row.append(str(irf_array[period_idx, i]))
+                        if show_ci and irf_ci_lower is not None:
+                            row.append(str(irf_ci_lower[period_idx, i]))
+                            row.append(str(irf_ci_upper[period_idx, i]))
+                csv_rows.append(','.join(row))
+        
+        else:
+            # 3D case: (steps+1, n_vars, n_vars)
+            # Columns: Period, Response_Var, Shock_Var, IRF_Value, CI_Lower (if available), CI_Upper (if available)
+            headers = ['Period', 'Response_Variable', 'Shock_Variable', 'IRF_Value']
+            if show_ci and irf_ci_lower is not None:
+                headers.extend(['CI_Lower', 'CI_Upper'])
+            
+            csv_rows.append(','.join(headers))
+            
+            for period_idx, period in enumerate(periods):
+                for i, response_var_name in enumerate(dependent_vars):
+                    for j, shock_var_name in enumerate(dependent_vars):
+                        if i < irf_array.shape[1] and j < irf_array.shape[2]:
+                            row = [
+                                str(period),
+                                response_var_name,
+                                shock_var_name,
+                                str(irf_array[period_idx, i, j])
+                            ]
+                            if show_ci and irf_ci_lower is not None:
+                                row.append(str(irf_ci_lower[period_idx, i, j]))
+                                row.append(str(irf_ci_upper[period_idx, i, j]))
+                            csv_rows.append(','.join(row))
+        
+        csv_content = '\n'.join(csv_rows)
+        
+        # Return CSV file
+        response = HttpResponse(csv_content, content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="varx_irf_data_{session_id}.csv"'
+        return response
+        
+    except json.JSONDecodeError:
+        return HttpResponse('Invalid JSON', status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return HttpResponse(f'Error: {str(e)}', status=500)
 
 
 def download_session_history_view(request, session_id):

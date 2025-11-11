@@ -11,3 +11,4 @@ class EngineConfig(AppConfig):
         register('bayesian', 'models.bayesian_regression:BayesianRegressionModule')
         register('bma', 'models.BMA:BMAModule')
         register('anova', 'models.ANOVA:ANOVAModule')
+        register('varx', 'models.VARX:VARXModule')

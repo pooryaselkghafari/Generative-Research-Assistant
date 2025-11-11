@@ -1,0 +1,194 @@
+{% load static %}
+{% load engine_extras %}
+
+<style>
+    .subscription-plans-container {
+        background: #f8fafc;
+        padding: 100px 20px;
+        width: 100%;
+    }
+    
+    .subscription-plans-inner {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    .subscription-plans-title {
+        text-align: center;
+        font-size: 3rem;
+        font-weight: 700;
+        margin: 0 0 60px 0;
+        color: #1f2937;
+    }
+    
+    .subscription-plans-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 30px;
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    /* Responsive: single column on mobile */
+    @media (max-width: 699px) {
+        .subscription-plans-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+    
+    .subscription-plan-card {
+        background: white;
+        border-radius: 16px;
+        padding: 40px 30px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        position: relative;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .subscription-plan-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+    
+    .subscription-plan-card.featured {
+        border: 2px solid #0f6b72;
+        transform: scale(1.05);
+    }
+    
+    .subscription-plan-badge {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #0f6b72;
+        color: white;
+        padding: 6px 20px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+    }
+    
+    .subscription-plan-name {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        color: #1f2937;
+    }
+    
+    .subscription-plan-price {
+        font-size: 3rem;
+        font-weight: 700;
+        color: #0f6b72;
+        margin: 0 0 8px 0;
+    }
+    
+    .subscription-plan-period {
+        font-size: 1rem;
+        color: #6b7280;
+        margin: 0 0 24px 0;
+    }
+    
+    .subscription-plan-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 32px 0;
+        flex: 1;
+    }
+    
+    .subscription-plan-features li {
+        padding: 8px 0;
+        color: #6b7280;
+        text-align: left;
+    }
+    
+    .subscription-plan-features li:before {
+        content: "✓";
+        color: #10b981;
+        font-weight: bold;
+        margin-right: 8px;
+    }
+    
+    .subscription-plan-button {
+        padding: 12px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        display: inline-block;
+        background: linear-gradient(135deg, #0f6b72 0%, #0a4f56 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .subscription-plan-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        text-decoration: none;
+        color: white;
+    }
+</style>
+
+<div class="subscription-plans-container">
+    <div class="subscription-plans-inner">
+        <h2 class="subscription-plans-title">Simple, Transparent Pricing</h2>
+        <div class="subscription-plans-grid">
+            {% for plan in plans %}
+            {% with tier_settings=plan.get_tier_settings %}
+            <div class="subscription-plan-card {% if forloop.counter == featured_plan_index and plans|length >= featured_plan_index %}featured{% endif %}">
+                {% if forloop.counter == featured_plan_index and plans|length >= featured_plan_index %}
+                <div class="subscription-plan-badge">Most Popular</div>
+                {% endif %}
+                <h3 class="subscription-plan-name">{{ plan.name }}</h3>
+                <div class="subscription-plan-price">${{ plan.price_monthly|floatformat:0 }}</div>
+                <div class="subscription-plan-period">per month</div>
+                <ul class="subscription-plan-features">
+                    {% if tier_settings %}
+                    <li>{% if tier_settings.max_datasets == -1 %}Unlimited{% else %}{{ tier_settings.max_datasets }}{% endif %} datasets</li>
+                    <li>{% if tier_settings.max_sessions == -1 %}Unlimited{% else %}{{ tier_settings.max_sessions }}{% endif %} analysis sessions</li>
+                    <li>{% if tier_settings.max_file_size_mb == -1 %}Unlimited{% else %}{{ tier_settings.max_file_size_mb }}{% endif %} MB max file size</li>
+                    {% endif %}
+                    {% if plan.features %}
+                    {% for feature in plan.features %}
+                    <li>{{ feature }}</li>
+                    {% endfor %}
+                    {% endif %}
+                    {% if plan.ai_features %}
+                    {% for ai_feature in plan.ai_features %}
+                    <li>🤖 {{ ai_feature }}</li>
+                    {% endfor %}
+                    {% endif %}
+                </ul>
+                {% if plan.price_monthly == 0 %}
+                <a href="{% url 'register' %}" class="subscription-plan-button">Get Started</a>
+                {% elif plan.name|lower == 'enterprise' or plan.name|lower == 'high tier' %}
+                <a href="{% url 'register' %}" class="subscription-plan-button">Contact Sales</a>
+                {% else %}
+                <a href="{% url 'register' %}" class="subscription-plan-button">Start Free Trial</a>
+                {% endif %}
+            </div>
+            {% endwith %}
+            {% empty %}
+            <div class="subscription-plan-card">
+                <h3 class="subscription-plan-name">Free</h3>
+                <div class="subscription-plan-price">$0</div>
+                <div class="subscription-plan-period">per month</div>
+                <ul class="subscription-plan-features">
+                    <li>5 datasets</li>
+                    <li>10 analysis sessions</li>
+                    <li>Basic regression</li>
+                    <li>Community support</li>
+                </ul>
+                <a href="{% url 'register' %}" class="subscription-plan-button">Get Started</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+

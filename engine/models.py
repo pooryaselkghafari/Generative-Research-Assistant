@@ -6,20 +6,28 @@ from datetime import timedelta
 class UserProfile(models.Model):
     SUBSCRIPTION_CHOICES = [
         ('free', 'Free'),
-        ('basic', 'Basic'),
-        ('pro', 'Pro'),
-        ('enterprise', 'Enterprise'),
+        ('low', 'Low Tier (AI Basic)'),
+        ('mid', 'Mid Tier (AI RAG)'),
+        ('high', 'High Tier (AI Fine-tuned)'),
+    ]
+    
+    AI_TIER_CHOICES = [
+        ('none', 'No AI Access'),
+        ('general', 'General Fine-tuned Model'),
+        ('rag', 'RAG (Retrieval-Augmented Generation)'),
+        ('fine_tuned', 'User Fine-tuned Model'),
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     subscription_type = models.CharField(max_length=20, choices=SUBSCRIPTION_CHOICES, default='free')
+    ai_tier = models.CharField(max_length=20, choices=AI_TIER_CHOICES, default='none')
     subscription_start = models.DateTimeField(null=True, blank=True)
     subscription_end = models.DateTimeField(null=True, blank=True)
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
-    max_datasets = models.IntegerField(default=5)  # Free tier limit
-    max_sessions = models.IntegerField(default=10)  # Free tier limit
-    max_file_size_mb = models.IntegerField(default=10)  # Free tier limit
+    max_datasets = models.IntegerField(null=True, blank=True)  # Null means use tier defaults
+    max_sessions = models.IntegerField(null=True, blank=True)  # Null means use tier defaults
+    max_file_size_mb = models.IntegerField(null=True, blank=True)  # Null means use tier defaults
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -41,13 +49,54 @@ class UserProfile(models.Model):
         return max(0, delta.days)
     
     def get_limits(self):
-        limits = {
-            'free': {'datasets': 5, 'sessions': 10, 'file_size': 10},
-            'basic': {'datasets': 25, 'sessions': 100, 'file_size': 50},
-            'pro': {'datasets': 100, 'sessions': 500, 'file_size': 200},
-            'enterprise': {'datasets': -1, 'sessions': -1, 'file_size': 1000},  # -1 means unlimited
+        """Get limits from tier settings or use defaults"""
+        from .models import SubscriptionTierSettings
+        try:
+            tier_settings = SubscriptionTierSettings.objects.get(tier=self.subscription_type)
+            return {
+                'datasets': self.max_datasets if self.max_datasets is not None else tier_settings.max_datasets,
+                'sessions': self.max_sessions if self.max_sessions is not None else tier_settings.max_sessions,
+                'file_size': self.max_file_size_mb if self.max_file_size_mb is not None else tier_settings.max_file_size_mb,
+            }
+        except SubscriptionTierSettings.DoesNotExist:
+            # Fallback to hardcoded defaults
+            defaults = {
+                'free': {'datasets': 5, 'sessions': 10, 'file_size': 10},
+                'low': {'datasets': 25, 'sessions': 100, 'file_size': 50},
+                'mid': {'datasets': 100, 'sessions': 500, 'file_size': 200},
+                'high': {'datasets': -1, 'sessions': -1, 'file_size': 1000},  # -1 means unlimited
+            }
+            return defaults.get(self.subscription_type, defaults['free'])
+    
+    def get_ai_features(self):
+        """Get AI features based on tier"""
+        features = {
+            'none': {
+                'ai_enabled': False,
+                'model_type': None,
+                'rag_enabled': False,
+                'fine_tuning_enabled': False,
+            },
+            'general': {
+                'ai_enabled': True,
+                'model_type': 'general_fine_tuned',
+                'rag_enabled': False,
+                'fine_tuning_enabled': False,
+            },
+            'rag': {
+                'ai_enabled': True,
+                'model_type': 'general_fine_tuned',
+                'rag_enabled': True,
+                'fine_tuning_enabled': False,
+            },
+            'fine_tuned': {
+                'ai_enabled': True,
+                'model_type': 'user_fine_tuned',
+                'rag_enabled': True,
+                'fine_tuning_enabled': True,
+            },
         }
-        return limits.get(self.subscription_type, limits['free'])
+        return features.get(self.ai_tier, features['none'])
 
 class Dataset(models.Model):
     name = models.CharField(max_length=200)
@@ -80,22 +129,67 @@ class AnalysisSession(models.Model):
     def __str__(self):
         return f"{self.name} ({self.user.username if self.user else 'No User'})"
 
+class SubscriptionTierSettings(models.Model):
+    """Admin-configurable settings for each subscription tier"""
+    TIER_CHOICES = [
+        ('free', 'Free'),
+        ('low', 'Low Tier (AI Basic)'),
+        ('mid', 'Mid Tier (AI RAG)'),
+        ('high', 'High Tier (AI Fine-tuned)'),
+    ]
+    
+    AI_TIER_CHOICES = [
+        ('none', 'No AI Access'),
+        ('general', 'General Fine-tuned Model'),
+        ('rag', 'RAG (Retrieval-Augmented Generation)'),
+        ('fine_tuned', 'User Fine-tuned Model'),
+    ]
+    
+    tier = models.CharField(max_length=20, choices=TIER_CHOICES, unique=True)
+    max_datasets = models.IntegerField(default=5, help_text="Maximum number of datasets. Use -1 for unlimited.")
+    max_sessions = models.IntegerField(default=10, help_text="Maximum number of analysis sessions. Use -1 for unlimited.")
+    max_file_size_mb = models.IntegerField(default=10, help_text="Maximum file size in MB. Use -1 for unlimited.")
+    ai_tier = models.CharField(max_length=20, choices=AI_TIER_CHOICES, default='none', help_text="AI access level for this tier")
+    description = models.TextField(blank=True, help_text="Description of this tier")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Subscription Tier Settings"
+        verbose_name_plural = "Subscription Tier Settings"
+        ordering = ['tier']
+    
+    def __str__(self):
+        return f"{self.get_tier_display()} Settings"
+
 class SubscriptionPlan(models.Model):
     name = models.CharField(max_length=50)
+    tier_key = models.CharField(max_length=20, unique=True, blank=True, null=True, help_text="Must match tier in SubscriptionTierSettings (free, low, mid, high)")
     description = models.TextField()
-    price_monthly = models.DecimalField(max_digits=10, decimal_places=2)
-    price_yearly = models.DecimalField(max_digits=10, decimal_places=2)
-    max_datasets = models.IntegerField()
-    max_sessions = models.IntegerField()
-    max_file_size_mb = models.IntegerField()
-    features = models.JSONField(default=list)  # List of features
+    price_monthly = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    price_yearly = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    features = models.JSONField(default=list, help_text="List of feature strings (e.g., ['AI Interpretation', 'RAG Support'])")
+    ai_features = models.JSONField(default=list, help_text="AI-specific features for this plan")
     stripe_price_id_monthly = models.CharField(max_length=100, blank=True)
     stripe_price_id_yearly = models.CharField(max_length=100, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    class Meta:
+        ordering = ['price_monthly']
+    
     def __str__(self):
         return self.name
+    
+    def get_tier_settings(self):
+        """Get associated tier settings"""
+        if not self.tier_key:
+            return None
+        try:
+            return SubscriptionTierSettings.objects.get(tier=self.tier_key)
+        except SubscriptionTierSettings.DoesNotExist:
+            return None
 
 class Payment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
@@ -160,3 +254,37 @@ class Page(models.Model):
         if self.is_default_landing and self.page_type == 'landing':
             Page.objects.filter(page_type='landing', is_default_landing=True).exclude(pk=self.pk).update(is_default_landing=False)
         super().save(*args, **kwargs)
+
+class PrivacyPolicy(models.Model):
+    """Model for managing privacy policy versions"""
+    version = models.CharField(max_length=20, unique=True)
+    content = models.TextField()
+    effective_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Privacy Policy"
+        verbose_name_plural = "Privacy Policies"
+        ordering = ['-effective_date']
+    
+    def __str__(self):
+        return f"Privacy Policy v{self.version} ({self.effective_date})"
+
+class TermsOfService(models.Model):
+    """Model for managing terms of service versions"""
+    version = models.CharField(max_length=20, unique=True)
+    content = models.TextField()
+    effective_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Terms of Service"
+        verbose_name_plural = "Terms of Service"
+        ordering = ['-effective_date']
+    
+    def __str__(self):
+        return f"Terms of Service v{self.version} ({self.effective_date})"

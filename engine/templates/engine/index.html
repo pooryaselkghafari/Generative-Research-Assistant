@@ -273,6 +273,7 @@
                 <option value="{{k}}" {% if current and current.module == k %}selected{% endif %}>
                   {% if k == 'regression' %}Regression
                   {% elif k == 'anova' %}ANOVA
+                  {% elif k == 'varx' %}VARX
                   {% else %}{{k|upper}}{% endif %}
                 </option>
               {% endif %}
@@ -1034,8 +1035,8 @@ function updateAnalysisTypeToggle() {
   
   const selectedModule = moduleSelect.value;
   
-  if (selectedModule === 'bma' || selectedModule === 'anova') {
-    // Disable analysis type toggle for BMA and ANOVA
+  if (selectedModule === 'bma' || selectedModule === 'anova' || selectedModule === 'varx') {
+    // Disable analysis type toggle for BMA, ANOVA, and VARX
     analysisTypeContainer.style.display = 'none';
     // Uncheck all radio buttons
     analysisTypeRadios.forEach(radio => {

@@ -37,28 +37,51 @@
       </div>
       
       <div class="plan-features">
+        {% with tier_settings=plan.get_tier_settings %}
+        {% if tier_settings %}
         <div class="feature">
           <span class="feature-icon">📊</span>
-          <span>{{ plan.max_datasets|default:"∞" }} datasets</span>
+          <span>{{ tier_settings.max_datasets|default:"∞" }}{% if tier_settings.max_datasets == -1 %}∞{% else %}{% endif %} datasets</span>
         </div>
         <div class="feature">
           <span class="feature-icon">🔬</span>
-          <span>{{ plan.max_sessions|default:"∞" }} analysis sessions</span>
+          <span>{{ tier_settings.max_sessions|default:"∞" }}{% if tier_settings.max_sessions == -1 %}∞{% else %}{% endif %} analysis sessions</span>
         </div>
         <div class="feature">
           <span class="feature-icon">📁</span>
-          <span>{{ plan.max_file_size_mb|default:"∞" }} MB max file size</span>
+          <span>{% if tier_settings.max_file_size_mb == -1 %}∞{% else %}{{ tier_settings.max_file_size_mb }}{% endif %} MB max file size</span>
         </div>
+        {% else %}
+        <div class="feature">
+          <span class="feature-icon">📊</span>
+          <span>See tier settings</span>
+        </div>
+        {% endif %}
+        {% endwith %}
         {% for feature in plan.features %}
         <div class="feature">
           <span class="feature-icon">✓</span>
           <span>{{ feature }}</span>
         </div>
         {% endfor %}
+        {% if plan.ai_features %}
+        <div class="ai-features-section">
+          <div class="ai-section-header">
+            <span class="feature-icon">🤖</span>
+            <strong>AI Features:</strong>
+          </div>
+          {% for ai_feature in plan.ai_features %}
+          <div class="feature ai-feature">
+            <span class="feature-icon">✨</span>
+            <span>{{ ai_feature }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
       
       <div class="plan-actions">
-        {% if profile.subscription_type == plan.name|lower %}
+        {% if profile.subscription_type == plan.tier_key|default:plan.name|lower %}
           <button class="btn btn-secondary" disabled>Current Plan</button>
         {% else %}
           <button class="btn btn-primary plan-select" data-plan-id="{{ plan.id }}">
@@ -308,6 +331,28 @@ function cancelSubscription() {
 .management-actions .btn {
   padding: 12px 24px;
   font-weight: 600;
+}
+
+.ai-features-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ai-section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.ai-section-header .feature-icon {
+  margin-right: 8px;
+}
+
+.ai-feature {
+  padding-left: 20px;
 }
 
 @media (max-width: 768px) {

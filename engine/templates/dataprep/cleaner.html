@@ -567,6 +567,29 @@
     </div>
   </div>
 
+  <!-- Date Format Selection Modal -->
+  <div id="dateFormatModal" style="display:none; position:fixed; inset:0; z-index:2000;">
+    <div style="position:absolute; inset:0; background: rgba(0,0,0,.55);" onclick="closeDateFormatModal()"></div>
+    <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:min(700px, 95vw); max-height:90vh; background:#0f172a; border:1px solid #1f2937; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937;">
+        <strong id="dateFormatTitle">Select Date Format</strong>
+        <button onclick="closeDateFormatModal()" class="btn secondary" style="height:28px;">✕</button>
+      </div>
+      <div style="padding:16px;">
+        <div class="hint" style="margin-bottom:16px;">
+          Multiple date formats detected in column <strong id="dateFormatColumnName"></strong>. Please select the format to use for this column.
+        </div>
+        <div id="dateFormatOptions" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+          <!-- Format options will be inserted here -->
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn secondary" onclick="closeDateFormatModal()">Cancel</button>
+          <button class="btn" onclick="applyDateFormat()">Apply Format</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script id="uniques-data" type="application/json">{{ uniques_json|safe }}</script>
   <script id="columns-data" type="application/json">{{ columns_json|safe }}</script>
   <script src="{% static 'engine/dataprep/cleaner.js' %}"></script>
@@ -1851,6 +1874,186 @@
         showModernAlert('Failed to drop columns. Please try again.', 'error');
       }
     }
+
+    // Date Format Selection Modal Functions
+    let currentDateFormatColumn = null;
+    let currentDateFormatOptions = null;
+
+    function openDateFormatModal(columnName, formats) {
+      currentDateFormatColumn = columnName;
+      currentDateFormatOptions = formats;
+      
+      const modal = document.getElementById('dateFormatModal');
+      const title = document.getElementById('dateFormatTitle');
+      const columnNameEl = document.getElementById('dateFormatColumnName');
+      const optionsContainer = document.getElementById('dateFormatOptions');
+      
+      if (!modal || !title || !columnNameEl || !optionsContainer) return;
+      
+      title.textContent = `Select Date Format - ${columnName}`;
+      columnNameEl.textContent = columnName;
+      optionsContainer.innerHTML = '';
+      
+      // Create radio buttons for each format
+      formats.forEach((format, index) => {
+        const optionDiv = document.createElement('div');
+        optionDiv.style.cssText = 'display:flex; align-items:flex-start; gap:12px; padding:12px; background:#1f2937; border-radius:8px; cursor:pointer; border:2px solid transparent; transition:border-color 0.2s;';
+        optionDiv.onmouseover = () => optionDiv.style.borderColor = '#3b82f6';
+        optionDiv.onmouseout = () => {
+          if (!optionDiv.querySelector('input[type="radio"]').checked) {
+            optionDiv.style.borderColor = 'transparent';
+          }
+        };
+        
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'dateFormat';
+        radio.value = format.format;
+        radio.id = `dateFormat_${index}`;
+        radio.checked = index === 0; // Select first (best match) by default
+        radio.style.marginTop = '2px';
+        radio.onchange = () => {
+          document.querySelectorAll('#dateFormatOptions > div').forEach(div => {
+            div.style.borderColor = 'transparent';
+          });
+          if (radio.checked) {
+            optionDiv.style.borderColor = '#3b82f6';
+          }
+        };
+        
+        const labelDiv = document.createElement('div');
+        labelDiv.style.flex = '1';
+        
+        const formatName = document.createElement('div');
+        formatName.style.cssText = 'font-weight:600; margin-bottom:4px; color:#e6edf3;';
+        formatName.textContent = format.display;
+        
+        const formatStats = document.createElement('div');
+        formatStats.style.cssText = 'font-size:12px; color:#9ca3af; margin-bottom:6px;';
+        formatStats.textContent = `Matches: ${format.match_count} values (${format.match_percentage}%)`;
+        
+        const formatSamples = document.createElement('div');
+        formatSamples.style.cssText = 'font-size:11px; color:#6b7280; font-style:italic;';
+        if (format.sample_dates && format.sample_dates.length > 0) {
+          formatSamples.textContent = `Examples: ${format.sample_dates.slice(0, 3).join(', ')}`;
+        }
+        
+        labelDiv.appendChild(formatName);
+        labelDiv.appendChild(formatStats);
+        labelDiv.appendChild(formatSamples);
+        
+        optionDiv.appendChild(radio);
+        optionDiv.appendChild(labelDiv);
+        optionDiv.onclick = () => radio.click();
+        
+        optionsContainer.appendChild(optionDiv);
+        
+        // Highlight selected option
+        if (index === 0) {
+          optionDiv.style.borderColor = '#3b82f6';
+        }
+      });
+      
+      modal.style.display = 'block';
+    }
+
+    function closeDateFormatModal() {
+      const modal = document.getElementById('dateFormatModal');
+      if (modal) modal.style.display = 'none';
+      currentDateFormatColumn = null;
+      currentDateFormatOptions = null;
+    }
+
+    async function applyDateFormat() {
+      if (!currentDateFormatColumn || !currentDateFormatOptions) return;
+      
+      const selectedRadio = document.querySelector('input[name="dateFormat"]:checked');
+      if (!selectedRadio) {
+        showModernAlert('Please select a date format', 'warning');
+        return;
+      }
+      
+      const selectedFormat = selectedRadio.value;
+      const formatInfo = currentDateFormatOptions.find(f => f.format === selectedFormat);
+      
+      // Determine target format - use the selected format (unless it's dateutil, then use YYYY-MM-DD)
+      const targetFormat = selectedFormat === 'dateutil' ? '%Y-%m-%d' : selectedFormat;
+      
+      console.log('Selected format:', selectedFormat);
+      console.log('Target format:', targetFormat);
+      console.log('Format info:', formatInfo);
+      
+      // Disable the apply button to prevent double-clicks
+      const applyBtn = document.querySelector('#dateFormatModal .btn:last-child');
+      if (applyBtn) {
+        applyBtn.disabled = true;
+        applyBtn.textContent = 'Converting...';
+      }
+      
+      try {
+        const response = await fetch(`/dataprep/convert-date-format/{{ dataset.id }}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            column: currentDateFormatColumn,
+            target_format: targetFormat, // Convert all dates to this format
+            original_format: selectedFormat // Keep for reference
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          console.log('Date conversion successful:', result);
+          showModernAlert(`Successfully converted '${currentDateFormatColumn}' to standard date format`, 'success');
+          closeDateFormatModal();
+          // Reload the page to show updated data
+          // Use a longer delay to ensure file is saved
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } else {
+          showModernAlert(`Error: ${result.error || 'Failed to convert date format'}`, 'error');
+          console.error('Date conversion error:', result);
+          // Re-enable button on error
+          if (applyBtn) {
+            applyBtn.disabled = false;
+            applyBtn.textContent = 'Apply Format';
+          }
+        }
+      } catch (error) {
+        console.error('Date format conversion error:', error);
+        showModernAlert('Failed to convert date format. Please try again.', 'error');
+        // Re-enable button on error
+        if (applyBtn) {
+          applyBtn.disabled = false;
+          applyBtn.textContent = 'Apply Format';
+        }
+      }
+    }
+
+    // Check for date columns with multiple formats on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        const dateColumnsData = {{ date_columns_with_formats_json|safe }};
+        if (dateColumnsData && Object.keys(dateColumnsData).length > 0) {
+          // Show modal for first column with multiple formats
+          const firstColumn = Object.keys(dateColumnsData)[0];
+          const formats = dateColumnsData[firstColumn];
+          if (formats && formats.length > 1) {
+            // Small delay to ensure page is fully loaded
+            setTimeout(() => {
+              openDateFormatModal(firstColumn, formats);
+            }, 500);
+          }
+        }
+      } catch (e) {
+        console.error('Error checking date formats:', e);
+      }
+    });
   </script>
 </body>
 </html>

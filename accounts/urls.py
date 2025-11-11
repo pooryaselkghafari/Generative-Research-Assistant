@@ -11,4 +11,8 @@ urlpatterns = [
     path('subscription/success/', views.subscription_success, name='subscription_success'),
     path('subscription/cancel/', views.cancel_subscription, name='cancel_subscription'),
     path('webhook/', views.stripe_webhook, name='stripe_webhook'),
+    # Email verification and password reset
+    path('verify-email/<uidb64>/<token>/', views.verify_email_view, name='verify_email'),
+    path('password-reset/', views.password_reset_request_view, name='password_reset_request'),
+    path('password-reset-confirm/<uidb64>/<token>/', views.password_reset_confirm_view, name='password_reset_confirm'),
 ]

@@ -448,5 +448,17 @@
     </script>
 
     {% block extra_js %}{% endblock %}
+    
+    <footer class="sb-footer" style="margin-top: 40px; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 14px;">
+      <div style="max-width: 1200px; margin: 0 auto;">
+        <p style="margin: 0 0 10px 0;">
+          &copy; {% now "Y" %} Generative Research Assistant. All rights reserved.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+          <a href="{% url 'privacy_policy' %}" style="color: #3b82f6; text-decoration: none;">Privacy Policy</a>
+          <a href="{% url 'terms_of_service' %}" style="color: #3b82f6; text-decoration: none;">Terms of Service</a>
+        </div>
+      </div>
+    </footer>
   </body>
 </html>

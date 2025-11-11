@@ -51,18 +51,50 @@
       
       <div class="subscription-limits">
         <h3>Current Limits</h3>
+        {% with limits=profile.get_limits %}
         <div class="limit-item">
           <span>Datasets</span>
-          <span>{{ user.datasets.count }}/{{ profile.max_datasets|default:"∞" }}</span>
+          <span>{{ user.datasets.count }}/{% if limits.datasets == -1 %}∞{% else %}{{ limits.datasets }}{% endif %}</span>
         </div>
         <div class="limit-item">
           <span>Sessions</span>
-          <span>{{ user.sessions.count }}/{{ profile.max_sessions|default:"∞" }}</span>
+          <span>{{ user.sessions.count }}/{% if limits.sessions == -1 %}∞{% else %}{{ limits.sessions }}{% endif %}</span>
         </div>
         <div class="limit-item">
           <span>Max file size</span>
-          <span>{{ profile.max_file_size_mb|default:"∞" }} MB</span>
+          <span>{% if limits.file_size == -1 %}∞{% else %}{{ limits.file_size }}{% endif %} MB</span>
         </div>
+        {% endwith %}
+      </div>
+      
+      <div class="ai-features">
+        <h3>AI Features</h3>
+        {% with ai_features=profile.get_ai_features %}
+        <div class="ai-feature-item">
+          <span class="ai-status {% if ai_features.ai_enabled %}enabled{% else %}disabled{% endif %}">
+            {% if ai_features.ai_enabled %}✓{% else %}✗{% endif %}
+          </span>
+          <span>AI Interpretation: {% if ai_features.ai_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+        </div>
+        {% if ai_features.ai_enabled %}
+        <div class="ai-feature-item">
+          <span class="ai-status enabled">✓</span>
+          <span>Model Type: {{ ai_features.model_type|default:"General Fine-tuned" }}</span>
+        </div>
+        <div class="ai-feature-item">
+          <span class="ai-status {% if ai_features.rag_enabled %}enabled{% else %}disabled{% endif %}">
+            {% if ai_features.rag_enabled %}✓{% else %}✗{% endif %}
+          </span>
+          <span>RAG (Personalized Context): {% if ai_features.rag_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+        </div>
+        <div class="ai-feature-item">
+          <span class="ai-status {% if ai_features.fine_tuning_enabled %}enabled{% else %}disabled{% endif %}">
+            {% if ai_features.fine_tuning_enabled %}✓{% else %}✗{% endif %}
+          </span>
+          <span>User Fine-tuning: {% if ai_features.fine_tuning_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+        </div>
+        {% endif %}
+        {% endwith %}
       </div>
     </div>
   </div>
