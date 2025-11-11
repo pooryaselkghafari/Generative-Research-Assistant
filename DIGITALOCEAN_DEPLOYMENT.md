@@ -90,7 +90,7 @@ apt update && apt upgrade -y
 - If you want to see what changed, you can choose "show the differences" first
 - If you haven't modified SSH config manually, you can also safely keep the local version
 
-### 2.3 Create a Non-Root User (Security Best Practice)
+### 2.3 Crete a Non-Root User (Security Best Practice)
 
 ```bash
 # Create a new user
