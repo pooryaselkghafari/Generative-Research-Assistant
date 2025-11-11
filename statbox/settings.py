@@ -89,7 +89,14 @@ AUTHENTICATION_BACKENDS = [
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = True
 ACCOUNT_AUTHENTICATION_METHOD = 'username_email'  # Allow login with username or email
-ACCOUNT_EMAIL_VERIFICATION = 'mandatory'  # Require email verification
+
+# Make email verification optional when using console email backend (for development/testing)
+# This allows users to register and use the app immediately when email isn't configured
+if 'console' in EMAIL_BACKEND.lower():
+    ACCOUNT_EMAIL_VERIFICATION = 'none'  # Skip email verification when using console backend
+else:
+    ACCOUNT_EMAIL_VERIFICATION = 'mandatory'  # Require email verification when email is working
+
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_SIGNUP_EMAIL_ENTER_TWICE = False
 ACCOUNT_SESSION_REMEMBER = True  # Remember user login
