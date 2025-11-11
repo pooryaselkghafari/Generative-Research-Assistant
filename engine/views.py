@@ -291,13 +291,33 @@ def get_dataset_variables(request, dataset_id):
         dataset = get_object_or_404(Dataset, pk=dataset_id)
         # Use efficient column-only loading for large datasets
         from engine.dataprep.loader import get_dataset_columns_only
-        variables, column_types = get_dataset_columns_only(dataset.file_path)
-        return JsonResponse({
-            'success': True,
-            'variables': variables,
-            'column_types': column_types,
-            'dataset_name': dataset.name
-        })
+        from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
+        import os
+        
+        path = dataset.file_path
+        
+        # Check if file is encrypted and handle accordingly
+        if is_encrypted_file(path):
+            decrypted_path = get_decrypted_path(path, user_id=request.user.id)
+            working_path = decrypted_path
+        else:
+            working_path = path
+        
+        try:
+            variables, column_types = get_dataset_columns_only(working_path)
+            return JsonResponse({
+                'success': True,
+                'variables': variables,
+                'column_types': column_types,
+                'dataset_name': dataset.name
+            })
+        finally:
+            # Clean up temporary decrypted file if it was created
+            if is_encrypted_file(path) and os.path.exists(decrypted_path):
+                try:
+                    os.unlink(decrypted_path)
+                except:
+                    pass
     except Exception as e:
         return JsonResponse({
             'success': False,

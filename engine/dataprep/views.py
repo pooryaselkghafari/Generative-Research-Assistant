@@ -43,15 +43,32 @@ def open_cleaner(request, dataset_id):
         return HttpResponse("Dataset has no file path.", status=400)
     
     try:
-        # For large datasets, use efficient column loading and limited preview
+        # Check if file is encrypted and handle accordingly
+        from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
         from engine.dataprep.loader import get_dataset_columns_only, load_dataframe_any
         
-        # Get column names and types efficiently
-        columns, column_types = get_dataset_columns_only(path)
+        # If encrypted, get decrypted temporary path
+        if is_encrypted_file(path):
+            decrypted_path = get_decrypted_path(path, user_id=request.user.id)
+            # Use decrypted path for loading
+            working_path = decrypted_path
+        else:
+            working_path = path
         
-        # Load only a small sample for preview and analysis
-        MAX_PREVIEW_ROWS = 1000  # Limit preview to 1000 rows for large datasets
-        df_sample, _ = load_dataframe_any(path, preview_rows=MAX_PREVIEW_ROWS)
+        try:
+            # Get column names and types efficiently
+            columns, column_types = get_dataset_columns_only(working_path)
+            
+            # Load only a small sample for preview and analysis
+            MAX_PREVIEW_ROWS = 1000  # Limit preview to 1000 rows for large datasets
+            df_sample, _ = load_dataframe_any(working_path, preview_rows=MAX_PREVIEW_ROWS)
+        finally:
+            # Clean up temporary decrypted file if it was created
+            if is_encrypted_file(path) and os.path.exists(decrypted_path):
+                try:
+                    os.unlink(decrypted_path)
+                except:
+                    pass
         
     except Exception as e:
         return HttpResponse(f"Failed to read dataset: {e}", status=400, content_type="text/plain")
