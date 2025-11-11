@@ -22,7 +22,7 @@ services:
 
   web:
     build: .
-    command: gunicorn --bind 0.0.0.0:8000 statbox.wsgi:application
+    command: gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 2 statbox.wsgi:application
     volumes:
       - .:/app
       - static_volume:/app/staticfiles

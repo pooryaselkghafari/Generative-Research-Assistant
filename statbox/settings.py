@@ -66,6 +66,9 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'resend')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@statbox.com')
 
+# Email timeout settings to prevent hanging on connection failures
+EMAIL_TIMEOUT = 10  # 10 seconds timeout for SMTP connections
+
 # Login/Logout URLs
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/app/'
