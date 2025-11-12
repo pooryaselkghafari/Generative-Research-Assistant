@@ -15,8 +15,29 @@ class CustomAccountAdapter(DefaultAccountAdapter):
     def save_user(self, request, user, form, commit=True):
         user = super().save_user(request, user, form, commit)
         if commit:
-            # Create user profile
-            UserProfile.objects.get_or_create(user=user)
+            # Create user profile with free tier defaults
+            try:
+                profile, created = UserProfile.objects.get_or_create(
+                    user=user,
+                    defaults={
+                        'subscription_type': 'free',
+                        'ai_tier': 'none'
+                    }
+                )
+                
+                # Update AI tier from tier settings if available (only for new profiles)
+                if created:
+                    try:
+                        from engine.models import SubscriptionTierSettings
+                        tier_settings = SubscriptionTierSettings.objects.get(tier='free')
+                        profile.ai_tier = tier_settings.ai_tier
+                        profile.save()
+                    except SubscriptionTierSettings.DoesNotExist:
+                        pass
+            except Exception as e:
+                # Log error but don't break registration
+                logger.error(f"Failed to create user profile in adapter: {e}")
+                # Profile can be created later via signals
         return user
     
     def send_account_already_exists_mail(self, email):

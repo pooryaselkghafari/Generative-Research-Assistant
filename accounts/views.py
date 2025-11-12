@@ -56,66 +56,92 @@ if STRIPE_AVAILABLE:
     stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
 
 def register_view(request):
+    """
+    Custom registration view that uses the CustomAccountAdapter for consistency.
+    This ensures the same profile creation logic is used as Google sign-in.
+    """
     if request.method == 'POST':
         form = UserRegistrationForm(request.POST)
         if form.is_valid():
-            user = form.save(commit=False)
-            
-            # Check if using console email backend (for development/testing)
-            from django.conf import settings
-            using_console_email = 'console' in settings.EMAIL_BACKEND.lower()
-            
-            # Set user as inactive until email is verified (unless using console backend)
-            if using_console_email:
-                # Auto-activate users when using console backend since emails won't be sent
-                user.is_active = True
-                user.save()
-                # Log them in automatically
-                from django.contrib.auth import login
-                login(request, user)
-                messages.success(request, f'Welcome, {user.username}! Your account has been created and activated.')
-                return redirect('index')
-            else:
-                # Normal flow: require email verification
-                user.is_active = False
-                user.save()
-            
-            # Create user profile with free tier defaults
-            profile = UserProfile.objects.create(
-                user=user,
-                subscription_type='free',
-                ai_tier='none'
-            )
-            
-            # Update AI tier from tier settings if available
-            from engine.models import SubscriptionTierSettings
             try:
-                tier_settings = SubscriptionTierSettings.objects.get(tier='free')
-                profile.ai_tier = tier_settings.ai_tier
-                profile.save()
-            except SubscriptionTierSettings.DoesNotExist:
-                pass
-            
-            # Send welcome and verification emails (non-blocking)
-            try:
-                send_welcome_email(user)
-                if not using_console_email:
-                    send_verification_email(user, request)
-                messages.success(request, 'Account created successfully! Please check your email to verify your account.')
+                # Use the adapter to save user (same as allauth does)
+                from accounts.adapters import CustomAccountAdapter
+                adapter = CustomAccountAdapter()
+                
+                # Save user using adapter (this will create the profile)
+                user = adapter.save_user(request, form, commit=True)
+                
+                # Check if using console email backend
+                from django.conf import settings
+                using_console_email = 'console' in settings.EMAIL_BACKEND.lower()
+                
+                # Set user as inactive until email is verified (unless using console backend)
+                if using_console_email:
+                    # Auto-activate users when using console backend
+                    user.is_active = True
+                    user.save()
+                    # Log them in automatically
+                    from django.contrib.auth import login
+                    login(request, user)
+                    messages.success(request, f'Welcome, {user.username}! Your account has been created and activated.')
+                    return redirect('index')
+                else:
+                    # Normal flow: require email verification
+                    user.is_active = False
+                    user.save()
+                
+                # Send welcome and verification emails (non-blocking)
+                email_sent = False
+                try:
+                    # Try to send welcome email
+                    try:
+                        send_welcome_email(user)
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Failed to send welcome email: {e}")
+                    
+                    # Try to send verification email
+                    try:
+                        send_verification_email(user, request)
+                        email_sent = True
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Failed to send verification email: {e}")
+                    
+                    if email_sent:
+                        messages.success(request, 'Account created successfully! Please check your email to verify your account.')
+                    else:
+                        # If email failed, auto-activate user so they can still use the app
+                        user.is_active = True
+                        user.save()
+                        from django.contrib.auth import login
+                        login(request, user)
+                        messages.warning(request, f'Account created! We could not send verification emails, but your account has been activated. Welcome, {user.username}!')
+                        return redirect('index')
+                except Exception as e:
+                    # If email fails completely, auto-activate user
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to send registration emails: {e}")
+                    user.is_active = True
+                    user.save()
+                    from django.contrib.auth import login
+                    login(request, user)
+                    messages.warning(request, f'Account created! We could not send verification emails, but your account has been activated. Welcome, {user.username}!')
+                    return redirect('index')
+                
+                return redirect('login')
             except Exception as e:
-                # If email fails, auto-activate user so they can still use the app
+                # Catch any unexpected errors during registration
                 import logging
+                import traceback
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Failed to send registration emails: {e}")
-                # Auto-activate user if email fails
-                user.is_active = True
-                user.save()
-                from django.contrib.auth import login
-                login(request, user)
-                messages.warning(request, f'Account created! We could not send verification emails, but your account has been activated. Welcome, {user.username}!')
-                return redirect('index')
-            
-            return redirect('login')
+                logger.error(f"Registration error: {e}\n{traceback.format_exc()}")
+                messages.error(request, f'An error occurred during registration. Please try again or contact support if the problem persists.')
+                # Re-render form with error
+                return render(request, 'accounts/register.html', {'form': form})
     else:
         form = UserRegistrationForm()
     
