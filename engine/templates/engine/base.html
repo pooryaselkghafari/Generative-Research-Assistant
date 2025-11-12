@@ -65,18 +65,81 @@
       (function(){
         const modal = document.getElementById('sbModal');
         const frame = document.getElementById('sbModalFrame');
+        let loadTimeout = null;
+        
         window.sbOpenModal = function(url){
           if (!modal || !frame) return;
-          frame.src = url;
+          
+          // Clear any existing timeout
+          if (loadTimeout) {
+            clearTimeout(loadTimeout);
+            loadTimeout = null;
+          }
+          
+          // Show loading state
+          frame.style.display = 'block';
           modal.style.display = 'block';
           document.body.style.overflow = 'hidden';
+          
+          // Set timeout to detect if iframe fails to load
+          loadTimeout = setTimeout(function() {
+            try {
+              // Check if iframe loaded successfully
+              if (frame.contentWindow && frame.contentWindow.location.href === 'about:blank') {
+                console.warn('Iframe failed to load:', url);
+              }
+            } catch (e) {
+              // Cross-origin error is expected, means iframe loaded
+              console.log('Iframe loaded (cross-origin check passed)');
+            }
+            loadTimeout = null;
+          }, 5000);
+          
+          // Handle iframe load
+          frame.onload = function() {
+            if (loadTimeout) {
+              clearTimeout(loadTimeout);
+              loadTimeout = null;
+            }
+            try {
+              // Try to access iframe content (will fail if cross-origin, which is OK)
+              if (frame.contentWindow) {
+                console.log('Iframe loaded successfully');
+              }
+            } catch (e) {
+              // Cross-origin is expected and OK
+              console.log('Iframe loaded (cross-origin)');
+            }
+          };
+          
+          frame.onerror = function() {
+            console.error('Iframe failed to load:', url);
+            if (loadTimeout) {
+              clearTimeout(loadTimeout);
+              loadTimeout = null;
+            }
+          };
+          
+          // Set the URL last to trigger load
+          frame.src = url;
         };
+        
         window.sbCloseModal = function(){
           if (!modal || !frame) return;
+          
+          // Clear timeout if modal is closed before load completes
+          if (loadTimeout) {
+            clearTimeout(loadTimeout);
+            loadTimeout = null;
+          }
+          
           modal.style.display = 'none';
           frame.src = 'about:blank';
+          frame.onload = null;
+          frame.onerror = null;
           document.body.style.overflow = '';
         };
+        
         document.addEventListener('keydown', function(e){
           if (e.key === 'Escape') window.sbCloseModal();
         });
