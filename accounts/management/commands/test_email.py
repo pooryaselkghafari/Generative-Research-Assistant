@@ -33,31 +33,37 @@ class Command(BaseCommand):
             self.stdout.write(f"EMAIL_TIMEOUT: {getattr(settings, 'EMAIL_TIMEOUT', 'NOT SET')}")
             self.stdout.write("")
         
-        # Test SMTP connection
-        self.stdout.write("Testing SMTP connection...")
-        try:
-            # Port 465 uses SSL, port 587 uses TLS
-            if getattr(settings, 'EMAIL_USE_SSL', False):
-                # Port 465: Use SMTP_SSL (SSL from the start)
-                server = smtplib.SMTP_SSL(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
-            elif getattr(settings, 'EMAIL_USE_TLS', False):
-                # Port 587: Use STARTTLS
-                server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
-                server.starttls()
-            else:
-                # No encryption (not recommended)
-                server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
-            
-            if settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
-                server.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
-                self.stdout.write(self.style.SUCCESS('✓ SMTP connection successful'))
-            else:
-                self.stdout.write(self.style.WARNING('⚠ No credentials provided, skipping login'))
-            
-            server.quit()
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f'✗ SMTP connection failed: {e}'))
-            return
+        # Check if using Resend API backend (skip SMTP test)
+        if 'resend_backend' in settings.EMAIL_BACKEND.lower():
+            self.stdout.write("Using Resend API backend (skipping SMTP test)...")
+            self.stdout.write(self.style.SUCCESS('✓ API backend configured - no SMTP connection needed'))
+        else:
+            # Test SMTP connection only if using SMTP backend
+            self.stdout.write("Testing SMTP connection...")
+            try:
+                # Port 465 uses SSL, port 587 uses TLS
+                if getattr(settings, 'EMAIL_USE_SSL', False):
+                    # Port 465: Use SMTP_SSL (SSL from the start)
+                    server = smtplib.SMTP_SSL(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
+                elif getattr(settings, 'EMAIL_USE_TLS', False):
+                    # Port 587: Use STARTTLS
+                    server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
+                    server.starttls()
+                else:
+                    # No encryption (not recommended)
+                    server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
+                
+                if settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
+                    server.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
+                    self.stdout.write(self.style.SUCCESS('✓ SMTP connection successful'))
+                else:
+                    self.stdout.write(self.style.WARNING('⚠ No credentials provided, skipping login'))
+                
+                server.quit()
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f'✗ SMTP connection failed: {e}'))
+                self.stdout.write(self.style.WARNING('Consider using Resend API backend instead'))
+                return
         
         # Try to send test email
         self.stdout.write(f"Sending test email to {email}...")

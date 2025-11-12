@@ -33,6 +33,7 @@ stripe>=6.0.0
 
 # Email
 django-anymail>=10.0
+requests>=2.28.0  # Required for Resend API backend
 
 # Social Authentication
 django-allauth>=0.57.0
