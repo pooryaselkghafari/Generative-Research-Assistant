@@ -36,10 +36,16 @@ class Command(BaseCommand):
         # Test SMTP connection
         self.stdout.write("Testing SMTP connection...")
         try:
-            if settings.EMAIL_USE_TLS:
+            # Port 465 uses SSL, port 587 uses TLS
+            if getattr(settings, 'EMAIL_USE_SSL', False):
+                # Port 465: Use SMTP_SSL (SSL from the start)
+                server = smtplib.SMTP_SSL(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
+            elif getattr(settings, 'EMAIL_USE_TLS', False):
+                # Port 587: Use STARTTLS
                 server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
                 server.starttls()
             else:
+                # No encryption (not recommended)
                 server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=getattr(settings, 'EMAIL_TIMEOUT', 10))
             
             if settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
