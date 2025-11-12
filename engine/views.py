@@ -304,6 +304,9 @@ def index(request):
     return render(request, 'engine/index.html', context)
 
 def edit_session(request, pk: int):
+    # Require authentication
+    if not request.user.is_authenticated:
+        return redirect('login')
     # Security: Only allow access to user's own sessions
     s = get_object_or_404(AnalysisSession, pk=pk, user=request.user)
     return render(request, 'engine/index.html', _list_context(current_session=s, user=request.user))
@@ -311,6 +314,9 @@ def edit_session(request, pk: int):
 
 def get_dataset_variables(request, dataset_id):
     """API endpoint to get variables from a dataset"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
     try:
         # Security: Only allow access to user's own datasets
         dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
@@ -351,6 +357,9 @@ def get_dataset_variables(request, dataset_id):
 
 def update_sessions_for_variable_rename(request, dataset_id):
     """API endpoint to update all sessions when variables are renamed"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST only'})
     
@@ -399,13 +408,16 @@ def update_sessions_for_variable_rename(request, dataset_id):
         })
 
 def upload_dataset(request):
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     if 'dataset' not in request.FILES:
         return HttpResponse('No dataset file provided', status=400)
     
     # Check user authentication and limits
-    user = request.user if request.user.is_authenticated else None
+    user = request.user
     if user:
         profile = user.profile
         limits = profile.get_limits()
@@ -485,6 +497,9 @@ def upload_dataset(request):
     return redirect('index')
 
 def delete_dataset(request, pk: int):
+    # Require authentication
+    if not request.user.is_authenticated:
+        return redirect('login')
     # Security: Only allow deletion of user's own datasets
     ds = get_object_or_404(Dataset, pk=pk, user=request.user)
     # Detach sessions from this dataset (only user's own sessions)
@@ -498,6 +513,9 @@ def delete_dataset(request, pk: int):
     return redirect('index')
 
 def run_analysis(request):
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
 
@@ -1001,6 +1019,9 @@ def generate_plot(request):
 
 def calculate_summary_stats(request, session_id):
     """Calculate summary statistics for selected variables."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
@@ -1046,6 +1067,9 @@ from django.conf import settings
 from .models import AnalysisSession
 
 def delete_session(request, pk: int):
+    # Require authentication
+    if not request.user.is_authenticated:
+        return redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
 
@@ -1076,6 +1100,9 @@ def delete_session(request, pk: int):
 
 
 def bulk_delete_sessions(request):
+    # Require authentication
+    if not request.user.is_authenticated:
+        return redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -1116,11 +1143,15 @@ def bulk_delete_sessions(request):
 
 def preview_drop_rows(request, dataset_id):
     """API endpoint to preview which rows would be dropped"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
     try:
-        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        # Security: Only allow access to user's own datasets
+        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
         df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         data = json.loads(request.body)
@@ -1200,11 +1231,15 @@ def preview_drop_rows(request, dataset_id):
 
 def apply_drop_rows(request, dataset_id):
     """API endpoint to apply row dropping"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
     try:
-        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        # Security: Only allow access to user's own datasets
+        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
         df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         data = json.loads(request.body)
@@ -1440,6 +1475,9 @@ def _generate_multinomial_ordinal_spotlight_from_predictions(predictions, intera
 
 def generate_spotlight_plot(request, session_id):
     """Generate spotlight plot for a specific interaction."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -1690,6 +1728,9 @@ def generate_spotlight_plot(request, session_id):
 
 def generate_correlation_heatmap(request, session_id):
     """Generate correlation heatmap for continuous variables."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -1752,6 +1793,9 @@ def generate_correlation_heatmap(request, session_id):
 
 def merge_datasets(request):
     """API endpoint to merge multiple datasets based on common column values"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
@@ -1916,6 +1960,9 @@ def cancel_bayesian_analysis(request):
 
 def run_bma_analysis(request):
     """Handle BMA analysis requests"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -1955,7 +2002,7 @@ def run_bma_analysis(request):
         if not result['success']:
             return render(request, 'engine/BMA_results.html', {
                 'dataset': dataset,
-                'session': get_object_or_404(AnalysisSession, pk=session_id) if (action == 'update' and session_id) else None,
+                'session': get_object_or_404(AnalysisSession, pk=session_id, user=request.user) if (action == 'update' and session_id) else None,
                 'formula': formula,
                 'results': {'has_results': False, 'error': result['error']}
             })
@@ -2045,6 +2092,9 @@ def run_bma_analysis(request):
 
 def generate_anova_plot_view(request, session_id):
     """Generate ANOVA plot with t-tests"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
@@ -2088,6 +2138,9 @@ def generate_anova_plot_view(request, session_id):
 
 def run_anova_analysis(request):
     """Handle ANOVA analysis requests"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -2124,7 +2177,7 @@ def run_anova_analysis(request):
         if not result.get('has_results', False):
             return render(request, 'engine/ANOVA_results.html', {
                 'dataset': dataset,
-                'session': get_object_or_404(AnalysisSession, pk=session_id) if (action == 'update' and session_id) else None,
+                'session': get_object_or_404(AnalysisSession, pk=session_id, user=request.user) if (action == 'update' and session_id) else None,
                 'formula': formula,
                 'results': {'has_results': False, 'error': result.get('error', 'Unknown error')}
             })
@@ -2216,6 +2269,9 @@ def run_anova_analysis(request):
 
 def run_varx_analysis(request):
     """Handle VARX analysis requests"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -2270,7 +2326,7 @@ def run_varx_analysis(request):
         if not result.get('has_results', False):
             return render(request, 'engine/VARX_results.html', {
                 'dataset': dataset,
-                'session': get_object_or_404(AnalysisSession, pk=session_id) if (action == 'update' and session_id) else None,
+                'session': get_object_or_404(AnalysisSession, pk=session_id, user=request.user) if (action == 'update' and session_id) else None,
                 'formula': formula,
                 'results': {'has_results': False, 'error': result.get('error', 'Unknown error')}
             })
@@ -2378,11 +2434,15 @@ def run_varx_analysis(request):
 @require_http_methods(["POST"])
 def generate_varx_irf_view(request, session_id):
     """Generate VARX IRF plot"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
     try:
-        session = get_object_or_404(AnalysisSession, pk=session_id)
+        # Security: Only allow access to user's own sessions
+        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
         
         # Parse JSON body
         import json
@@ -2875,11 +2935,15 @@ def generate_varx_irf_view(request, session_id):
 @require_http_methods(["POST"])
 def generate_varx_irf_data_view(request, session_id):
     """Export VARX IRF data as CSV"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
     try:
-        session = get_object_or_404(AnalysisSession, pk=session_id)
+        # Security: Only allow access to user's own sessions
+        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
         
         # Parse JSON body
         import json
@@ -3079,6 +3143,9 @@ def generate_varx_irf_data_view(request, session_id):
 
 def download_session_history_view(request, session_id):
     """Download session history as text or JSON file."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return HttpResponse('Authentication required', status=401)
     try:
         # Get format parameter (default to 'text')
         format_type = request.GET.get('format', 'text')
@@ -3087,6 +3154,8 @@ def download_session_history_view(request, session_id):
         if format_type not in ['text', 'json']:
             format_type = 'text'
         
+        # Security: Verify session belongs to user before downloading
+        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
         # Generate and return the history file
         return download_session_history(session_id, format_type)
         
@@ -3191,6 +3260,9 @@ Be concise, accurate, and focus on statistical concepts and interpretations."""
 
 def add_model_errors_to_dataset(request, session_id):
     """Add model residuals/errors to the dataset as new columns"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     

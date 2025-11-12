@@ -37,6 +37,9 @@ def _dataset_path(ds: Dataset) -> str:
     return getattr(ds, "file_path", None) or getattr(getattr(ds, "file", None), "path", None)
 
 def open_cleaner(request, dataset_id):
+    # Require authentication
+    if not request.user.is_authenticated:
+        return HttpResponse("Authentication required", status=401)
     # Security: Only allow access to user's own datasets
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
@@ -252,6 +255,9 @@ def _apply_types(df: pd.DataFrame, new_types: dict, orders: dict) -> pd.DataFram
     return df
 
 def apply_cleaning(request, dataset_id: int):
+    # Require authentication
+    if not request.user.is_authenticated:
+        return HttpResponse("Authentication required", status=401)
     if request.method != "POST":
         return HttpResponse("POST only", status=405)
 
@@ -401,9 +407,12 @@ def apply_cleaning(request, dataset_id: int):
 
 def normalize_columns(request, dataset_id):
     """Normalize selected numeric columns in a dataset."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
-    
+
     # Security: Only allow access to user's own datasets
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
@@ -501,9 +510,12 @@ def normalize_columns(request, dataset_id):
 
 def merge_columns_preview(request, dataset_id):
     """Preview merge columns operation."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
-    
+
     # Security: Only allow access to user's own datasets
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
@@ -561,6 +573,9 @@ def merge_columns_preview(request, dataset_id):
 
 def get_column_values(request, dataset_id):
     """Get unique values for a specific column."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
@@ -603,6 +618,9 @@ def get_column_values(request, dataset_id):
 
 def apply_column_coding(request, dataset_id):
     """Apply column coding/recoding."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
@@ -661,9 +679,12 @@ def apply_column_coding(request, dataset_id):
 
 def merge_columns(request, dataset_id):
     """Apply merge columns operation."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
-    
+
     # Security: Only allow access to user's own datasets
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
@@ -733,6 +754,9 @@ def merge_columns(request, dataset_id):
 
 def get_column_values(request, dataset_id):
     """Get unique values for a specific column."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
@@ -776,6 +800,9 @@ def get_column_values(request, dataset_id):
 
 def apply_column_coding(request, dataset_id):
     """Apply column coding/recoding."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
@@ -851,9 +878,12 @@ def apply_column_coding(request, dataset_id):
 
 def drop_columns(request, dataset_id):
     """Drop selected columns from a dataset."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != "POST":
         return HttpResponse(json.dumps({"error": "Method not allowed"}), status=405, content_type="application/json")
-    
+
     # Security: Only allow access to user's own datasets
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
@@ -916,9 +946,12 @@ def drop_columns(request, dataset_id):
 
 def detect_date_formats_api(request, dataset_id):
     """API endpoint to detect date formats in a specific column."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
-    
+
     # Security: Only allow access to user's own datasets
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
@@ -956,9 +989,12 @@ def detect_date_formats_api(request, dataset_id):
 
 def convert_date_format_api(request, dataset_id):
     """API endpoint to convert a date column to a selected format."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
-    
+
     # Security: Only allow access to user's own datasets
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
@@ -1073,6 +1109,9 @@ def convert_date_format_api(request, dataset_id):
 
 def fix_stationary(request, dataset_id):
     """API endpoint to fix stationarity by applying transformation (diff or log) to a variable."""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
