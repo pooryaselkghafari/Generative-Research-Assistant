@@ -28,16 +28,26 @@ def send_welcome_email(user):
         plain_message = strip_tags(html_message)
         from_email = settings.DEFAULT_FROM_EMAIL
         
-        send_mail(
+        # Log email attempt
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Attempting to send welcome email to {user.email} from {from_email}")
+        
+        result = send_mail(
             subject,
             plain_message,
             from_email,
             [user.email],
             html_message=html_message,
-            fail_silently=True,  # Don't break registration if email fails
+            fail_silently=False,  # Set to False to see actual errors
         )
+        logger.info(f"Welcome email sent successfully: {result}")
         return True
     except Exception as e:
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error sending welcome email to {user.email}: {e}\n{traceback.format_exc()}")
         print(f"Error sending welcome email: {e}")
         return False
 
@@ -69,16 +79,26 @@ def send_verification_email(user, request):
         plain_message = strip_tags(html_message)
         from_email = settings.DEFAULT_FROM_EMAIL
         
-        send_mail(
+        # Log email attempt
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Attempting to send verification email to {user.email} from {from_email}")
+        
+        result = send_mail(
             subject,
             plain_message,
             from_email,
             [user.email],
             html_message=html_message,
-            fail_silently=True,  # Don't break registration if email fails
+            fail_silently=False,  # Set to False to see actual errors
         )
+        logger.info(f"Verification email sent successfully: {result}")
         return True
     except Exception as e:
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error sending verification email to {user.email}: {e}\n{traceback.format_exc()}")
         print(f"Error sending verification email: {e}")
         return False
 
@@ -110,16 +130,26 @@ def send_password_reset_email(user, request):
         plain_message = strip_tags(html_message)
         from_email = settings.DEFAULT_FROM_EMAIL
         
-        send_mail(
+        # Log email attempt
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Attempting to send password reset email to {user.email} from {from_email}")
+        
+        result = send_mail(
             subject,
             plain_message,
             from_email,
             [user.email],
             html_message=html_message,
-            fail_silently=True,  # Don't break registration if email fails
+            fail_silently=False,  # Set to False to see actual errors
         )
+        logger.info(f"Password reset email sent successfully: {result}")
         return True
     except Exception as e:
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error sending password reset email to {user.email}: {e}\n{traceback.format_exc()}")
         print(f"Error sending password reset email: {e}")
         return False
 
