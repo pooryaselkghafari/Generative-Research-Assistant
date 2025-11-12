@@ -57,8 +57,11 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
 
 # Email settings
-# Supports Resend, Gmail, and other SMTP providers via environment variables
-EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+# Supports Resend API (recommended) or SMTP
+# Option 1: Resend API (more reliable, no SMTP ports needed)
+# Option 2: SMTP (traditional, requires open ports)
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', os.environ.get('EMAIL_HOST_PASSWORD', ''))
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'accounts.resend_backend.ResendBackend')
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.resend.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
 # Port 465 uses SSL (SMTPS), port 587 uses TLS (STARTTLS)
