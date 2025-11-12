@@ -94,41 +94,52 @@ def register_view(request):
                     user.is_active = False
                     user.save()
                 
-                # Send welcome and verification emails (non-blocking)
-                email_sent = False
+                # Send welcome and verification emails
+                welcome_sent = False
+                verification_sent = False
+                
                 try:
                     # Try to send welcome email
                     try:
-                        send_welcome_email(user)
+                        welcome_sent = send_welcome_email(user)
+                        if welcome_sent:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.info(f"Welcome email sent to {user.email}")
                     except Exception as e:
                         import logging
                         logger = logging.getLogger(__name__)
-                        logger.warning(f"Failed to send welcome email: {e}")
+                        logger.error(f"Failed to send welcome email to {user.email}: {e}")
                     
-                    # Try to send verification email
+                    # Try to send verification email (more important)
                     try:
-                        send_verification_email(user, request)
-                        email_sent = True
+                        verification_sent = send_verification_email(user, request)
+                        if verification_sent:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.info(f"Verification email sent to {user.email}")
                     except Exception as e:
                         import logging
+                        import traceback
                         logger = logging.getLogger(__name__)
-                        logger.warning(f"Failed to send verification email: {e}")
-                    
-                    if email_sent:
-                        messages.success(request, 'Account created successfully! Please check your email to verify your account.')
-                    else:
-                        # If email failed, auto-activate user so they can still use the app
-                        user.is_active = True
-                        user.save()
-                        from django.contrib.auth import login
-                        login(request, user)
-                        messages.warning(request, f'Account created! We could not send verification emails, but your account has been activated. Welcome, {user.username}!')
-                        return redirect('index')
+                        logger.error(f"Failed to send verification email to {user.email}: {e}\n{traceback.format_exc()}")
+                
                 except Exception as e:
-                    # If email fails completely, auto-activate user
+                    # If email fails completely, log and continue
                     import logging
+                    import traceback
                     logger = logging.getLogger(__name__)
-                    logger.warning(f"Failed to send registration emails: {e}")
+                    logger.error(f"Failed to send registration emails to {user.email}: {e}\n{traceback.format_exc()}")
+                
+                # Show appropriate message based on email sending results
+                if verification_sent:
+                    messages.success(request, f'Account created successfully! We\'ve sent a verification email to {user.email}. Please check your inbox (and spam folder) and click the verification link to activate your account.')
+                    messages.info(request, 'If you don\'t receive the email within a few minutes, please check your spam folder or contact support.')
+                elif welcome_sent:
+                    # Welcome sent but verification failed - still need verification
+                    messages.warning(request, f'Account created! We sent a welcome email but had trouble sending the verification email. Please contact support to verify your account.')
+                else:
+                    # Both emails failed - auto-activate user so they can still use the app
                     user.is_active = True
                     user.save()
                     from django.contrib.auth import login

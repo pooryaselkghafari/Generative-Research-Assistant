@@ -41,8 +41,13 @@ def send_welcome_email(user):
             html_message=html_message,
             fail_silently=False,  # Set to False to see actual errors
         )
-        logger.info(f"Welcome email sent successfully: {result}")
-        return True
+        # send_mail returns the number of emails sent (1 if successful, 0 if failed)
+        if result > 0:
+            logger.info(f"Welcome email sent successfully to {user.email}")
+            return True
+        else:
+            logger.warning(f"Welcome email returned {result} (expected 1)")
+            return False
     except Exception as e:
         import logging
         import traceback
@@ -92,8 +97,13 @@ def send_verification_email(user, request):
             html_message=html_message,
             fail_silently=False,  # Set to False to see actual errors
         )
-        logger.info(f"Verification email sent successfully: {result}")
-        return True
+        # send_mail returns the number of emails sent (1 if successful, 0 if failed)
+        if result > 0:
+            logger.info(f"Verification email sent successfully to {user.email}")
+            return True
+        else:
+            logger.warning(f"Verification email returned {result} (expected 1)")
+            return False
     except Exception as e:
         import logging
         import traceback
@@ -143,8 +153,13 @@ def send_password_reset_email(user, request):
             html_message=html_message,
             fail_silently=False,  # Set to False to see actual errors
         )
-        logger.info(f"Password reset email sent successfully: {result}")
-        return True
+        # send_mail returns the number of emails sent (1 if successful, 0 if failed)
+        if result > 0:
+            logger.info(f"Password reset email sent successfully to {user.email}")
+            return True
+        else:
+            logger.warning(f"Password reset email returned {result} (expected 1)")
+            return False
     except Exception as e:
         import logging
         import traceback
