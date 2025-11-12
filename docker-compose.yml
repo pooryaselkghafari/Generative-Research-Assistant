@@ -45,7 +45,7 @@ services:
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
-      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.resend.com}
       - EMAIL_PORT=${EMAIL_PORT:-465}
       - EMAIL_USE_SSL=${EMAIL_USE_SSL:-True}
       - EMAIL_USE_TLS=${EMAIL_USE_TLS:-False}

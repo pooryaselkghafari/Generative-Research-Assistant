@@ -1129,7 +1129,7 @@ def fix_stationary(request, dataset_id):
         
         # Get dataset
         # Security: Only allow access to user's own datasets
-    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
         path = _dataset_path(dataset)
         if not path:
             return JsonResponse({'error': 'Dataset has no file path'}, status=400)
