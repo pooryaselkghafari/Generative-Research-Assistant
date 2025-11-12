@@ -64,12 +64,16 @@ def register_view(request):
         form = UserRegistrationForm(request.POST)
         if form.is_valid():
             try:
+                # Create user from form first (but don't save yet)
+                user = form.save(commit=False)
+                user.email = form.cleaned_data['email']
+                
                 # Use the adapter to save user (same as allauth does)
                 from accounts.adapters import CustomAccountAdapter
                 adapter = CustomAccountAdapter()
                 
                 # Save user using adapter (this will create the profile)
-                user = adapter.save_user(request, form, commit=True)
+                user = adapter.save_user(request, user, form, commit=True)
                 
                 # Check if using console email backend
                 from django.conf import settings
