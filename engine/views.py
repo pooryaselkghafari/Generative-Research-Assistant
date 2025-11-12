@@ -244,9 +244,25 @@ def sitemap_xml(request):
     
     return HttpResponse('\n'.join(xml_lines), content_type='application/xml')
 
-def _list_context(current_session=None):
-    sessions = AnalysisSession.objects.order_by('-updated_at')[:50]
-    datasets = Dataset.objects.order_by('-uploaded_at')
+def _list_context(current_session=None, user=None):
+    """
+    Get context for listing sessions and datasets.
+    Only shows data for the specified user (security: user isolation).
+    """
+    if user is None or not user.is_authenticated:
+        # Return empty context for unauthenticated users
+        registry = get_registry()
+        return {
+            'sessions': AnalysisSession.objects.none(),
+            'datasets': Dataset.objects.none(),
+            'modules': registry,
+            'current': current_session,
+            'line_styles': ['solid', 'dashed', 'dotted', 'dashdot'],
+        }
+    
+    # Filter by user - only show user's own data
+    sessions = AnalysisSession.objects.filter(user=user).order_by('-updated_at')[:50]
+    datasets = Dataset.objects.filter(user=user).order_by('-uploaded_at')
     registry = get_registry()
     return {
         'sessions': sessions,
@@ -265,30 +281,39 @@ def index(request):
     session_id = request.GET.get('session_id')
     if session_id:
         try:
-            session = get_object_or_404(AnalysisSession, pk=session_id)
-            context = _list_context(current_session=session)
+            # Security: Only allow access to user's own sessions
+            session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+            context = _list_context(current_session=session, user=request.user)
         except (ValueError, AnalysisSession.DoesNotExist):
-            # Invalid session_id, just use default context
-            context = _list_context()
+            # Invalid session_id or not owned by user, just use default context
+            context = _list_context(user=request.user)
     else:
-        context = _list_context()
+        context = _list_context(user=request.user)
     
     # Check if a specific dataset should be auto-selected
     dataset_id = request.GET.get('dataset_id')
     if dataset_id:
-        context['auto_select_dataset_id'] = dataset_id
+        # Security: Verify dataset belongs to user
+        try:
+            Dataset.objects.get(pk=dataset_id, user=request.user)
+            context['auto_select_dataset_id'] = dataset_id
+        except Dataset.DoesNotExist:
+            # Dataset doesn't exist or doesn't belong to user - ignore
+            pass
     
     return render(request, 'engine/index.html', context)
 
 def edit_session(request, pk: int):
-    s = get_object_or_404(AnalysisSession, pk=pk)
-    return render(request, 'engine/index.html', _list_context(current_session=s))
+    # Security: Only allow access to user's own sessions
+    s = get_object_or_404(AnalysisSession, pk=pk, user=request.user)
+    return render(request, 'engine/index.html', _list_context(current_session=s, user=request.user))
 
 
 def get_dataset_variables(request, dataset_id):
     """API endpoint to get variables from a dataset"""
     try:
-        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        # Security: Only allow access to user's own datasets
+        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
         # Use efficient column-only loading for large datasets
         from engine.dataprep.loader import get_dataset_columns_only
         from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
@@ -338,7 +363,8 @@ def update_sessions_for_variable_rename(request, dataset_id):
             return JsonResponse({'success': False, 'error': 'No rename mapping provided'})
         
         # Find all sessions using this dataset
-        sessions = AnalysisSession.objects.filter(dataset_id=dataset_id)
+        # Security: Only update user's own sessions
+        sessions = AnalysisSession.objects.filter(dataset_id=dataset_id, user=request.user)
         updated_count = 0
         
         for session in sessions:
@@ -459,9 +485,10 @@ def upload_dataset(request):
     return redirect('index')
 
 def delete_dataset(request, pk: int):
-    ds = get_object_or_404(Dataset, pk=pk)
-    # Detach sessions from this dataset
-    AnalysisSession.objects.filter(dataset=ds).update(dataset=None)
+    # Security: Only allow deletion of user's own datasets
+    ds = get_object_or_404(Dataset, pk=pk, user=request.user)
+    # Detach sessions from this dataset (only user's own sessions)
+    AnalysisSession.objects.filter(dataset=ds, user=request.user).update(dataset=None)
     try:
         if os.path.exists(ds.file_path):
             os.remove(ds.file_path)
@@ -482,7 +509,8 @@ def run_analysis(request):
     dataset_id = request.POST.get('dataset_id')
     if not dataset_id:
         return HttpResponse('Please select a dataset from the dropdown', status=400)
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
 
     try:
         df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
@@ -661,7 +689,8 @@ def run_analysis(request):
     
     if action == 'update' and session_id:
         print(f"DEBUG: Updating existing session {session_id}")
-        sess = get_object_or_404(AnalysisSession, pk=session_id)
+        # Security: Only allow access to user's own sessions
+        sess = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
         
         
         sess.name = session_name
@@ -670,7 +699,7 @@ def run_analysis(request):
         sess.analysis_type = analysis_type
         sess.options = options
         sess.dataset = dataset
-        # Ensure user is set if not already set
+        # Ensure user is set
         if not sess.user and request.user.is_authenticated:
             sess.user = request.user
     else:
@@ -976,7 +1005,8 @@ def calculate_summary_stats(request, session_id):
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     try:
-        session = AnalysisSession.objects.get(id=session_id)
+        # Security: Only allow access to user's own sessions
+        session = get_object_or_404(AnalysisSession, id=session_id, user=request.user)
         dataset = session.dataset
         
         # Get selected variables from request
@@ -1019,7 +1049,8 @@ def delete_session(request, pk: int):
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
 
-    s = get_object_or_404(AnalysisSession, pk=pk)
+    # Security: Only allow deletion of user's own sessions
+    s = get_object_or_404(AnalysisSession, pk=pk, user=request.user)
 
     # Best-effort cleanup of this session’s output folder(s) under MEDIA_ROOT
     rels = [s.spotlight_rel]
@@ -1052,8 +1083,8 @@ def bulk_delete_sessions(request):
     if not session_ids:
         return redirect('index')
     
-    # Get sessions to delete
-    sessions_to_delete = AnalysisSession.objects.filter(id__in=session_ids)
+    # Security: Only allow deletion of user's own sessions
+    sessions_to_delete = AnalysisSession.objects.filter(id__in=session_ids, user=request.user)
     deleted_count = 0
     
     # Delete each session (with cleanup)
@@ -1412,7 +1443,8 @@ def generate_spotlight_plot(request, session_id):
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
-    session = get_object_or_404(AnalysisSession, pk=session_id)
+    # Security: Only allow access to user's own sessions
+    session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
     interaction = request.POST.get('interaction')
     
     if not interaction:
@@ -1661,9 +1693,13 @@ def generate_correlation_heatmap(request, session_id):
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
-    session = get_object_or_404(AnalysisSession, pk=session_id)
+    # Security: Only allow access to user's own sessions
+    session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
     
     try:
+        # Security: Verify dataset belongs to user
+        if session.dataset and session.dataset.user != request.user:
+            return JsonResponse({'error': 'Dataset access denied'}, status=403)
         # Load the dataset
         df, schema_types, schema_orders = _read_dataset_file(session.dataset.file_path)
         
@@ -1736,7 +1772,8 @@ def merge_datasets(request):
         
         for i, dataset_id in enumerate(dataset_ids):
             try:
-                dataset = get_object_or_404(Dataset, pk=dataset_id)
+                # Security: Only allow access to user's own datasets
+                dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
                 datasets.append(dataset)
                 
                 # Read dataset file
@@ -1809,9 +1846,11 @@ def merge_datasets(request):
             merged_df.to_csv(merged_file_path, index=False)
             
             # Create dataset record
+            # Security: Set user on merged dataset
             merged_dataset = Dataset.objects.create(
                 name=merged_filename,
-                file_path=merged_file_path
+                file_path=merged_file_path,
+                user=request.user
             )
             
             # Generate dataset name
@@ -1852,7 +1891,8 @@ def cancel_bayesian_analysis(request):
         
         if session_id:
             # Cancel specific session
-            session = get_object_or_404(AnalysisSession, pk=session_id)
+            # Security: Only allow access to user's own sessions
+            session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
             
             # Instead of marking as cancelled, we'll just return success
             # The frontend will reload to show the previous state
@@ -1926,7 +1966,8 @@ def run_bma_analysis(request):
         # Update existing session or create new one
         if action == 'update' and session_id:
             print(f"DEBUG: Updating existing BMA session {session_id}")
-            session = get_object_or_404(AnalysisSession, pk=session_id)
+            # Security: Only allow access to user's own sessions
+            session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
             session.name = session_name
             session.module = 'bma'
             session.formula = formula
@@ -2008,7 +2049,8 @@ def generate_anova_plot_view(request, session_id):
         return JsonResponse({'error': 'POST only'}, status=405)
     
     try:
-        session = get_object_or_404(AnalysisSession, pk=session_id)
+        # Security: Only allow access to user's own sessions
+        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
         
         # Parse JSON body
         import json
@@ -2090,7 +2132,8 @@ def run_anova_analysis(request):
         # Update existing session or create new one
         if action == 'update' and session_id:
             print(f"DEBUG: Updating existing ANOVA session {session_id}")
-            session = get_object_or_404(AnalysisSession, pk=session_id)
+            # Security: Only allow access to user's own sessions
+            session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
             session.name = session_name
             session.module = 'anova'
             session.formula = formula
@@ -2235,7 +2278,8 @@ def run_varx_analysis(request):
         # Update existing session or create new one
         if action == 'update' and session_id:
             print(f"DEBUG: Updating existing VARX session {session_id}")
-            session = get_object_or_404(AnalysisSession, pk=session_id)
+            # Security: Only allow access to user's own sessions
+            session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
             session.name = session_name
             session.module = 'varx'
             session.formula = formula
@@ -3160,14 +3204,16 @@ def add_model_errors_to_dataset(request, session_id):
         import statsmodels.formula.api as smf
         
         # Get session and dataset
-        session = get_object_or_404(AnalysisSession, pk=session_id)
+        # Security: Only allow access to user's own sessions
+        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
         data = json.loads(request.body)
         dataset_id = data.get('dataset_id')
         
         if not dataset_id:
             return JsonResponse({'error': 'dataset_id is required'}, status=400)
         
-        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        # Security: Only allow access to user's own datasets
+        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
         
         # Check if session has a fitted model
         if not session.fitted_model:

@@ -37,7 +37,8 @@ def _dataset_path(ds: Dataset) -> str:
     return getattr(ds, "file_path", None) or getattr(getattr(ds, "file", None), "path", None)
 
 def open_cleaner(request, dataset_id):
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -254,7 +255,8 @@ def apply_cleaning(request, dataset_id: int):
     if request.method != "POST":
         return HttpResponse("POST only", status=405)
 
-    ds = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    ds = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(ds)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -402,7 +404,8 @@ def normalize_columns(request, dataset_id):
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -501,7 +504,8 @@ def merge_columns_preview(request, dataset_id):
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -560,7 +564,8 @@ def get_column_values(request, dataset_id):
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -601,7 +606,8 @@ def apply_column_coding(request, dataset_id):
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -658,7 +664,8 @@ def merge_columns(request, dataset_id):
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -729,7 +736,8 @@ def get_column_values(request, dataset_id):
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -771,7 +779,8 @@ def apply_column_coding(request, dataset_id):
     if request.method != "POST":
         return HttpResponse("Method not allowed", status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
@@ -845,7 +854,8 @@ def drop_columns(request, dataset_id):
     if request.method != "POST":
         return HttpResponse(json.dumps({"error": "Method not allowed"}), status=405, content_type="application/json")
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse(json.dumps({"error": "Dataset has no file path"}), status=400, content_type="application/json")
@@ -909,7 +919,8 @@ def detect_date_formats_api(request, dataset_id):
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse(json.dumps({"error": "Dataset has no file path"}), status=400, content_type="application/json")
@@ -948,7 +959,8 @@ def convert_date_format_api(request, dataset_id):
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
-    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse(json.dumps({"error": "Dataset has no file path"}), status=400, content_type="application/json")
@@ -1077,7 +1089,8 @@ def fix_stationary(request, dataset_id):
             return JsonResponse({'error': 'Transform type must be "diff" or "log"'}, status=400)
         
         # Get dataset
-        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        # Security: Only allow access to user's own datasets
+    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
         path = _dataset_path(dataset)
         if not path:
             return JsonResponse({'error': 'Dataset has no file path'}, status=400)
