@@ -13,9 +13,15 @@ from engine.services.row_filtering_service import RowFilteringService
 from engine.services.dataset_merge_service import DatasetMergeService
 from data_prep.file_handling import _read_dataset_file
 
-os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
-DATASET_DIR = os.path.join(settings.MEDIA_ROOT, 'datasets')
-os.makedirs(DATASET_DIR, exist_ok=True)
+# Create media directories lazily (not at import time)
+# This prevents permission errors during management commands
+try:
+    os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+    DATASET_DIR = os.path.join(settings.MEDIA_ROOT, 'datasets')
+    os.makedirs(DATASET_DIR, exist_ok=True)
+except (PermissionError, OSError):
+    # If we can't create directories at import time, create them when needed
+    DATASET_DIR = os.path.join(settings.MEDIA_ROOT, 'datasets')
 
 def get_dataset_variables(request, dataset_id):
     """API endpoint to get variables from a dataset"""
@@ -147,6 +153,13 @@ def upload_dataset(request):
         return HttpResponse('POST only', status=405)
     if 'dataset' not in request.FILES:
         return HttpResponse('No dataset file provided', status=400)
+    
+    # Ensure directories exist (create if needed)
+    try:
+        os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+        os.makedirs(DATASET_DIR, exist_ok=True)
+    except (PermissionError, OSError) as e:
+        return JsonResponse({'success': False, 'error': f'Cannot create media directory: {str(e)}'}, status=500)
     
     user = request.user
     f = request.FILES['dataset']

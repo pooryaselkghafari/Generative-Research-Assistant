@@ -49,6 +49,7 @@ sentry-sdk[django]>=1.30.0
 
 # Environment Management
 python-decouple>=3.8
+python-dotenv>=1.0.0  # For loading .env files
 
 # Security
 django-ratelimit>=4.0.0

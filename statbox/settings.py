@@ -1,5 +1,19 @@
 import os
 from pathlib import Path
+
+# Load environment variables from .env file (if it exists)
+# This allows using .env file instead of exporting variables manually
+try:
+    from dotenv import load_dotenv
+    # Load .env file from project root
+    env_path = Path(__file__).resolve().parent.parent / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    # python-dotenv not installed, skip .env loading
+    # Environment variables must be set manually or via system
+    pass
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 STATIC_URL = '/static/'
