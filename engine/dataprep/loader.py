@@ -217,7 +217,7 @@ def _read_json_robust(path: str, *, nrows=None) -> pd.DataFrame:
         else:
             raise
 
-def get_dataset_columns_only(path: str, *, sheet=None) -> tuple[list, dict]:
+def get_dataset_columns_only(path: str, *, sheet=None, user_id=None) -> tuple[list, dict]:
     """Get only column names and types without loading the full dataset."""
     if not path:
         raise FileNotFoundError("Dataset path is empty.")
@@ -225,32 +225,45 @@ def get_dataset_columns_only(path: str, *, sheet=None) -> tuple[list, dict]:
     if not p.exists():
         raise FileNotFoundError(f"Dataset file not found: {path}")
 
-    ext = p.suffix.lower()
-    if ext in {".csv", ".tsv", ".txt", ""}:
-        # Read only first few rows to get column names and sample data for type detection
-        df_sample = _read_csv_robust(path, nrows=1000)
-    elif ext in {".xlsx", ".xls", ".xlsm"}:
-        df_sample = _read_excel_robust(path, sheet=sheet, nrows=1000)
-    elif ext in {".json", ".ndjson", ".jsonl"}:
-        df_sample = _read_json_robust(path, nrows=1000)
-    else:
-        try:
-            df_sample = _read_csv_robust(path, nrows=1000)
-        except Exception:
+    # Check if file is encrypted and handle decryption
+    from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
+    decrypted_path = None
+    try:
+        if is_encrypted_file(str(path)):
+            # Get temporary decrypted file path
+            decrypted_path = get_decrypted_path(str(path), user_id=user_id)
+            working_path = decrypted_path
+        else:
+            working_path = str(path)
+        
+        p = Path(working_path)
+        ext = p.suffix.lower()
+        if ext in {".csv", ".tsv", ".txt", ""}:
+            # Read only first few rows to get column names and sample data for type detection
+            df_sample = _read_csv_robust(working_path, nrows=1000)
+        elif ext in {".xlsx", ".xls", ".xlsm"}:
+            df_sample = _read_excel_robust(working_path, sheet=sheet, nrows=1000)
+        elif ext in {".json", ".ndjson", ".jsonl"}:
+            df_sample = _read_json_robust(working_path, nrows=1000)
+        else:
             try:
-                df_sample = _read_excel_robust(path, sheet=sheet, nrows=1000)
+                df_sample = _read_csv_robust(working_path, nrows=1000)
             except Exception:
-                df_sample = _read_json_robust(path, nrows=1000)
+                try:
+                    df_sample = _read_excel_robust(working_path, sheet=sheet, nrows=1000)
+                except Exception:
+                    df_sample = _read_json_robust(working_path, nrows=1000)
 
-    _sanitize_columns_inplace(df_sample)
-    if df_sample.columns.duplicated().any():
-        df_sample = df_sample.loc[:, ~df_sample.columns.duplicated()].copy()
-    
-    # Auto-detect column types using sample data
-    detected_types = _auto_detect_column_types(df_sample)
-    
-    # Apply schema sidecar if present (types/orders)
-    schema_path = str(Path(path).with_suffix('')) + '.schema.json'
+        _sanitize_columns_inplace(df_sample)
+        if df_sample.columns.duplicated().any():
+            df_sample = df_sample.loc[:, ~df_sample.columns.duplicated()].copy()
+        
+        # Auto-detect column types using sample data
+        detected_types = _auto_detect_column_types(df_sample)
+        
+        # Apply schema sidecar if present (types/orders)
+        # Use original path (not decrypted path) for schema file location
+        schema_path = str(Path(str(path)).with_suffix('')) + '.schema.json'
     sp = Path(schema_path)
     if sp.exists():
         try:
@@ -271,42 +284,64 @@ def get_dataset_columns_only(path: str, *, sheet=None) -> tuple[list, dict]:
         except Exception as e:
             print(f"DEBUG: Failed to save schema: {e}")
     
-    return list(df_sample.columns), detected_types
+        result = (list(df_sample.columns), detected_types)
+    finally:
+        # Clean up temporary decrypted file if it was created
+        if decrypted_path and os.path.exists(decrypted_path):
+            try:
+                os.unlink(decrypted_path)
+            except Exception:
+                pass
+    
+    return result
 
-def load_dataframe_any(path: str, *, sheet=None, preview_rows=None) -> tuple[pd.DataFrame, dict]:
+def load_dataframe_any(path: str, *, sheet=None, preview_rows=None, user_id=None) -> tuple[pd.DataFrame, dict]:
     if not path:
         raise FileNotFoundError("Dataset path is empty.")
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Dataset file not found: {path}")
 
-    ext = p.suffix.lower()
-    if ext in {".csv", ".tsv", ".txt", ""}:
-        df = _read_csv_robust(path, nrows=preview_rows)
-    elif ext in {".xlsx", ".xls", ".xlsm"}:
-        df = _read_excel_robust(path, sheet=sheet, nrows=preview_rows)
-    elif ext in {".json", ".ndjson", ".jsonl"}:
-        df = _read_json_robust(path, nrows=preview_rows)
-    else:
-        try:
-            df = _read_csv_robust(path, nrows=preview_rows)
-        except Exception:
-            try:
-                df = _read_excel_robust(path, sheet=sheet, nrows=preview_rows)
-            except Exception:
-                df = _read_json_robust(path, nrows=preview_rows)
-
-    _sanitize_columns_inplace(df)
-    if df.columns.duplicated().any():
-        df = df.loc[:, ~df.columns.duplicated()].copy()
-    
-    # Auto-detect and assign column types
-    detected_types = _auto_detect_column_types(df)
-    
-    # Apply schema sidecar if present (types/orders)
+    # Check if file is encrypted and handle decryption
+    from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
+    decrypted_path = None
     try:
-        schema_path = str(Path(path).with_suffix('')) + '.schema.json'
-        sp = Path(schema_path)
+        if is_encrypted_file(str(path)):
+            # Get temporary decrypted file path
+            decrypted_path = get_decrypted_path(str(path), user_id=user_id)
+            working_path = decrypted_path
+        else:
+            working_path = str(path)
+        
+        p = Path(working_path)
+        ext = p.suffix.lower()
+        if ext in {".csv", ".tsv", ".txt", ""}:
+            df = _read_csv_robust(working_path, nrows=preview_rows)
+        elif ext in {".xlsx", ".xls", ".xlsm"}:
+            df = _read_excel_robust(working_path, sheet=sheet, nrows=preview_rows)
+        elif ext in {".json", ".ndjson", ".jsonl"}:
+            df = _read_json_robust(working_path, nrows=preview_rows)
+        else:
+            try:
+                df = _read_csv_robust(working_path, nrows=preview_rows)
+            except Exception:
+                try:
+                    df = _read_excel_robust(working_path, sheet=sheet, nrows=preview_rows)
+                except Exception:
+                    df = _read_json_robust(working_path, nrows=preview_rows)
+
+        _sanitize_columns_inplace(df)
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated()].copy()
+        
+        # Auto-detect and assign column types
+        detected_types = _auto_detect_column_types(df)
+        
+        # Apply schema sidecar if present (types/orders)
+        # Use original path (not decrypted path) for schema file location
+        try:
+            schema_path = str(Path(str(path)).with_suffix('')) + '.schema.json'
+            sp = Path(schema_path)
         if sp.exists():
             with open(sp, 'r', encoding='utf-8') as f:
                 schema = json.load(f)
@@ -343,9 +378,18 @@ def load_dataframe_any(path: str, *, sheet=None, preview_rows=None) -> tuple[pd.
         # best-effort; ignore schema errors
         pass
     
-    # Merge detected types with schema types (schema takes precedence)
-    final_types = detected_types.copy()
-    if 'types' in locals():
-        final_types.update(types)
+        # Merge detected types with schema types (schema takes precedence)
+        final_types = detected_types.copy()
+        if 'types' in locals():
+            final_types.update(types)
+        
+        result = (df, final_types)
+    finally:
+        # Clean up temporary decrypted file if it was created
+        if decrypted_path and os.path.exists(decrypted_path):
+            try:
+                os.unlink(decrypted_path)
+            except Exception:
+                pass
     
-    return df, final_types
+    return result[0], result[1]

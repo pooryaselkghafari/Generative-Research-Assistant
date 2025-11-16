@@ -62,8 +62,13 @@ def read_encrypted_file(encrypted_path, user_id=None, as_dataframe=True, **kwarg
     # Get encryption instance
     enc = get_encryption()
     
-    # Create temporary file for decrypted data
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp_file:
+    # Determine file type from original path BEFORE creating temp file
+    original_ext = os.path.splitext(encrypted_path.replace('.encrypted', ''))[1].lower()
+    
+    # Create temporary file with correct extension for proper format detection
+    # Use original extension so pandas can detect the format correctly
+    suffix = original_ext if original_ext else '.csv'
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
         tmp_path = tmp_file.name
     
     try:
@@ -71,8 +76,6 @@ def read_encrypted_file(encrypted_path, user_id=None, as_dataframe=True, **kwarg
         enc.decrypt_file(encrypted_path, tmp_path, user_id)
         
         if as_dataframe:
-            # Determine file type from original path
-            original_ext = os.path.splitext(encrypted_path.replace('.encrypted', ''))[1].lower()
             
             # Read as DataFrame based on extension
             if original_ext in ['.xlsx', '.xlsm']:

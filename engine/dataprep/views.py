@@ -64,11 +64,11 @@ def open_cleaner(request, dataset_id):
         
         try:
             # Get column names and types efficiently
-            columns, column_types = get_dataset_columns_only(working_path)
+            columns, column_types = get_dataset_columns_only(working_path, user_id=request.user.id)
             
             # Load only a small sample for preview and analysis
             MAX_PREVIEW_ROWS = 1000  # Limit preview to 1000 rows for large datasets
-            df_sample, _ = load_dataframe_any(working_path, preview_rows=MAX_PREVIEW_ROWS)
+            df_sample, _ = load_dataframe_any(working_path, preview_rows=MAX_PREVIEW_ROWS, user_id=request.user.id)
         finally:
             # Clean up temporary decrypted file if it was created
             if is_encrypted_file(path) and os.path.exists(decrypted_path):
@@ -276,7 +276,7 @@ def apply_cleaning(request, dataset_id: int):
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
     try:
-        df, column_types = load_dataframe_any(path)
+        df, column_types = load_dataframe_any(path, user_id=request.user.id)
     except Exception as e:
         return HttpResponse(f"Failed to read dataset: {e}", status=400, content_type="text/plain")
 
@@ -439,7 +439,7 @@ def normalize_columns(request, dataset_id):
                               status=400, content_type="application/json")
         
         # Load the full dataset
-        df, _ = load_dataframe_any(path)
+        df, _ = load_dataframe_any(path, user_id=request.user.id)
         
         # Check if columns exist and are numeric
         missing_cols = [col for col in columns if col not in df.columns]
@@ -544,7 +544,7 @@ def merge_columns_preview(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Formula is required"}), status=400, content_type="application/json")
         
         # Load dataset
-        df, _ = load_dataframe_any(path)
+        df, _ = load_dataframe_any(path, user_id=request.user.id)
         
         # Check if column name already exists
         if column_name in df.columns:
@@ -603,7 +603,7 @@ def get_column_values(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Column name is required"}), status=400, content_type="application/json")
         
         # Load dataset
-        df, _ = load_dataframe_any(path)
+        df, _ = load_dataframe_any(path, user_id=request.user.id)
         
         # Check if column exists
         if column_name not in df.columns:
@@ -652,7 +652,7 @@ def apply_column_coding(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Value mapping is required"}), status=400, content_type="application/json")
         
         # Load dataset
-        df, column_types = load_dataframe_any(path)
+        df, column_types = load_dataframe_any(path, user_id=request.user.id)
         
         # Check if column exists
         if column_name not in df.columns:
@@ -713,7 +713,7 @@ def merge_columns(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Formula is required"}), status=400, content_type="application/json")
         
         # Load dataset
-        df, column_types = load_dataframe_any(path)
+        df, column_types = load_dataframe_any(path, user_id=request.user.id)
         
         # Check if column name already exists
         if column_name in df.columns:
@@ -784,7 +784,7 @@ def get_column_values(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Column name is required"}), status=400, content_type="application/json")
         
         # Load dataset
-        df, _ = load_dataframe_any(path)
+        df, _ = load_dataframe_any(path, user_id=request.user.id)
         
         # Check if column exists
         if column_name not in df.columns:
@@ -836,7 +836,7 @@ def apply_column_coding(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Value mapping is required"}), status=400, content_type="application/json")
         
         # Load dataset
-        df, column_types = load_dataframe_any(path)
+        df, column_types = load_dataframe_any(path, user_id=request.user.id)
         
         # Check if column exists
         if column_name not in df.columns:
@@ -901,7 +901,7 @@ def drop_columns(request, dataset_id):
     
     try:
         # Load the dataset
-        df, column_types = load_dataframe_any(path)
+        df, column_types = load_dataframe_any(path, user_id=request.user.id)
         original_column_count = len(df.columns)
         
         # Get columns to drop from request
@@ -976,7 +976,7 @@ def detect_date_formats_api(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Column name required"}), status=400, content_type="application/json")
         
         # Load dataset
-        df, _ = load_dataframe_any(path, preview_rows=1000)
+        df, _ = load_dataframe_any(path, preview_rows=1000, user_id=request.user.id)
         
         if column_name not in df.columns:
             return HttpResponse(json.dumps({"error": f"Column '{column_name}' not found"}), status=400, content_type="application/json")
@@ -1036,7 +1036,7 @@ def convert_date_format_api(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Column name required"}), status=400, content_type="application/json")
         
         # Load full dataset
-        df, _ = load_dataframe_any(path)
+        df, _ = load_dataframe_any(path, user_id=request.user.id)
         
         if column_name not in df.columns:
             return HttpResponse(json.dumps({"error": f"Column '{column_name}' not found"}), status=400, content_type="application/json")
@@ -1144,7 +1144,7 @@ def fix_stationary(request, dataset_id):
             return JsonResponse({'error': 'Dataset has no file path'}, status=400)
         
         # Load dataset
-        df, _ = load_dataframe_any(path)
+        df, _ = load_dataframe_any(path, user_id=request.user.id)
         
         if variable_name not in df.columns:
             return JsonResponse({'error': f'Variable "{variable_name}" not found in dataset'}, status=400)

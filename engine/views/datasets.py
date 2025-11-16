@@ -63,7 +63,7 @@ def get_dataset_variables(request, dataset_id):
                 'error': f'Dataset file not found: {dataset.name}'
             }, status=404)
         
-        variables, column_types = get_dataset_columns_only(working_path)
+        variables, column_types = get_dataset_columns_only(working_path, user_id=request.user.id)
         return JsonResponse({
             'success': True,
             'variables': variables,
