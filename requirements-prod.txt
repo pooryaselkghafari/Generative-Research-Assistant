@@ -40,6 +40,9 @@ django-allauth>=0.61.0
 PyJWT>=2.9.0  # Required for Google OAuth in allauth
 cryptography>=43.0.0  # Required for Google OAuth JWT handling in allauth
 
+# Rich Text Editor
+django-ckeditor>=6.7.0  # Rich text editor for admin (Privacy Policy, Terms of Service, Pages)
+
 # Production Server
 gunicorn>=23.0.0
 whitenoise>=6.7.0

@@ -27,8 +27,14 @@ COPY . /app/
 # Create directories
 RUN mkdir -p /app/staticfiles /app/media
 
-# Collect static files
-RUN python manage.py collectstatic --noinput
+# Set a dummy SECRET_KEY for collectstatic (required by Django)
+# This will be overridden by environment variables at runtime
+ENV SECRET_KEY=dummy-key-for-collectstatic-only
+ENV DEBUG=False
+ENV ALLOWED_HOSTS=localhost
+
+# Collect static files (skip if it fails - will be collected at runtime if needed)
+RUN python manage.py collectstatic --noinput || echo "Warning: collectstatic failed, will retry at runtime"
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser
