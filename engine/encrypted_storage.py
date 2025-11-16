@@ -173,6 +173,14 @@ def get_decrypted_path(encrypted_path, user_id=None):
             raise ValueError("Decryption failed: output file is empty")
         
         return tmp_path
+    except FileNotFoundError as e:
+        # Clean up temp file on error
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+        raise FileNotFoundError(f"Encrypted file not found: {encrypted_path}") from e
     except Exception as e:
         # Clean up temp file on error
         if os.path.exists(tmp_path):
@@ -180,6 +188,16 @@ def get_decrypted_path(encrypted_path, user_id=None):
                 os.unlink(tmp_path)
             except:
                 pass
-        raise ValueError(f"Failed to decrypt file {encrypted_path}: {e}") from e
+        # Provide more context about the error
+        error_msg = str(e)
+        if "InvalidTag" in str(type(e).__name__) or "decryption" in error_msg.lower():
+            raise ValueError(
+                f"Failed to decrypt file {encrypted_path}. "
+                f"This usually means: (1) wrong encryption key (check ENCRYPTION_KEY in .env), "
+                f"(2) wrong user_id (file was encrypted with different user), "
+                f"or (3) file is corrupted. Original error: {error_msg}"
+            ) from e
+        else:
+            raise ValueError(f"Failed to decrypt file {encrypted_path}: {error_msg}") from e
 
 

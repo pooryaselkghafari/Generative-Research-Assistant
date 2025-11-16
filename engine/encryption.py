@@ -178,25 +178,64 @@ class DataEncryption:
             output_path: Path to save decrypted file
             user_id: Optional user ID for user-specific decryption
             chunk_size: Size of chunks to read/write
+            
+        Raises:
+            FileNotFoundError: If input file doesn't exist
+            ValueError: If file is too small or corrupted
+            cryptography.exceptions.InvalidTag: If decryption fails (wrong key or corrupted data)
         """
-        with open(input_path, 'rb') as infile, open(output_path, 'wb') as outfile:
-            # Read salt and nonce
-            salt = infile.read(16)
-            nonce = infile.read(self.NONCE_SIZE)
-            key = self._derive_key(salt, user_id)
-            aesgcm = AESGCM(key)
-            
-            # Decrypt file in chunks
-            # Note: Each encrypted chunk includes 16-byte authentication tag
-            encrypted_chunk_size = chunk_size + 16
-            
-            while True:
-                encrypted_chunk = infile.read(encrypted_chunk_size)
-                if not encrypted_chunk:
-                    break
+        from cryptography.exceptions import InvalidTag
+        
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Encrypted file not found: {input_path}")
+        
+        file_size = os.path.getsize(input_path)
+        min_size = 16 + self.NONCE_SIZE + 16  # salt + nonce + minimum one encrypted chunk
+        if file_size < min_size:
+            raise ValueError(f"Encrypted file is too small ({file_size} bytes). Minimum size: {min_size} bytes. File may be corrupted.")
+        
+        try:
+            with open(input_path, 'rb') as infile, open(output_path, 'wb') as outfile:
+                # Read salt and nonce
+                salt = infile.read(16)
+                if len(salt) != 16:
+                    raise ValueError(f"Failed to read salt: expected 16 bytes, got {len(salt)}")
                 
-                decrypted_chunk = aesgcm.decrypt(nonce, encrypted_chunk, None)
-                outfile.write(decrypted_chunk)
+                nonce = infile.read(self.NONCE_SIZE)
+                if len(nonce) != self.NONCE_SIZE:
+                    raise ValueError(f"Failed to read nonce: expected {self.NONCE_SIZE} bytes, got {len(nonce)}")
+                
+                key = self._derive_key(salt, user_id)
+                aesgcm = AESGCM(key)
+                
+                # Decrypt file in chunks
+                # Note: Each encrypted chunk includes 16-byte authentication tag
+                encrypted_chunk_size = chunk_size + 16
+                chunk_count = 0
+                
+                while True:
+                    encrypted_chunk = infile.read(encrypted_chunk_size)
+                    if not encrypted_chunk:
+                        break
+                    
+                    if len(encrypted_chunk) < 16:
+                        raise ValueError(f"Encrypted chunk too small: {len(encrypted_chunk)} bytes (minimum 16 for auth tag)")
+                    
+                    try:
+                        decrypted_chunk = aesgcm.decrypt(nonce, encrypted_chunk, None)
+                        outfile.write(decrypted_chunk)
+                        chunk_count += 1
+                    except InvalidTag as e:
+                        raise InvalidTag(
+                            f"Decryption failed at chunk {chunk_count}. "
+                            f"This usually means: (1) wrong encryption key, (2) wrong user_id, "
+                            f"or (3) file is corrupted. Original error: {e}"
+                        ) from e
+        except (FileNotFoundError, ValueError, InvalidTag):
+            # Re-raise these with context
+            raise
+        except Exception as e:
+            raise ValueError(f"Unexpected error during decryption: {type(e).__name__}: {e}") from e
 
 
 # Global encryption instance
