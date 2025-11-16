@@ -264,26 +264,26 @@ def get_dataset_columns_only(path: str, *, sheet=None, user_id=None) -> tuple[li
         # Apply schema sidecar if present (types/orders)
         # Use original path (not decrypted path) for schema file location
         schema_path = str(Path(str(path)).with_suffix('')) + '.schema.json'
-    sp = Path(schema_path)
-    if sp.exists():
-        try:
-            with open(sp, 'r', encoding='utf-8') as f:
-                schema = json.load(f)
-            types = schema.get('types') or {}
-            # Override detected types with schema types
-            detected_types.update(types)
-        except Exception:
-            pass
-    else:
-        # If no schema exists, save the detected types to create a schema
-        try:
-            schema = {"types": detected_types, "orders": {}}
-            with open(schema_path, 'w', encoding='utf-8') as f:
-                json.dump(schema, f, ensure_ascii=False, indent=2)
-            print(f"DEBUG: Created schema file with detected types: {detected_types}")
-        except Exception as e:
-            print(f"DEBUG: Failed to save schema: {e}")
-    
+        sp = Path(schema_path)
+        if sp.exists():
+            try:
+                with open(sp, 'r', encoding='utf-8') as f:
+                    schema = json.load(f)
+                types = schema.get('types') or {}
+                # Override detected types with schema types
+                detected_types.update(types)
+            except Exception:
+                pass
+        else:
+            # If no schema exists, save the detected types to create a schema
+            try:
+                schema = {"types": detected_types, "orders": {}}
+                with open(schema_path, 'w', encoding='utf-8') as f:
+                    json.dump(schema, f, ensure_ascii=False, indent=2)
+                print(f"DEBUG: Created schema file with detected types: {detected_types}")
+            except Exception as e:
+                print(f"DEBUG: Failed to save schema: {e}")
+        
         result = (list(df_sample.columns), detected_types)
     finally:
         # Clean up temporary decrypted file if it was created
@@ -342,41 +342,41 @@ def load_dataframe_any(path: str, *, sheet=None, preview_rows=None, user_id=None
         try:
             schema_path = str(Path(str(path)).with_suffix('')) + '.schema.json'
             sp = Path(schema_path)
-        if sp.exists():
-            with open(sp, 'r', encoding='utf-8') as f:
-                schema = json.load(f)
-            types = schema.get('types') or {}
-            orders = schema.get('orders') or {}
-            from pandas.api.types import CategoricalDtype
-            for col, t in types.items():
-                if col not in df.columns:
-                    continue
-                t = (t or 'auto').lower()
-                if t == 'numeric':
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                elif t == 'count':
-                    df[col] = pd.to_numeric(df[col], errors='coerce').round().astype('Int64')
-                elif t == 'categorical' or t == 'binary':
-                    df[col] = df[col].astype('category')
-                elif t == 'ordinal':
-                    order_str = orders.get(col) or ""
-                    order = [x.strip() for x in order_str.split(",") if x.strip()] if order_str else []
-                    # Replace categories not present in order with string versions to avoid empty-category errors
-                    if order:
-                        # Convert values not in order to strings so astype doesn't fail on unseen categories
-                        mask = ~df[col].isin(order) & df[col].notna()
-                        if mask.any():
-                            df.loc[mask, col] = df.loc[mask, col].astype(str)
-                        dtype = CategoricalDtype(categories=order, ordered=True)
-                        df[col] = df[col].astype(dtype)
-                    else:
-                        # best-effort: infer order from uniques
-                        cats = sorted(df[col].dropna().astype(str).unique().tolist())
-                        dtype = CategoricalDtype(categories=cats, ordered=True)
-                        df[col] = df[col].astype(dtype)
-    except Exception:
-        # best-effort; ignore schema errors
-        pass
+            if sp.exists():
+                with open(sp, 'r', encoding='utf-8') as f:
+                    schema = json.load(f)
+                types = schema.get('types') or {}
+                orders = schema.get('orders') or {}
+                from pandas.api.types import CategoricalDtype
+                for col, t in types.items():
+                    if col not in df.columns:
+                        continue
+                    t = (t or 'auto').lower()
+                    if t == 'numeric':
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                    elif t == 'count':
+                        df[col] = pd.to_numeric(df[col], errors='coerce').round().astype('Int64')
+                    elif t == 'categorical' or t == 'binary':
+                        df[col] = df[col].astype('category')
+                    elif t == 'ordinal':
+                        order_str = orders.get(col) or ""
+                        order = [x.strip() for x in order_str.split(",") if x.strip()] if order_str else []
+                        # Replace categories not present in order with string versions to avoid empty-category errors
+                        if order:
+                            # Convert values not in order to strings so astype doesn't fail on unseen categories
+                            mask = ~df[col].isin(order) & df[col].notna()
+                            if mask.any():
+                                df.loc[mask, col] = df.loc[mask, col].astype(str)
+                            dtype = CategoricalDtype(categories=order, ordered=True)
+                            df[col] = df[col].astype(dtype)
+                        else:
+                            # best-effort: infer order from uniques
+                            cats = sorted(df[col].dropna().astype(str).unique().tolist())
+                            dtype = CategoricalDtype(categories=cats, ordered=True)
+                            df[col] = df[col].astype(dtype)
+        except Exception:
+            # best-effort; ignore schema errors
+            pass
     
         # Merge detected types with schema types (schema takes precedence)
         final_types = detected_types.copy()
