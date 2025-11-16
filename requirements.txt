@@ -13,3 +13,5 @@ cryptography>=43.0.0
 django-allauth>=0.61.0
 PyJWT>=2.9.0  # Required for Google OAuth in allauth
 python-dotenv>=1.0.0  # For loading .env files
+openpyxl>=3.1.0  # For reading Excel files (.xlsx, .xlsm)
+xlrd>=2.0.0  # For reading legacy Excel files (.xls)
