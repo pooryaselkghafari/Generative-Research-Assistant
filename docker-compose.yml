@@ -39,7 +39,7 @@ services:
       - DB_NAME=${DB_NAME:-gra}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD}
-      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_HOST=${DB_HOST:-localhost}  # Use localhost since web is on host network
       - DB_PORT=${DB_PORT:-5432}
       - STRIPE_PUBLIC_KEY=${STRIPE_PUBLIC_KEY}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
