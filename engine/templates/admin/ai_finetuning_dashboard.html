@@ -1,0 +1,194 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}AI Fine-tuning Dashboard{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/ai_finetuning_dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+  <div class="dashboard-header">
+    <h1>🤖 AI Fine-tuning Dashboard</h1>
+    <p>Upload files and send commands to fine-tune your AI model</p>
+  </div>
+  
+  <div id="alertContainer" class="alert-container"></div>
+  
+  <div class="dashboard-grid">
+    <!-- File Upload Section -->
+    <div class="dashboard-card">
+      <h2>📁 Upload Files</h2>
+      
+      <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Drop zone for file upload">
+        <div class="drop-zone-icon">📤</div>
+        <div class="drop-zone-text">Drag and drop files here or click to browse</div>
+        <div class="drop-zone-hint">Supports: JSON, TXT, CSV, and other text files</div>
+        <input type="file" id="fileInput" class="file-input-hidden" multiple accept=".json,.txt,.csv,.md">
+      </div>
+      
+      <div class="form-group">
+        <label for="fileName">File Name/Description:</label>
+        <input type="text" id="fileName" placeholder="e.g., Training Data - Q&A Pairs">
+      </div>
+      
+      <div class="form-group">
+        <label for="fileDescription">Additional Description:</label>
+        <textarea id="fileDescription" placeholder="Describe what this file contains..."></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label for="fileType">File Type:</label>
+        <select id="fileType">
+          <option value="training">Training Data</option>
+          <option value="validation">Validation Data</option>
+          <option value="prompt">Prompt Template</option>
+          <option value="system">System Instructions</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      
+      <h2 style="margin-top: 30px; margin-bottom: 15px;">📋 Active Files</h2>
+      <div class="file-list" id="fileList">
+        {% for file in active_files %}
+        <div class="file-item {% if not file.is_active %}inactive{% endif %}" data-file-id="{{ file.id }}">
+          <div class="file-info">
+            <div class="file-name">
+              {{ file.name }}
+              <span class="file-type-badge">{{ file.get_file_type_display }}</span>
+            </div>
+            <div class="file-meta">
+              Uploaded: {{ file.uploaded_at|date:"M d, Y H:i" }} | 
+              {% if file.uploaded_by %}{{ file.uploaded_by.username }}{% else %}System{% endif %}
+              {% if file.description %}<br>{{ file.description|truncatewords:15 }}{% endif %}
+            </div>
+          </div>
+          <div class="file-actions">
+            <button class="btn-small btn-toggle" onclick="window.AIFineTuningDashboard.toggleFile({{ file.id }})">
+              {% if file.is_active %}Disable{% else %}Enable{% endif %}
+            </button>
+            <button class="btn-small btn-delete" onclick="window.AIFineTuningDashboard.deleteFile({{ file.id }})">Delete</button>
+          </div>
+        </div>
+        {% empty %}
+        <p class="empty-state">No files uploaded yet</p>
+        {% endfor %}
+      </div>
+    </div>
+    
+    <!-- Command Section -->
+    <div class="dashboard-card">
+      <h2>⚙️ Send Fine-tuning Command</h2>
+      
+      <form class="command-form" id="commandForm">
+        <div class="form-group">
+          <label for="commandType">Command Type:</label>
+          <select id="commandType" required>
+            <option value="fine_tune">Fine-tune Model</option>
+            <option value="update_prompt">Update System Prompt</option>
+            <option value="add_context">Add Context Data</option>
+            <option value="test_model">Test Model</option>
+            <option value="reset_model">Reset Model</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="commandDescription">Description:</label>
+          <textarea id="commandDescription" required placeholder="Describe what this command should do..."></textarea>
+        </div>
+        
+        <div class="form-group" id="promptGroup" style="display: none;">
+          <label for="promptText">System Prompt:</label>
+          <textarea id="promptText" placeholder="Enter the new system prompt..."></textarea>
+        </div>
+        
+        <div class="form-group" id="testMessageGroup" style="display: none;">
+          <label for="testMessage">Test Message:</label>
+          <input type="text" id="testMessage" placeholder="Enter a test message for the AI...">
+        </div>
+        
+        <div class="form-group">
+          <label for="templateSelect">Select Template (optional):</label>
+          <select id="templateSelect">
+            <option value="">-- No Template --</option>
+            {% for template in templates %}
+            <option value="{{ template.id }}" data-command-type="{{ template.command_type }}">
+              {{ template.name }} ({{ template.get_command_type_display }})
+            </option>
+            {% endfor %}
+          </select>
+          <small style="color: #666; font-size: 12px; margin-top: 4px; display: block;">
+            Select a template to pre-fill the command data, then edit as needed
+          </small>
+        </div>
+        
+        <script>
+          // Store templates data for JavaScript access
+          window.AIFineTuningTemplates = {{ templates_json|safe }};
+        </script>
+        
+        <div class="form-group">
+          <label for="commandData">Command Data (JSON):</label>
+          <textarea 
+            id="commandData" 
+            placeholder='{"key": "value"}' 
+            style="font-family: monospace; min-height: 150px;"
+          >{}</textarea>
+          <small style="color: #666; font-size: 12px; margin-top: 4px; display: block;">
+            JSON data for the command (e.g., parameters, file IDs, etc.)
+          </small>
+          <div id="jsonError" style="color: #ba2121; font-size: 12px; margin-top: 4px; display: none;"></div>
+        </div>
+        
+        <div class="form-group">
+          <label>Select Files (optional):</label>
+          <div id="fileCheckboxes" class="file-checkboxes">
+            {% for file in active_files %}
+            <label class="checkbox-label">
+              <input type="checkbox" name="file_ids" value="{{ file.id }}">
+              {{ file.name }} <span class="file-type-hint">({{ file.get_file_type_display }})</span>
+            </label>
+            {% empty %}
+            <p class="empty-state">No active files available</p>
+            {% endfor %}
+          </div>
+        </div>
+        
+        <button type="submit" class="btn-primary" id="submitBtn">
+          Send Command
+        </button>
+      </form>
+      
+      <h2 style="margin-top: 30px; margin-bottom: 15px;">📜 Command History</h2>
+      <div class="command-list" id="commandList">
+        {% for command in recent_commands %}
+        <div class="command-item">
+          <div class="command-header">
+            <span class="command-type">{{ command.get_command_type_display }}</span>
+            <span class="command-status status-{{ command.status }}">{{ command.get_status_display }}</span>
+          </div>
+          <div class="command-description">{{ command.description }}</div>
+          {% if command.result %}
+          <div class="command-result">{{ command.result }}</div>
+          {% endif %}
+          <div class="command-meta">
+            Created: {{ command.created_at|date:"M d, Y H:i" }} | 
+            {% if command.created_by %}{{ command.created_by.username }}{% else %}System{% endif %}
+            {% if command.files.exists %}
+            | Files: {{ command.files.count }}
+            {% endif %}
+          </div>
+        </div>
+        {% empty %}
+        <p class="empty-state">No commands executed yet</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'admin/js/ai_finetuning_dashboard.js' %}"></script>
+{% endblock %}

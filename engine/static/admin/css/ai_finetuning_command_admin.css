@@ -1,0 +1,231 @@
+/**
+ * Styles for AI Fine-tuning Command Admin Page
+ * 
+ * Provides modern, visually appealing styling for template selection
+ * and JSON editing in Django admin.
+ */
+
+/* Template Selector Section */
+.field-template_select {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.field-template_select label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 12px;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field-template_select label::before {
+  content: '📋';
+  font-size: 20px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
+}
+
+.template-select {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 14px 18px;
+  border: 2px solid #417690;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
+  color: #1f2937;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgba(65, 118, 144, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23417090' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+}
+
+.template-select:hover {
+  border-color: #205067;
+  background: linear-gradient(to bottom, #ffffff 0%, #f0f7fa 100%);
+  box-shadow: 0 4px 12px rgba(65, 118, 144, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.template-select:focus {
+  border-color: #205067;
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(65, 118, 144, 0.15), 0 4px 12px rgba(65, 118, 144, 0.2);
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.help {
+  font-size: 13px;
+  color: #4b5563;
+  margin-top: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #e8f4f8 0%, #f0f7fa 100%);
+  border-left: 4px solid #417690;
+  border-radius: 8px;
+  line-height: 1.7;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.help::before {
+  content: '💡';
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Command Data JSON Editor */
+.field-command_data {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.field-command_data label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 12px;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field-command_data label::before {
+  content: '⚙️';
+  font-size: 20px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
+}
+
+.command-data-json {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  font-size: 13px;
+  line-height: 1.8;
+  background: linear-gradient(to bottom, #ffffff 0%, #fafbfc 100%);
+  border: 2px solid #d1d5db;
+  border-radius: 10px;
+  padding: 20px;
+  width: 100%;
+  min-height: 350px;
+  resize: vertical;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 0 rgba(255, 255, 255, 0.8);
+  color: #1f2937;
+}
+
+.command-data-json:focus {
+  border-color: #417690;
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(65, 118, 144, 0.1), 
+              inset 0 2px 6px rgba(0, 0, 0, 0.06),
+              0 4px 12px rgba(65, 118, 144, 0.15);
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.command-data-json::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* JSON Error Message */
+#json-error-message {
+  color: #ba2121;
+  font-size: 13px;
+  margin-top: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(to right, #fff3f3, #ffe8e8);
+  border-left: 4px solid #ba2121;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 4px rgba(186, 33, 33, 0.1);
+}
+
+#json-error-message::before {
+  content: '⚠️';
+  font-size: 18px;
+}
+
+/* Template Info Box */
+.template-info-box {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #e8f4f8 0%, #f0f7fa 100%);
+  border: 1px solid #417690;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #205067;
+  line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.template-info-box::before {
+  content: '💡';
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* Success State */
+.command-data-json.valid-json {
+  border-color: #10b981;
+  background: linear-gradient(to bottom, #ffffff, #f0fdf4);
+}
+
+.command-data-json.valid-json:focus {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1), inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Template Selector Options Styling */
+.template-select option {
+  padding: 8px;
+  background: #ffffff;
+}
+
+.template-select option[value=""] {
+  font-style: italic;
+  color: #999;
+}
+
+.template-select option:checked {
+  background: #417690;
+  color: #ffffff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .template-select,
+  .command-data-json {
+    font-size: 12px;
+    padding: 10px;
+  }
+  
+  .command-data-json {
+    min-height: 200px;
+  }
+}
+

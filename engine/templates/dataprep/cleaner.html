@@ -443,11 +443,11 @@
           <label class="field-label" style="display:block; margin-bottom:8px;">Merge Formula:</label>
           <textarea 
             id="mergeFormula" 
-            placeholder="col1 + col2 or col1 * col2 / col3 or mean(col1, col2)" 
+            placeholder="col1 + col2 or col1 * col2 / col3 or col1^2 or col1^3 or mean(col1, col2)" 
             style="width:100%; background:#ffffff; color:#1f293b; border:2px solid #d1d5db; border-radius:6px; padding:12px 16px; font-family:monospace; font-size:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); min-height:80px; resize:vertical; line-height:1.5;" 
             oninput="setupAutocomplete(this)" 
             onclick="clearPlaceholder(this)"
-          >col1 + col2 or col1 * col2 / col3 or mean(col1, col2)</textarea>
+          >col1 + col2 or col1 * col2 / col3 or col1^2 or col1^3 or mean(col1, col2)</textarea>
         </div>
         
         <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:16px; gap:8px;">
@@ -1176,7 +1176,7 @@
         console.log('Modal displayed');
         // Reset form
         document.getElementById('mergeColumnName').value = '';
-        document.getElementById('mergeFormula').value = 'col1 + col2 or col1 * col2 / col3 or mean(col1, col2)';
+        document.getElementById('mergeFormula').value = 'col1 + col2 or col1 * col2 / col3 or col1^2 or col1^3 or mean(col1, col2)';
         const preview = document.getElementById('mergePreview');
         if (preview) {
           preview.style.display = 'none';
@@ -1202,7 +1202,7 @@
         return;
       }
       
-      if (!formula || formula === 'col1 + col2 or col1 * col2 / col3 or mean(col1, col2)') {
+      if (!formula || formula === 'col1 + col2 or col1 * col2 / col3 or col1^2 or col1^3 or mean(col1, col2)') {
         showModernAlert('Please enter a merge formula', 'warning');
         return;
       }
@@ -1246,7 +1246,7 @@
         return;
       }
       
-      if (!formula || formula === 'col1 + col2 or col1 * col2 / col3 or mean(col1, col2)') {
+      if (!formula || formula === 'col1 + col2 or col1 * col2 / col3 or col1^2 or col1^3 or mean(col1, col2)') {
         showModernAlert('Please enter a merge formula', 'warning');
         return;
       }

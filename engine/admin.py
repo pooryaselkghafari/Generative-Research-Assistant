@@ -1,14 +1,17 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
+from django.contrib.admin.models import LogEntry
 from django.utils.html import format_html
 from django import forms
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from .models import (
     Dataset, AnalysisSession, UserProfile, SubscriptionPlan, Payment, Page,
-    SubscriptionTierSettings, PrivacyPolicy, TermsOfService
+    SubscriptionTierSettings, PrivacyPolicy, TermsOfService,
+    AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult
 )
+
 
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
@@ -360,6 +363,186 @@ admin.site.register(Payment, PaymentAdmin)
 admin.site.register(Page, PageAdmin)
 admin.site.register(PrivacyPolicy, PrivacyPolicyAdmin)
 admin.site.register(TermsOfService, TermsOfServiceAdmin)
+
+
+class AIFineTuningFileAdmin(admin.ModelAdmin):
+    """Admin interface for AI fine-tuning files."""
+    list_display = ('name', 'file_type', 'is_active', 'uploaded_by', 'uploaded_at')
+    list_filter = ('file_type', 'is_active', 'uploaded_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('uploaded_at', 'updated_at')
+    list_editable = ('is_active',)
+
+
+class AIFineTuningCommandAdmin(admin.ModelAdmin):
+    """
+    Admin interface for AI fine-tuning commands with template support.
+    
+    Provides template selection and JSON editing capabilities for
+    fine-tuning command configuration.
+    """
+    list_display = ('command_type', 'status', 'created_by', 'created_at', 'get_files_count')
+    list_filter = ('command_type', 'status', 'created_at')
+    search_fields = ('description', 'result')
+    readonly_fields = ('created_at', 'updated_at', 'completed_at', 'status')
+    filter_horizontal = ('files',)
+    
+    fieldsets = (
+        ('Command Information', {
+            'fields': ('command_type', 'description')
+        }),
+        ('Command Data', {
+            'fields': ('template_select', 'command_data'),
+            'description': (
+                '📋 Select a template to automatically pre-fill the command data with sensible defaults, '
+                'or edit the JSON directly. Templates are automatically generated based on your selected command type.'
+            ),
+            'classes': ('wide',)
+        }),
+        ('Files', {
+            'fields': ('files',),
+            'classes': ('collapse',)
+        }),
+        ('Status & Metadata', {
+            'fields': ('status', 'created_by', 'created_at', 'updated_at', 'completed_at', 'result'),
+            'description': 'Status is automatically managed by the system during command processing.',
+            'classes': ('collapse',)
+        }),
+    )
+    
+    class Media:
+        """Media files for admin interface."""
+        js = ('admin/js/ai_finetuning_command_admin.js',)
+        css = {
+            'all': ('admin/css/ai_finetuning_command_admin.css',)
+        }
+    
+    def get_files_count(self, obj):
+        """
+        Return count of associated files.
+        
+        Args:
+            obj: AIFineTuningCommand instance
+            
+        Returns:
+            int: Number of associated files
+        """
+        return obj.files.count()
+    get_files_count.short_description = 'Files'
+    
+    def save_model(self, request, obj, form, change):
+        """
+        Save model and set created_by if new.
+        
+        Args:
+            request: Django request object
+            obj: AIFineTuningCommand instance
+            form: Form instance
+            change: Boolean indicating if this is an update
+        """
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+admin.site.register(AIFineTuningFile, AIFineTuningFileAdmin)
+admin.site.register(AIFineTuningCommand, AIFineTuningCommandAdmin)
+
+
+class TestResultAdmin(admin.ModelAdmin):
+    """Admin interface for test results."""
+    list_display = ('category', 'test_name', 'score', 'passed', 'passed_tests', 'total_tests', 'execution_time', 'created_at')
+    list_filter = ('category', 'passed', 'created_at')
+    search_fields = ('test_name', 'category')
+    readonly_fields = ('created_at', 'execution_time', 'score', 'passed', 'passed_tests', 'failed_tests', 'total_tests')
+    ordering = ('-created_at',)
+    
+    fieldsets = (
+        ('Test Information', {
+            'fields': ('category', 'test_name', 'passed', 'score')
+        }),
+        ('Test Results', {
+            'fields': ('total_tests', 'passed_tests', 'failed_tests', 'execution_time')
+        }),
+        ('Details', {
+            'fields': ('details', 'error_message'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at',)
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """Test results are created automatically by test suites."""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Test results should not be manually edited."""
+        return False
+
+
+admin.site.register(TestResult, TestResultAdmin)
+
+
+class LogEntryAdmin(admin.ModelAdmin):
+    """Admin interface for Django admin activity logs."""
+    list_display = ('action_time', 'user', 'content_type', 'object_repr', 'action_flag', 'get_change_message')
+    list_filter = ('action_time', 'action_flag', 'content_type')
+    search_fields = ('user__username', 'object_repr', 'change_message')
+    readonly_fields = ('action_time', 'user', 'content_type', 'object_id', 'object_repr', 'action_flag', 'change_message')
+    ordering = ('-action_time',)
+    date_hierarchy = 'action_time'
+    
+    fieldsets = (
+        ('Action Information', {
+            'fields': ('action_time', 'user', 'action_flag')
+        }),
+        ('Object Information', {
+            'fields': ('content_type', 'object_id', 'object_repr')
+        }),
+        ('Change Details', {
+            'fields': ('change_message',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_change_message(self, obj):
+        """Display change message with better formatting."""
+        if obj.change_message:
+            # Truncate long messages
+            msg = obj.change_message
+            if len(msg) > 100:
+                msg = msg[:100] + '...'
+            return format_html('<span style="font-size: 0.9em;">{}</span>', msg)
+        return '-'
+    get_change_message.short_description = 'Change Message'
+    
+    def has_add_permission(self, request):
+        """Log entries are created automatically by Django."""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Log entries should not be manually edited."""
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """Allow deletion for cleanup (with proper permissions)."""
+        return request.user.is_superuser
+
+
+admin.site.register(LogEntry, LogEntryAdmin)
+
+
+# AIFineTuningTemplate model exists but is not exposed in admin
+# Templates are managed through the command data field
+
+# Setup custom form for AIFineTuningCommandAdmin
+try:
+    from engine.admin_forms import AIFineTuningCommandAdminForm
+    AIFineTuningCommandAdmin.form = AIFineTuningCommandAdminForm
+except ImportError:
+    pass
 
 # Customize admin site
 admin.site.site_header = "Generative Research Assistant Administration"

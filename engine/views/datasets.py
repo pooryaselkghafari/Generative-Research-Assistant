@@ -157,15 +157,22 @@ def upload_dataset(request):
     if limit_error:
         return limit_error
     
-    # Save file
+    # Save file (with encryption if enabled)
     name = request.POST.get('dataset_name') or f.name
     safe = f.name.replace(' ', '_')
     slug = str(uuid.uuid4())[:8]
     path = os.path.join(DATASET_DIR, f"{slug}_{safe}")
     
-    with open(path, 'wb') as dest:
-        for chunk in f.chunks():
-            dest.write(chunk)
+    # Check if encryption is enabled
+    if getattr(settings, 'ENCRYPT_DATASETS', False):
+        # Use encrypted storage
+        from engine.encrypted_storage import store_encrypted_file
+        path = store_encrypted_file(f, user_id=user.id)
+    else:
+        # Save unencrypted
+        with open(path, 'wb') as dest:
+            for chunk in f.chunks():
+                dest.write(chunk)
     
     # Create or update dataset record
     dataset, created = _create_or_update_dataset(name, path, file_size_mb, user)

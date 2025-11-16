@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
+from .encrypted_fields import EncryptedCharField
 
 class UserProfile(models.Model):
     SUBSCRIPTION_CHOICES = [
@@ -23,8 +24,8 @@ class UserProfile(models.Model):
     ai_tier = models.CharField(max_length=20, choices=AI_TIER_CHOICES, default='none')
     subscription_start = models.DateTimeField(null=True, blank=True)
     subscription_end = models.DateTimeField(null=True, blank=True)
-    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
-    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_customer_id = EncryptedCharField(max_length=100, blank=True, null=True, help_text="Encrypted Stripe customer ID")
+    stripe_subscription_id = EncryptedCharField(max_length=100, blank=True, null=True, help_text="Encrypted Stripe subscription ID")
     max_datasets = models.IntegerField(null=True, blank=True)  # Null means use tier defaults
     max_sessions = models.IntegerField(null=True, blank=True)  # Null means use tier defaults
     max_file_size_mb = models.IntegerField(null=True, blank=True)  # Null means use tier defaults
@@ -212,7 +213,7 @@ class Payment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='usd')
-    stripe_payment_intent_id = models.CharField(max_length=100)
+    stripe_payment_intent_id = EncryptedCharField(max_length=100, help_text="Encrypted Stripe payment intent ID")
     status = models.CharField(max_length=20, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -323,6 +324,7 @@ class TestResult(models.Model):
         ('monitoring', 'Monitoring/Logging Tests'),
         ('cron', 'Cron/Scheduled Task Tests'),
         ('frontend', 'Frontend Tests'),
+        ('privacy', 'Privacy Compliance Tests'),
     ]
     
     category = models.CharField(max_length=20, choices=TEST_CATEGORIES)
@@ -347,3 +349,226 @@ class TestResult(models.Model):
     def __str__(self):
         status = "✅ PASS" if self.passed else "❌ FAIL"
         return f"{self.category}/{self.test_name} - {status} ({self.score}%)"
+
+
+class AIFineTuningFile(models.Model):
+    """
+    Files uploaded for AI fine-tuning.
+    
+    Stores metadata about files used for fine-tuning the AI model,
+    including training data, validation data, prompt templates, etc.
+    """
+    FILE_TYPE_TRAINING = 'training'
+    FILE_TYPE_VALIDATION = 'validation'
+    FILE_TYPE_PROMPT = 'prompt'
+    FILE_TYPE_SYSTEM = 'system'
+    FILE_TYPE_OTHER = 'other'
+    
+    FILE_TYPE_CHOICES = [
+        (FILE_TYPE_TRAINING, 'Training Data'),
+        (FILE_TYPE_VALIDATION, 'Validation Data'),
+        (FILE_TYPE_PROMPT, 'Prompt Template'),
+        (FILE_TYPE_SYSTEM, 'System Instructions'),
+        (FILE_TYPE_OTHER, 'Other'),
+    ]
+    
+    name = models.CharField(
+        max_length=255,
+        help_text="Name/description of the file"
+    )
+    file = models.FileField(
+        upload_to='ai_finetuning/files/',
+        help_text="File to use for fine-tuning"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of what this file contains"
+    )
+    file_type = models.CharField(
+        max_length=50,
+        choices=FILE_TYPE_CHOICES,
+        default=FILE_TYPE_TRAINING,
+        help_text="Type of file"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this file is currently active",
+        db_index=True
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='ai_finetuning_files',
+        db_index=True
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+        verbose_name = "AI Fine-tuning File"
+        verbose_name_plural = "AI Fine-tuning Files"
+        indexes = [
+            models.Index(fields=['-uploaded_at', 'is_active']),
+            models.Index(fields=['file_type', 'is_active']),
+        ]
+    
+    def __str__(self) -> str:
+        """Return string representation of the file."""
+        return f"{self.name} ({self.get_file_type_display()})"
+
+
+class AIFineTuningCommand(models.Model):
+    """
+    Commands sent to fine-tune the AI model.
+    
+    Tracks all fine-tuning operations including their status,
+    results, and associated files.
+    """
+    STATUS_PENDING = 'pending'
+    STATUS_PROCESSING = 'processing'
+    STATUS_COMPLETED = 'completed'
+    STATUS_FAILED = 'failed'
+    
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+    
+    COMMAND_TYPE_FINE_TUNE = 'fine_tune'
+    COMMAND_TYPE_UPDATE_PROMPT = 'update_prompt'
+    COMMAND_TYPE_ADD_CONTEXT = 'add_context'
+    COMMAND_TYPE_TEST_MODEL = 'test_model'
+    COMMAND_TYPE_RESET_MODEL = 'reset_model'
+    COMMAND_TYPE_OTHER = 'other'
+    
+    COMMAND_TYPE_CHOICES = [
+        (COMMAND_TYPE_FINE_TUNE, 'Fine-tune Model'),
+        (COMMAND_TYPE_UPDATE_PROMPT, 'Update System Prompt'),
+        (COMMAND_TYPE_ADD_CONTEXT, 'Add Context Data'),
+        (COMMAND_TYPE_TEST_MODEL, 'Test Model'),
+        (COMMAND_TYPE_RESET_MODEL, 'Reset Model'),
+        (COMMAND_TYPE_OTHER, 'Other'),
+    ]
+    
+    command_type = models.CharField(
+        max_length=50,
+        choices=COMMAND_TYPE_CHOICES,
+        default=COMMAND_TYPE_FINE_TUNE,
+        help_text="Type of command",
+        db_index=True
+    )
+    description = models.TextField(
+        help_text="Description of what this command does"
+    )
+    command_data = models.JSONField(
+        default=dict,
+        help_text="JSON data for the command (e.g., parameters, file IDs, etc.)"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True
+    )
+    result = models.TextField(
+        blank=True,
+        help_text="Result or error message from command execution"
+    )
+    files = models.ManyToManyField(
+        AIFineTuningFile,
+        blank=True,
+        related_name='commands',
+        help_text="Files associated with this command"
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='ai_finetuning_commands',
+        db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "AI Fine-tuning Command"
+        verbose_name_plural = "AI Fine-tuning Commands"
+        indexes = [
+            models.Index(fields=['-created_at', 'status']),
+            models.Index(fields=['command_type', 'status']),
+        ]
+    
+    def __str__(self) -> str:
+        """Return string representation of the command."""
+        date_str = self.created_at.strftime('%Y-%m-%d %H:%M')
+        return f"{self.get_command_type_display()} - {self.status} ({date_str})"
+
+
+class AIFineTuningTemplate(models.Model):
+    """
+    JSON templates for AI fine-tuning commands.
+    
+    Stores reusable JSON templates that users can select and edit
+    when creating fine-tuning commands.
+    """
+    name = models.CharField(
+        max_length=255,
+        help_text="Name of the template"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of what this template is for"
+    )
+    command_type = models.CharField(
+        max_length=50,
+        choices=AIFineTuningCommand.COMMAND_TYPE_CHOICES,
+        help_text="Command type this template is for"
+    )
+    template_data = models.JSONField(
+        default=dict,
+        help_text="JSON template data"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this template is active",
+        db_index=True
+    )
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Whether this is the default template for this command type"
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='ai_finetuning_templates',
+        db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['command_type', 'name']
+        verbose_name = "AI Fine-tuning Template"
+        verbose_name_plural = "AI Fine-tuning Templates"
+        indexes = [
+            models.Index(fields=['command_type', 'is_active']),
+            models.Index(fields=['is_default', 'command_type']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['command_type'],
+                condition=models.Q(is_default=True),
+                name='unique_default_per_command_type'
+            )
+        ]
+    
+    def __str__(self) -> str:
+        """Return string representation of the template."""
+        return f"{self.name} ({self.get_command_type_display()})"

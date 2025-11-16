@@ -27,8 +27,13 @@ else:
 # Generate ONCE with: python manage.py generate_encryption_key
 # Store in .env file and reuse the same key (don't regenerate each time!)
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', SECRET_KEY)
-# Enable encryption for datasets (set to False to disable)
+# Enable encryption for datasets
+# In production, set ENCRYPT_DATASETS=True in environment variables
+# For development, defaults to False for easier testing
 ENCRYPT_DATASETS = os.environ.get('ENCRYPT_DATASETS', 'False').lower() == 'true'  # Default False for development
+
+# Enable encryption for sensitive database fields (always enabled if encryption key is set)
+ENCRYPT_DB_FIELDS = bool(os.environ.get('ENCRYPTION_KEY', None)) or bool(ENCRYPTION_KEY != SECRET_KEY)
 
 # Database
 # Use SQLite for local development, PostgreSQL for production

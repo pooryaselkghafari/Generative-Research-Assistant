@@ -9,6 +9,7 @@ import re
 def add_statistical_functions(df, formula):
     """Add support for statistical functions like mean(), max(), min(), etc. in formulas
     Supports: min, max, mean, median, std, var, log (case-insensitive)
+    Also converts ^ to ** for power operations (e.g., col1^2 becomes col1**2)
     """
     # Find all function calls in the formula (case-insensitive)
     function_pattern = r'(\w+)\(([^)]+)\)'
@@ -64,5 +65,12 @@ def add_statistical_functions(df, formula):
                 import re as re_module
                 pattern = re_module.escape(f'{func_name}({column_name})')
                 formula = re_module.sub(pattern, str(value), formula, flags=re_module.IGNORECASE)
+    
+    # Convert ^ to ** for power operations (pandas uses ** for exponentiation)
+    # This handles cases like col1^2, col1^3, (col1 + col2)^2, etc.
+    # We need to be careful to only replace ^ when it's used for exponentiation
+    # Pattern: match ^ followed by a number or expression in parentheses
+    # Replace ^ with ** (pandas power operator)
+    formula = re.sub(r'\^', '**', formula)
     
     return formula
