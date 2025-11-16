@@ -68,6 +68,8 @@ services:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
       - ./ssl:/etc/nginx/ssl
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Allows nginx to reach host network services
     depends_on:
       - web
 
