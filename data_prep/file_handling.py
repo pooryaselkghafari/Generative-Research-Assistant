@@ -122,8 +122,14 @@ def _read_dataset_file(file_path):
     file_extension = file_path.lower().split('.')[-1]
     
     # Read the file
-    if file_extension in ['xlsx', 'xls']:
-        df = pd.read_excel(file_path)
+    if file_extension in ['xlsx', 'xlsm']:
+        df = pd.read_excel(file_path, engine='openpyxl')
+    elif file_extension == 'xls':
+        # Try openpyxl first, then xlrd for legacy .xls files
+        try:
+            df = pd.read_excel(file_path, engine='openpyxl')
+        except Exception:
+            df = pd.read_excel(file_path, engine='xlrd')
     elif file_extension == 'csv':
         df = pd.read_csv(file_path)
     else:
@@ -131,7 +137,11 @@ def _read_dataset_file(file_path):
         try:
             df = pd.read_csv(file_path)
         except:
-            df = pd.read_excel(file_path)
+            # Try Excel with openpyxl engine
+            try:
+                df = pd.read_excel(file_path, engine='openpyxl')
+            except Exception:
+                df = pd.read_excel(file_path, engine='xlrd')
     
     # Auto-detect and assign column types
     detected_types = _auto_detect_column_types(df)

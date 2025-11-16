@@ -159,8 +159,27 @@ def _read_csv_robust(path: str, *, encoding=None, nrows=None) -> pd.DataFrame:
     return pd.read_csv(path, engine="python", on_bad_lines="skip", nrows=nrows)
 
 def _read_excel_robust(path: str, *, sheet=None, nrows=None) -> pd.DataFrame:
+    """Read Excel file with automatic engine detection."""
     try:
-        return pd.read_excel(path, sheet_name=(sheet if sheet is not None else 0), nrows=nrows)
+        # Determine engine based on file extension
+        path_lower = path.lower()
+        if path_lower.endswith('.xlsx') or path_lower.endswith('.xlsm'):
+            engine = 'openpyxl'
+        elif path_lower.endswith('.xls'):
+            # Try openpyxl first (supports some .xls), then xlrd as fallback
+            try:
+                return pd.read_excel(path, sheet_name=(sheet if sheet is not None else 0), 
+                                    nrows=nrows, engine='openpyxl')
+            except Exception:
+                # Fallback to xlrd for legacy .xls files
+                return pd.read_excel(path, sheet_name=(sheet if sheet is not None else 0), 
+                                    nrows=nrows, engine='xlrd')
+        else:
+            # Default to openpyxl for unknown extensions
+            engine = 'openpyxl'
+        
+        return pd.read_excel(path, sheet_name=(sheet if sheet is not None else 0), 
+                           nrows=nrows, engine=engine)
     except ImportError as ie:
         raise RuntimeError(
             "Reading Excel requires 'openpyxl' (for .xlsx/.xlsm) or 'xlrd' (legacy .xls). "

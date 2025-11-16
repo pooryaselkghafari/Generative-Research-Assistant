@@ -75,8 +75,14 @@ def read_encrypted_file(encrypted_path, user_id=None, as_dataframe=True, **kwarg
             original_ext = os.path.splitext(encrypted_path.replace('.encrypted', ''))[1].lower()
             
             # Read as DataFrame based on extension
-            if original_ext in ['.xlsx', '.xls', '.xlsm']:
-                df = pd.read_excel(tmp_path, **kwargs)
+            if original_ext in ['.xlsx', '.xlsm']:
+                df = pd.read_excel(tmp_path, engine='openpyxl', **kwargs)
+            elif original_ext == '.xls':
+                # Try openpyxl first, then xlrd for legacy .xls files
+                try:
+                    df = pd.read_excel(tmp_path, engine='openpyxl', **kwargs)
+                except Exception:
+                    df = pd.read_excel(tmp_path, engine='xlrd', **kwargs)
             elif original_ext == '.csv' or original_ext == '':
                 df = pd.read_csv(tmp_path, **kwargs)
             else:
@@ -84,7 +90,11 @@ def read_encrypted_file(encrypted_path, user_id=None, as_dataframe=True, **kwarg
                 try:
                     df = pd.read_csv(tmp_path, **kwargs)
                 except:
-                    df = pd.read_excel(tmp_path, **kwargs)
+                    # Try Excel with openpyxl engine
+                    try:
+                        df = pd.read_excel(tmp_path, engine='openpyxl', **kwargs)
+                    except Exception:
+                        df = pd.read_excel(tmp_path, engine='xlrd', **kwargs)
             
             return df
         else:
