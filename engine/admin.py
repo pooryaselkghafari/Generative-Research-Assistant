@@ -208,7 +208,31 @@ class UserProfileAdmin(admin.ModelAdmin):
         return mark_safe(html)
     usage_stats.short_description = 'Usage Statistics'
 
+class PrivacyPolicyAdminForm(forms.ModelForm):
+    """Custom form for Privacy Policy with CKEditor rich text editor."""
+    class Meta:
+        model = PrivacyPolicy
+        fields = '__all__'
+        widgets = {}
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Check for CKEditor dynamically
+        try:
+            from ckeditor.widgets import CKEditorWidget
+            # Use CKEditor widget for content field
+            widget = CKEditorWidget(config_name='default')
+            self.fields['content'].widget = widget
+        except ImportError:
+            # Fallback to textarea if CKEditor not available
+            self.fields['content'].widget = forms.Textarea(attrs={
+                'rows': 30, 
+                'cols': 80, 
+                'style': 'width: 100%; font-family: monospace;'
+            })
+
 class PrivacyPolicyAdmin(admin.ModelAdmin):
+    form = PrivacyPolicyAdminForm
     list_display = ('version', 'effective_date', 'is_active', 'created_at')
     list_filter = ('is_active', 'effective_date')
     search_fields = ('version', 'content')
@@ -218,12 +242,36 @@ class PrivacyPolicyAdmin(admin.ModelAdmin):
         }),
         ('Content', {
             'fields': ('content',),
-            'description': 'Privacy policy content. Use HTML for formatting.'
+            'description': 'Use the rich text editor below to format your privacy policy with HTML, headings, lists, and more.'
         }),
     )
     readonly_fields = ('created_at', 'updated_at')
 
+class TermsOfServiceAdminForm(forms.ModelForm):
+    """Custom form for Terms of Service with CKEditor rich text editor."""
+    class Meta:
+        model = TermsOfService
+        fields = '__all__'
+        widgets = {}
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Check for CKEditor dynamically
+        try:
+            from ckeditor.widgets import CKEditorWidget
+            # Use CKEditor widget for content field
+            widget = CKEditorWidget(config_name='default')
+            self.fields['content'].widget = widget
+        except ImportError:
+            # Fallback to textarea if CKEditor not available
+            self.fields['content'].widget = forms.Textarea(attrs={
+                'rows': 30, 
+                'cols': 80, 
+                'style': 'width: 100%; font-family: monospace;'
+            })
+
 class TermsOfServiceAdmin(admin.ModelAdmin):
+    form = TermsOfServiceAdminForm
     list_display = ('version', 'effective_date', 'is_active', 'created_at')
     list_filter = ('is_active', 'effective_date')
     search_fields = ('version', 'content')
@@ -233,7 +281,7 @@ class TermsOfServiceAdmin(admin.ModelAdmin):
         }),
         ('Content', {
             'fields': ('content',),
-            'description': 'Terms of service content. Use HTML for formatting.'
+            'description': 'Use the rich text editor below to format your terms of service with HTML, headings, lists, and more.'
         }),
     )
     readonly_fields = ('created_at', 'updated_at')
