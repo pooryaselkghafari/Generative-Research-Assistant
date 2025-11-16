@@ -1,0 +1,46 @@
+{
+  "category": "database",
+  "test_name": "Database Tests",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 5,
+  "passed_tests": 5,
+  "failed_tests": 0,
+  "execution_time": 0.803142786026001,
+  "test_results": [
+    {
+      "test_name": "database_integrity_foreign_keys",
+      "passed": true,
+      "message": "Database constraints should be enforced (unique constraints tested)",
+      "details": {}
+    },
+    {
+      "test_name": "index_usage",
+      "passed": true,
+      "message": "Query time: 0.0003s (should be < 0.1s)",
+      "details": {
+        "query_time": 0.00026226043701171875
+      }
+    },
+    {
+      "test_name": "query_performance_no_n_plus_one",
+      "passed": true,
+      "message": "Query count: 0 (should be < 10)",
+      "details": {
+        "query_count": 0
+      }
+    },
+    {
+      "test_name": "transaction_rollback",
+      "passed": true,
+      "message": "Transactions should rollback on errors",
+      "details": {}
+    },
+    {
+      "test_name": "unique_constraints",
+      "passed": true,
+      "message": "Unique constraints should be enforced",
+      "details": {}
+    }
+  ]
+}

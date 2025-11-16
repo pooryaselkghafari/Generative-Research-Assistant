@@ -1,0 +1,24 @@
+{
+  "category": "api",
+  "test_name": "API Tests",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 2,
+  "passed_tests": 2,
+  "failed_tests": 0,
+  "execution_time": 0.6370198726654053,
+  "test_results": [
+    {
+      "test_name": "api_authentication_required",
+      "passed": true,
+      "message": "API should require authentication",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_variables_api",
+      "passed": true,
+      "message": "Dataset variables API should respond (status: 200)",
+      "details": {}
+    }
+  ]
+}

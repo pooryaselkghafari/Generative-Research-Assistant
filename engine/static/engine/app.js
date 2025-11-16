@@ -745,11 +745,8 @@
       }
     }
     
-    // Intercept form submission to handle large dataset warnings
-    const form = document.getElementById('analysisForm');
-    if (form) {
-      form.addEventListener('submit', handleFormSubmission);
-    }
+    // Note: Form submission is handled by handleFormSubmission in index.html via onsubmit
+    // Don't add duplicate event listener here to avoid conflicts
     
     return true;
   };
@@ -1200,11 +1197,20 @@ Examples
 
   // Show autocomplete dropdown
   window.showAutocomplete = function(query, cursorPosition) {
-    console.log('showAutocomplete called with query:', query, 'cursorPosition:', cursorPosition);
-    console.log('Available variables:', window.datasetVariables);
+    console.log('=== showAutocomplete CALLED ===');
+    console.log('DEBUG: query:', query);
+    console.log('DEBUG: cursorPosition:', cursorPosition);
+    console.log('DEBUG: Available variables:', window.datasetVariables);
+    console.log('DEBUG: Available variables count:', window.datasetVariables ? window.datasetVariables.length : 0);
     
     if (!query || query.length < 1) {
-      console.log('Query too short, hiding autocomplete');
+      console.log('DEBUG: ✗ Query too short, hiding autocomplete');
+      hideAutocomplete();
+      return;
+    }
+    
+    if (!window.datasetVariables || window.datasetVariables.length === 0) {
+      console.log('DEBUG: ✗ No variables available, hiding autocomplete');
       hideAutocomplete();
       return;
     }
@@ -1213,10 +1219,11 @@ Examples
       variable.toLowerCase().includes(query.toLowerCase())
     ).slice(0, 10); // Limit to 10 suggestions
     
-    console.log('Filtered matches:', matches);
+    console.log('DEBUG: Filtered matches:', matches);
+    console.log('DEBUG: Matches count:', matches.length);
     
     if (matches.length === 0) {
-      console.log('No matches found, hiding autocomplete');
+      console.log('DEBUG: ✗ No matches found, hiding autocomplete');
       hideAutocomplete();
       return;
     }
@@ -1268,19 +1275,71 @@ Examples
     document.body.removeChild(tempDiv);
     document.body.removeChild(lineDiv);
     
-    // Calculate position relative to the textarea
+    // Find the container with position: relative (the parent that contains the dropdown)
+    let container = equationBox.parentElement;
+    while (container && window.getComputedStyle(container).position === 'static') {
+      container = container.parentElement;
+    }
+    
+    // If no positioned container found, use the textarea's parent
+    if (!container) {
+      container = equationBox.parentElement;
+    }
+    
     const textareaRect = equationBox.getBoundingClientRect();
-    const containerRect = equationBox.parentElement.getBoundingClientRect();
+    const containerRect = container ? container.getBoundingClientRect() : textareaRect;
+    
+    console.log('DEBUG: textareaRect:', textareaRect);
+    console.log('DEBUG: containerRect:', containerRect);
+    console.log('DEBUG: container element:', container);
+    console.log('DEBUG: lineWidth:', lineWidth);
+    console.log('DEBUG: lineHeight:', lineHeight);
+    console.log('DEBUG: lastNewline:', lastNewline);
+    console.log('DEBUG: textHeight:', textHeight);
+    
+    // Count the number of lines before the cursor
+    const lineCount = (textBeforeCursor.match(/\n/g) || []).length;
+    console.log('DEBUG: lineCount (number of newlines before cursor):', lineCount);
     
     // Position the dropdown
     const leftOffset = lineWidth + 10; // 10px offset from the text
-    const topOffset = (lastNewline === -1 ? 0 : (lastNewline + 1) * lineHeight) + lineHeight;
+    
+    // Calculate top offset: account for textarea padding + line number * line height
+    const textareaStyle = window.getComputedStyle(equationBox);
+    const paddingTop = parseInt(textareaStyle.paddingTop) || 0;
+    const borderTop = parseInt(textareaStyle.borderTopWidth) || 0;
+    const scrollTop = equationBox.scrollTop || 0;
+    
+    // Calculate the visual line position within the textarea
+    // This is the position from the top of the textarea (including padding)
+    const visualTopInTextarea = paddingTop + borderTop + (lineCount * lineHeight) - scrollTop + lineHeight;
+    
+    console.log('DEBUG: paddingTop:', paddingTop);
+    console.log('DEBUG: borderTop:', borderTop);
+    console.log('DEBUG: scrollTop:', scrollTop);
+    console.log('DEBUG: visualTopInTextarea:', visualTopInTextarea);
+    
+    // Position relative to the container
+    // Calculate the textarea's position relative to the container
+    const textareaTopInContainer = textareaRect.top - containerRect.top;
+    const textareaLeftInContainer = textareaRect.left - containerRect.left;
+    
+    console.log('DEBUG: textareaTopInContainer:', textareaTopInContainer);
+    console.log('DEBUG: textareaLeftInContainer:', textareaLeftInContainer);
     
     dropdown.style.position = 'absolute';
-    dropdown.style.left = leftOffset + 'px';
-    dropdown.style.top = topOffset + 'px';
+    dropdown.style.left = (textareaLeftInContainer + leftOffset) + 'px';
+    dropdown.style.top = (textareaTopInContainer + visualTopInTextarea) + 'px';
     dropdown.style.width = '200px'; // Fixed width for better appearance
     dropdown.style.maxWidth = (equationBox.offsetWidth - leftOffset) + 'px';
+    dropdown.style.zIndex = '10000'; // Ensure it's on top
+    dropdown.style.backgroundColor = 'white'; // Ensure visibility
+    dropdown.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'; // Ensure visibility
+    
+    console.log('DEBUG: Final dropdown position - left:', dropdown.style.left, 'top:', dropdown.style.top);
+    console.log('DEBUG: Dropdown display:', dropdown.style.display);
+    console.log('DEBUG: Dropdown computed display:', window.getComputedStyle(dropdown).display);
+    console.log('DEBUG: Dropdown offsetParent:', dropdown.offsetParent);
     
     dropdown.innerHTML = '';
     console.log('Creating dropdown items for matches:', matches);
@@ -1353,7 +1412,16 @@ Examples
 
   // Handle keyboard navigation in autocomplete
   window.handleAutocompleteKeydown = function(event) {
-    if (!autocompleteVisible) return;
+    // Don't interfere with Ctrl/Cmd+Enter (submit form)
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      hideAutocomplete();
+      return;
+    }
+    
+    // If autocomplete is not visible, don't interfere with Enter key
+    if (!autocompleteVisible) {
+      return;
+    }
     
     const items = document.querySelectorAll('.autocomplete-item');
     
@@ -1369,15 +1437,103 @@ Examples
         updateAutocompleteSelection();
         break;
       case 'Enter':
-        event.preventDefault();
+        // Only prevent default if we're selecting from autocomplete
         if (selectedAutocompleteIndex >= 0 && items[selectedAutocompleteIndex]) {
-          items[selectedAutocompleteIndex].click();
+          event.preventDefault();
+          const selectedVariable = items[selectedAutocompleteIndex].textContent;
+          const equationBox = document.getElementById('equationBox');
+          const cursorPosition = equationBox.selectionStart;
+          selectAutocompleteItem(selectedVariable, cursorPosition);
+          return;
         }
+        // If Enter is pressed but no item is selected, don't prevent default
+        // This allows Enter to create a new line
         break;
       case 'Escape':
+        event.preventDefault();
         hideAutocomplete();
         break;
     }
+  }
+
+  // Helper function to check if autocomplete should be shown at current cursor position
+  function checkAutocompleteAtCursor() {
+    console.log('=== checkAutocompleteAtCursor CALLED ===');
+    const equationBox = document.getElementById('equationBox');
+    if (!equationBox) {
+      console.log('DEBUG: ✗ equationBox not found');
+      return;
+    }
+    if (!window.datasetVariables) {
+      console.log('DEBUG: ✗ window.datasetVariables is null/undefined');
+      return;
+    }
+    if (window.datasetVariables.length === 0) {
+      console.log('DEBUG: ✗ window.datasetVariables is empty');
+      return;
+    }
+    
+    const cursorPosition = equationBox.selectionStart;
+    const value = equationBox.value;
+    const beforeCursor = value.substring(0, cursorPosition);
+    
+    console.log('DEBUG: cursorPosition:', cursorPosition);
+    console.log('DEBUG: value length:', value.length);
+    console.log('DEBUG: beforeCursor:', JSON.stringify(beforeCursor));
+    console.log('DEBUG: Available variables count:', window.datasetVariables.length);
+    
+    // For multi-line equations, only look at the current line
+    const lastNewline = beforeCursor.lastIndexOf('\n');
+    const currentLineStart = lastNewline + 1;
+    const currentLineBeforeCursor = beforeCursor.substring(currentLineStart);
+    
+    console.log('DEBUG: lastNewline index:', lastNewline);
+    console.log('DEBUG: currentLineStart:', currentLineStart);
+    console.log('DEBUG: currentLineBeforeCursor:', JSON.stringify(currentLineBeforeCursor));
+    console.log('DEBUG: currentLineBeforeCursor length:', currentLineBeforeCursor.length);
+    
+    // Find the current word being typed (only on the current line)
+    // Try multiple patterns to catch different word boundaries
+    let wordMatch = currentLineBeforeCursor.match(/\b[a-zA-Z_][a-zA-Z0-9_]*$/);
+    console.log('DEBUG: wordMatch (with word boundary):', wordMatch);
+    
+    // If no match with word boundary, try matching from the end of the string
+    if (!wordMatch) {
+      // Match any sequence of letters/numbers/underscores at the end
+      wordMatch = currentLineBeforeCursor.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
+      console.log('DEBUG: wordMatch (without word boundary):', wordMatch);
+    }
+    
+    // Also try a simpler approach - just get the last word from current line
+    // Split by whitespace, +, ~, and other operators, but keep the last token
+    const currentLineWords = currentLineBeforeCursor.trim().split(/[\s+~*:()\[\]]+/);
+    const lastWord = currentLineWords[currentLineWords.length - 1] || '';
+    
+    console.log('DEBUG: currentLineWords:', currentLineWords);
+    console.log('DEBUG: lastWord:', lastWord);
+    console.log('DEBUG: lastWord length:', lastWord.length);
+    console.log('DEBUG: lastWord starts with letter/underscore:', lastWord ? /^[a-zA-Z_]/.test(lastWord) : false);
+    
+    // Determine which word to use for autocomplete
+    let queryWord = null;
+    if (wordMatch && wordMatch[0] && wordMatch[0].length >= 1) {
+      queryWord = wordMatch[0];
+      console.log('DEBUG: Using wordMatch[0] as queryWord:', queryWord);
+    } else if (lastWord && lastWord.length >= 1 && /^[a-zA-Z_]/.test(lastWord)) {
+      queryWord = lastWord;
+      console.log('DEBUG: Using lastWord as queryWord:', queryWord);
+    } else {
+      console.log('DEBUG: No valid queryWord found');
+    }
+    
+    if (queryWord) {
+      console.log('DEBUG: ✓ Calling showAutocomplete with queryWord:', queryWord, 'at position:', cursorPosition);
+      showAutocomplete(queryWord, cursorPosition);
+    } else {
+      console.log('DEBUG: ✗ Hiding autocomplete - no queryWord');
+      hideAutocomplete();
+    }
+    console.log('=== END checkAutocompleteAtCursor ===');
   }
 
   // Test function for debugging autocomplete
@@ -1525,51 +1681,143 @@ Examples
       
       // Handle equation input
       equationBox.addEventListener('input', (e) => {
+        console.log('=== INPUT EVENT TRIGGERED ===');
         if (equationValidator) {
           equationValidator.validate();
         }
         validateRun();
         
-        // Handle autocomplete
-        const cursorPosition = e.target.selectionStart;
-        const value = e.target.value;
-        const beforeCursor = value.substring(0, cursorPosition);
-        
-        console.log('Input event - cursorPosition:', cursorPosition, 'value:', value, 'beforeCursor:', beforeCursor);
-        console.log('Available variables:', window.datasetVariables);
-        
-        // Find the current word being typed
-        const wordMatch = beforeCursor.match(/\b[a-zA-Z_][a-zA-Z0-9_]*$/);
-        console.log('Word match:', wordMatch);
-        
-        // Also try a simpler approach - just get the last word
-        const words = beforeCursor.trim().split(/\s+/);
-        const lastWord = words[words.length - 1] || '';
-        console.log('Last word (simple):', lastWord);
-        
-        if (wordMatch && window.datasetVariables.length > 0) {
-          console.log('Calling showAutocomplete with:', wordMatch[0]);
-          showAutocomplete(wordMatch[0], cursorPosition);
-        } else if (lastWord && window.datasetVariables.length > 0 && lastWord.length >= 1) {
-          console.log('Calling showAutocomplete with last word:', lastWord);
-          showAutocomplete(lastWord, cursorPosition);
-        } else {
-          console.log('Hiding autocomplete - wordMatch:', wordMatch, 'lastWord:', lastWord, 'variables length:', window.datasetVariables.length);
-          hideAutocomplete();
-        }
+        // Handle autocomplete - use a small delay to ensure cursor position is updated
+        setTimeout(() => {
+          console.log('=== AUTCOMPLETE CHECK (from input event) ===');
+          const cursorPosition = e.target.selectionStart;
+          const value = e.target.value;
+          const beforeCursor = value.substring(0, cursorPosition);
+          
+          console.log('DEBUG: cursorPosition:', cursorPosition);
+          console.log('DEBUG: value length:', value.length);
+          console.log('DEBUG: beforeCursor:', JSON.stringify(beforeCursor));
+          console.log('DEBUG: Available variables count:', window.datasetVariables ? window.datasetVariables.length : 0);
+          console.log('DEBUG: Available variables:', window.datasetVariables);
+          
+          // For multi-line equations, only look at the current line
+          const lastNewline = beforeCursor.lastIndexOf('\n');
+          const currentLineStart = lastNewline + 1;
+          const currentLineBeforeCursor = beforeCursor.substring(currentLineStart);
+          
+          console.log('DEBUG: lastNewline index:', lastNewline);
+          console.log('DEBUG: currentLineStart:', currentLineStart);
+          console.log('DEBUG: currentLineBeforeCursor:', JSON.stringify(currentLineBeforeCursor));
+          console.log('DEBUG: currentLineBeforeCursor length:', currentLineBeforeCursor.length);
+          
+          // Find the current word being typed (only on the current line)
+          // Try multiple patterns to catch different word boundaries
+          let wordMatch = currentLineBeforeCursor.match(/\b[a-zA-Z_][a-zA-Z0-9_]*$/);
+          console.log('DEBUG: wordMatch (with word boundary):', wordMatch);
+          
+          // If no match with word boundary, try matching from the end of the string
+          if (!wordMatch) {
+            // Match any sequence of letters/numbers/underscores at the end
+            wordMatch = currentLineBeforeCursor.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
+            console.log('DEBUG: wordMatch (without word boundary):', wordMatch);
+          }
+          
+          // Also try a simpler approach - just get the last word from current line
+          // Split by whitespace, +, ~, and other operators, but keep the last token
+          const currentLineWords = currentLineBeforeCursor.trim().split(/[\s+~*:()\[\]]+/);
+          const lastWord = currentLineWords[currentLineWords.length - 1] || '';
+          console.log('DEBUG: currentLineWords:', currentLineWords);
+          console.log('DEBUG: lastWord:', lastWord);
+          console.log('DEBUG: lastWord length:', lastWord.length);
+          console.log('DEBUG: lastWord starts with letter/underscore:', lastWord ? /^[a-zA-Z_]/.test(lastWord) : false);
+          
+          // Determine which word to use for autocomplete
+          let queryWord = null;
+          if (wordMatch && wordMatch[0] && wordMatch[0].length >= 1) {
+            queryWord = wordMatch[0];
+            console.log('DEBUG: Using wordMatch[0] as queryWord:', queryWord);
+          } else if (lastWord && lastWord.length >= 1 && /^[a-zA-Z_]/.test(lastWord)) {
+            queryWord = lastWord;
+            console.log('DEBUG: Using lastWord as queryWord:', queryWord);
+          } else {
+            console.log('DEBUG: No valid queryWord found');
+          }
+          
+          if (queryWord && window.datasetVariables && window.datasetVariables.length > 0) {
+            console.log('DEBUG: ✓ Calling showAutocomplete with queryWord:', queryWord, 'at position:', cursorPosition);
+            showAutocomplete(queryWord, cursorPosition);
+          } else {
+            console.log('DEBUG: ✗ Hiding autocomplete');
+            console.log('  - queryWord:', queryWord);
+            console.log('  - datasetVariables exists:', !!window.datasetVariables);
+            console.log('  - datasetVariables length:', window.datasetVariables ? window.datasetVariables.length : 0);
+            hideAutocomplete();
+          }
+          console.log('=== END AUTCOMPLETE CHECK ===');
+        }, 10);
       });
       
       // Handle keyboard events for autocomplete
       equationBox.addEventListener('keydown', (e) => {
-        handleAutocompleteKeydown(e);
-        
-        // Handle Ctrl/Cmd+Enter to run
+        // Handle Ctrl/Cmd+Enter to run (before autocomplete handler)
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          hideAutocomplete();
           const run = document.getElementById('runBtn');
           if (run && !run.disabled) {
             e.preventDefault();
             run.click();
           }
+          return;
+        }
+        
+        // Handle regular Enter key - allow it to create new line, then check for autocomplete
+        if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+          console.log('=== ENTER KEY PRESSED ===');
+          console.log('DEBUG: autocompleteVisible:', autocompleteVisible);
+          console.log('DEBUG: selectedAutocompleteIndex:', selectedAutocompleteIndex);
+          
+          // IMPORTANT: Don't prevent default - let Enter create a new line
+          // Only handle autocomplete if an item is selected
+          if (autocompleteVisible) {
+            const items = document.querySelectorAll('.autocomplete-item');
+            console.log('DEBUG: autocomplete items found:', items.length);
+            if (selectedAutocompleteIndex >= 0 && items[selectedAutocompleteIndex]) {
+              // User wants to select from autocomplete
+              console.log('DEBUG: Selecting autocomplete item:', items[selectedAutocompleteIndex].textContent);
+              e.preventDefault();
+              const selectedVariable = items[selectedAutocompleteIndex].textContent;
+              const cursorPosition = equationBox.selectionStart;
+              selectAutocompleteItem(selectedVariable, cursorPosition);
+              return;
+            }
+          }
+          // Otherwise, let Enter work normally (create new line)
+          // After the line is created, check if we should show autocomplete
+          // Use a slightly longer delay to ensure the DOM has updated
+          console.log('DEBUG: Enter will create new line, will check autocomplete after');
+          setTimeout(() => {
+            console.log('DEBUG: Checking autocomplete after Enter (50ms delay)');
+            checkAutocompleteAtCursor();
+          }, 50);
+          // Don't call handleAutocompleteKeydown for Enter - we've handled it above
+          return;
+        }
+        
+        // Handle autocomplete navigation (arrow keys, etc.) - but NOT Enter
+        if (e.key !== 'Enter') {
+          handleAutocompleteKeydown(e);
+        }
+      });
+      
+      // Check for autocomplete when user clicks or moves cursor
+      equationBox.addEventListener('click', () => {
+        setTimeout(() => checkAutocompleteAtCursor(), 100);
+      });
+      
+      equationBox.addEventListener('keyup', (e) => {
+        // Check after arrow keys, home, end, etc. (but not for typing - that's handled by input event)
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+          setTimeout(() => checkAutocompleteAtCursor(), 50);
         }
       });
       
@@ -1675,6 +1923,92 @@ Examples
       return result;
     }
     
+    // Check if this is a multi-line equation (multiple equations, one per line)
+    const lines = equation.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    const equationLines = lines.filter(line => line.includes('~'));
+    
+    // DIAGNOSTICS: Log equation detection
+    console.log('=== PARSE EQUATION DIAGNOSTICS ===');
+    console.log('Original equation:', equation);
+    console.log('Total lines (non-empty):', lines.length);
+    console.log('Equation lines (with ~):', equationLines.length);
+    console.log('Equation lines:', equationLines);
+    
+    // If multiple equations (multiple lines with ~), parse each line separately
+    if (equationLines.length > 1) {
+      console.log('✓ MULTI-EQUATION DETECTED: Parsing', equationLines.length, 'equations separately');
+      const allUnknownVars = [];
+      const allSyntaxErrors = [];
+      const allInvalidElements = [];
+      const fixedLines = [];
+      let hasAnyErrors = false;
+      
+      // Parse each line as a separate equation
+      for (let i = 0; i < equationLines.length; i++) {
+        const line = equationLines[i];
+        const lineResult = parseSingleEquation(line);
+        
+        if (lineResult.hasErrors) {
+          hasAnyErrors = true;
+          if (lineResult.unknownVars && lineResult.unknownVars.length > 0) {
+            allUnknownVars.push(...lineResult.unknownVars);
+          }
+          if (lineResult.syntaxErrors && lineResult.syntaxErrors.length > 0) {
+            allSyntaxErrors.push(`Line ${i + 1}: ${lineResult.syntaxErrors.join(', ')}`);
+          }
+          if (lineResult.invalidElements && lineResult.invalidElements.length > 0) {
+            allInvalidElements.push(...lineResult.invalidElements);
+          }
+        }
+        
+        fixedLines.push(lineResult.fixedEquation || line);
+      }
+      
+      // Combine results
+      result.hasErrors = hasAnyErrors;
+      result.hasSyntaxErrors = allSyntaxErrors.length > 0;
+      result.hasUnknownVars = allUnknownVars.length > 0;
+      result.hasInvalidElements = allInvalidElements.length > 0;
+      result.syntaxErrors = allSyntaxErrors;
+      result.unknownVars = [...new Set(allUnknownVars)]; // Remove duplicates
+      result.invalidElements = allInvalidElements;
+      result.fixedEquation = fixedLines.join('\n');
+      
+      console.log('Multi-equation parse result:', {
+        hasErrors: result.hasErrors,
+        unknownVars: result.unknownVars,
+        syntaxErrors: result.syntaxErrors,
+        fixedEquation: result.fixedEquation
+      });
+      console.log('=== END PARSE EQUATION DIAGNOSTICS ===');
+      
+      return result;
+    }
+    
+    // Single equation - use existing logic
+    console.log('Single equation detected - using standard parser');
+    console.log('=== END PARSE EQUATION DIAGNOSTICS ===');
+    return parseSingleEquation(equation);
+  };
+  
+  // Helper function to parse a single equation (one line)
+  function parseSingleEquation(equation) {
+    const result = {
+      hasErrors: false,
+      hasSyntaxErrors: false,
+      hasUnknownVars: false,
+      hasInvalidElements: false,
+      syntaxErrors: [],
+      unknownVars: [],
+      invalidElements: [],
+      fixedEquation: equation,
+      originalEquation: equation
+    };
+    
+    if (!equation.trim()) {
+      return result;
+    }
+    
     // Split equation by ~ to separate LHS and RHS
     const parts = equation.split('~');
     if (parts.length !== 2) {
@@ -1733,7 +2067,7 @@ Examples
     }
     
     return result;
-  };
+  }
   
   // Parse LHS (dependent variables) - supports VARX format with multiple variables
   function parseLHS(lhs) {

@@ -1,0 +1,736 @@
+{% extends "engine/base.html" %}
+{% load engine_extras %}
+{% block title %}Multi-Equation Regression Results — Generative Research Assistant{% endblock %}
+
+{% block header_actions %}
+  <a href="/session/{{session.id}}/" class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">Modify</a>
+  <a href="{% url 'download_session_history' session.id %}?format=text" class="btn btn-ghost" style="margin-left: 8px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+    </svg>
+    Download History
+  </a>
+  <button class="btn" type="button" onclick="toggleAIChatbox()" 
+          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
+          title="Ask AI Assistant">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    Ask AI
+  </button>
+{% endblock %}
+
+{% block sidebar %}
+  <!-- Regression options form -->
+  <form method="post" action="{% url 'run' %}" id="regressionOptionsForm" onsubmit="console.log('Form submission started'); return updateFormulaBeforeSubmit()">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="update">
+    <input type="hidden" name="session_id" value="{{session.id}}">
+    <input type="hidden" name="module" value="regression">
+    <input type="hidden" name="formula" value="{{session.formula}}">
+    <input type="hidden" name="dataset_id" value="{{dataset.id}}">
+    <input type="hidden" name="session_name" value="{{session.name}}">
+
+    <!-- Regression options -->
+    <div class="card" style="margin-bottom: 16px;">
+      <div class="card-head">
+        <h3 class="card-title">Display Options</h3>
+      </div>
+
+      <!-- Result table toggles -->
+      <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+      <div class="grid-2">
+        <div class="switch-col">
+            <label class="field-label">t / z statistic</label>
+          <label class="switch">
+              <input type="checkbox" name="show_t" {% if session.options.show_t %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+            <label class="field-label">p-value</label>
+          <label class="switch">
+              <input type="checkbox" name="show_p" {% if session.options.show_p %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="switch-col">
+            <label class="field-label">Std. Errors</label>
+          <label class="switch">
+              <input type="checkbox" name="show_se" {% if session.options.show_se %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+
+        <div class="switch-col">
+            <label class="field-label">95% CIs</label>
+          <label class="switch">
+              <input type="checkbox" name="show_ci" {% if session.options.show_ci %}checked{% endif %}>
+              <span></span>
+          </label>
+        </div>
+      </div>
+      </div>
+
+      <!-- Model Fit Statistics toggles -->
+      <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+        <div style="margin-bottom: 12px;">
+          <label class="field-label" style="font-weight: 600; margin-bottom: 8px; display: block;">Model Fit Statistics</label>
+        </div>
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">R² / Pseudo-R²</label>
+            <label class="switch">
+              <input type="checkbox" name="show_r2" {% if session.options.show_r2 %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">AIC</label>
+            <label class="switch">
+              <input type="checkbox" name="show_aic" {% if session.options.show_aic %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">BIC</label>
+            <label class="switch">
+              <input type="checkbox" name="show_bic" {% if session.options.show_bic %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary tables toggles -->
+      <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+        <h4 style="margin: 0 0 12px 0; color: var(--text); font-size: 14px; font-weight: 600;">Summary table columns</h4>
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">Min</label>
+            <label class="switch">
+              <input type="checkbox" name="show_min" {% if session.options.show_min|default:True %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">Max</label>
+            <label class="switch">
+              <input type="checkbox" name="show_max" {% if session.options.show_max|default:True %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">Range</label>
+            <label class="switch">
+              <input type="checkbox" name="show_range" {% if session.options.show_range %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="switch-col">
+            <label class="field-label">Variance</label>
+            <label class="switch">
+              <input type="checkbox" name="show_variance" {% if session.options.show_variance %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="switch-col">
+            <label class="field-label">VIF</label>
+            <label class="switch">
+              <input type="checkbox" name="show_vif" {% if session.options.show_vif %}checked{% endif %}>
+              <span></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="width: 100%;">Update Display</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+{% if has_results and is_multi_equation %}
+  <!-- Model Types Header -->
+  <div class="modern-results-header">
+    <div class="header-main">
+      <div style="flex: 1;">
+        <h2 style="color: #ffffff; font-size: 24px; font-weight: 700; margin: 0 0 16px 0; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+          Multi-Equation Regression
+        </h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; max-width: 100%;">
+          {% for eq_result in equation_results %}
+          <div class="regression-type-badge" style="display: flex; flex-direction: column; align-items: flex-start; padding: 10px 14px; min-width: 0;">
+            <div style="font-size: 10px; color: rgba(255, 255, 255, 0.8); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">
+              {{ eq_result.dependent_var }}
+            </div>
+            <div class="regression-type" style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">
+              {{ eq_result.regression_type|default:"Regression" }}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="header-actions" style="display: flex; flex-direction: column; gap: 8px; margin-left: 24px;">
+        <a class="modern-edit-btn" href="{% url 'dataprep_open' dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+          Edit Dataset
+        </a>
+        <button id="addErrorsBtn" class="modern-edit-btn" onclick="addModelErrorsToDataset()" title="Add model residuals/errors to dataset" style="cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+          Add Model Errors to Dataset
+        </button>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span class="meta-label">Session:</span>
+        <span class="meta-value">{{session.name}}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <span class="meta-label">Dataset:</span>
+        <span class="meta-value">{{dataset.name}}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+        </svg>
+        <span class="meta-label">Equations:</span>
+        <span class="meta-value">{{ dependent_vars|length }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multi-Equation Regression Results -->
+  <section class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h2 class="card-title">Multi-Equation Regression Results</h2>
+      <div class="muted small" style="color: var(--muted);">
+        Parameter estimates for {{ dependent_vars|length }} equation(s)
+      </div>
+    </div>
+
+    <div class="table-wrap" style="overflow-x: auto;">
+      <table class="table" style="min-width: 100%;">
+        <thead>
+          <tr>
+            <th style="position: sticky; left: 0; background: var(--bg); z-index: 10; border-right: 2px solid var(--border);">
+              <strong>Variable</strong>
+            </th>
+            {% for dv in dependent_vars %}
+            <th style="text-align: center; min-width: 150px;">
+              <strong>{{ dv }}</strong>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for rhs_var in rhs_vars %}
+          <tr>
+            <td style="position: sticky; left: 0; background: var(--bg); z-index: 9; border-right: 2px solid var(--border); font-weight: 600;">
+              {{ rhs_var }}
+            </td>
+            {% for dv in dependent_vars %}
+            <td class="multi-reg-cell" style="text-align: center; vertical-align: middle; padding: 12px;">
+              {% with rhs_dict=grid_data|get_item:rhs_var %}
+                {% if rhs_dict %}
+                  {% with cell_data=rhs_dict|get_item:dv %}
+                    {% if cell_data %}
+                      <!-- Parameter estimate with significance -->
+                      <div style="font-size: 16px; font-weight: 600; margin-bottom: 6px; line-height: 1.4;">
+                        {{ cell_data.coef|floatformat:4|default:"—" }}{{ cell_data.sig|default:"" }}
+                      </div>
+                      
+                      <!-- Additional statistics container (shown on next lines when enabled) -->
+                      <div style="font-size: 12px; color: var(--muted); line-height: 1.6;">
+                        <!-- Standard Error (shown if enabled) -->
+                        <div class="cell-se" style="display: {% if session.options.show_se %}block{% else %}none{% endif %}; margin-top: 2px;">
+                          SE: {{ cell_data.se|floatformat:4|default:"—" }}
+                        </div>
+                        
+                        <!-- Confidence Interval (shown if enabled) -->
+                        <div class="cell-ci" style="display: {% if session.options.show_ci %}block{% else %}none{% endif %}; margin-top: 2px;">
+                          CI: [{{ cell_data.ci_low|floatformat:4|default:"—" }}, {{ cell_data.ci_high|floatformat:4|default:"—" }}]
+                        </div>
+                        
+                        <!-- t/z statistic (shown if enabled) -->
+                        <div class="cell-t" style="display: {% if session.options.show_t %}block{% else %}none{% endif %}; margin-top: 2px;">
+                          t/z: {{ cell_data.t_stat|floatformat:4|default:"—" }}
+                        </div>
+                        
+                        <!-- p-value (shown if enabled) -->
+                        <div class="cell-p" style="display: {% if session.options.show_p %}block{% else %}none{% endif %}; margin-top: 2px;">
+                          p: {{ cell_data.p_val|floatformat:4|default:"—" }}
+                        </div>
+                      </div>
+                    {% else %}
+                      <div style="color: var(--muted);">—</div>
+                    {% endif %}
+                  {% endwith %}
+                {% else %}
+                  <div style="color: var(--muted);">—</div>
+                {% endif %}
+              {% endwith %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+          
+          <!-- Model Fit Statistics Rows (N is always shown, others shown conditionally via JavaScript) -->
+          <tr class="model-fit-row-n" style="background-color: var(--table-stats-bg); border-top: 2px solid var(--border);">
+            <td style="position: sticky; left: 0; background: var(--table-stats-bg); z-index: 9; border-right: 2px solid var(--border); font-weight: 600;">
+              <strong>N</strong>
+            </td>
+            {% for eq_result in equation_results %}
+            <td style="text-align: center; vertical-align: middle; padding: 12px;">
+              {% if eq_result.model_stats and eq_result.model_stats.N %}
+                {{ eq_result.model_stats.N }}
+              {% else %}
+                <div style="color: var(--muted);">—</div>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          
+          <tr class="model-fit-row-r2" style="background-color: var(--table-stats-bg); {% if not session.options.show_r2 %}display: none;{% endif %}">
+            <td style="position: sticky; left: 0; background: var(--table-stats-bg); z-index: 9; border-right: 2px solid var(--border); font-weight: 600;">
+              <strong>R² / Pseudo-R²</strong>
+            </td>
+            {% for eq_result in equation_results %}
+            <td style="text-align: center; vertical-align: middle; padding: 12px;">
+              {% if eq_result.model_stats %}
+                {% with r2_value=eq_result.model_stats|get_item:"R²" %}
+                  {% if r2_value %}
+                    {{ r2_value|floatformat:4 }}
+                  {% else %}
+                    {% with pseudo_mcfadden=eq_result.model_stats|get_item:"Pseudo_R²__McFadden_" %}
+                      {% if pseudo_mcfadden %}
+                        {{ pseudo_mcfadden|floatformat:4 }}
+                      {% else %}
+                        {% with pseudo_cox=eq_result.model_stats|get_item:"Pseudo_R²__Cox_Snell_" %}
+                          {% if pseudo_cox %}
+                            {{ pseudo_cox|floatformat:4 }}
+                          {% else %}
+                            {% with pseudo_nag=eq_result.model_stats|get_item:"Pseudo_R²__Nagelkerke_" %}
+                              {% if pseudo_nag %}
+                                {{ pseudo_nag|floatformat:4 }}
+                              {% else %}
+                                {% with pseudo_mcfadden2=eq_result.model_stats|get_item:"Pseudo R² (McFadden)" %}
+                                  {% if pseudo_mcfadden2 %}
+                                    {{ pseudo_mcfadden2|floatformat:4 }}
+                                  {% else %}
+                                    <div style="color: var(--muted);">—</div>
+                                  {% endif %}
+                                {% endwith %}
+                              {% endif %}
+                            {% endwith %}
+                          {% endif %}
+                        {% endwith %}
+                      {% endif %}
+                    {% endwith %}
+                  {% endif %}
+                {% endwith %}
+              {% else %}
+                <div style="color: var(--muted);">—</div>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          
+          <tr class="model-fit-row-aic" style="background-color: var(--table-stats-bg); {% if not session.options.show_aic %}display: none;{% endif %}">
+            <td style="position: sticky; left: 0; background: var(--table-stats-bg); z-index: 9; border-right: 2px solid var(--border); font-weight: 600;">
+              <strong>AIC</strong>
+            </td>
+            {% for eq_result in equation_results %}
+            <td style="text-align: center; vertical-align: middle; padding: 12px;">
+              {% if eq_result.model_stats and eq_result.model_stats.AIC %}
+                {{ eq_result.model_stats.AIC|floatformat:2 }}
+              {% else %}
+                <div style="color: var(--muted);">—</div>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          
+          <tr class="model-fit-row-bic" style="background-color: var(--table-stats-bg); {% if session.options and not session.options.show_bic %}display: none;{% endif %}">
+            <td style="position: sticky; left: 0; background: var(--table-stats-bg); z-index: 9; border-right: 2px solid var(--border); font-weight: 600;">
+              <strong>BIC</strong>
+            </td>
+            {% for eq_result in equation_results %}
+            <td style="text-align: center; vertical-align: middle; padding: 12px;">
+              {% if eq_result.model_stats and eq_result.model_stats.BIC %}
+                {{ eq_result.model_stats.BIC|floatformat:2 }}
+              {% else %}
+                <div style="color: var(--muted);">—</div>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Summary Statistics -->
+  {% if summary_stats %}
+  <section class="card" id="summary-table-section" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Summary Statistics</h3>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            {% if show_min %}<th>Min</th>{% endif %}
+            {% if show_max %}<th>Max</th>{% endif %}
+            {% if show_range %}<th>Range</th>{% endif %}
+            {% if show_variance %}<th>Variance</th>{% endif %}
+            {% if show_vif %}<th>VIF</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for var, stats in summary_stats.items %}
+          <tr>
+            <td><strong>{{ var }}</strong></td>
+            {% if show_min %}<td class="mono">{{ stats.min|floatformat:3 }}</td>{% endif %}
+            {% if show_max %}<td class="mono">{{ stats.max|floatformat:3 }}</td>{% endif %}
+            {% if show_range %}<td class="mono">{{ stats.range|floatformat:3 }}</td>{% endif %}
+            {% if show_variance %}<td class="mono">{{ stats.variance|floatformat:3 }}</td>{% endif %}
+            {% if show_vif %}<td class="mono">{% if stats.vif|floatformat:2 != "nan" %}{{ stats.vif|floatformat:2 }}{% else %}—{% endif %}</td>{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Correlation Heatmap Section -->
+  {% if continuous_vars|length >= 2 %}
+  <section class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Correlation Analysis</h3>
+      <div style="margin-left: auto;">
+        <button type="button" class="btn btn-ghost" onclick="addCorrelationHeatmap()" style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px;">+</span> Correlation Heatmap
+        </button>
+      </div>
+    </div>
+    <div style="padding: 16px; text-align: center; color: var(--muted);">
+      <p>Click the button above to generate an interactive correlation heatmap showing pairwise correlations between all continuous variables.</p>
+    </div>
+  </section>
+  {% endif %}
+  
+  <!-- Dynamic Plots Container -->
+  <div id="dynamic-plots-container">
+    <!-- Plots will be added here dynamically -->
+  </div>
+
+{% else %}
+  <!-- Error State -->
+  <section class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h2 class="card-title">Error</h2>
+    </div>
+    <div style="padding: 16px; color: var(--error);">
+      {% if error %}
+        {{ error }}
+      {% else %}
+        Unable to generate multi-equation regression results.
+      {% endif %}
+    </div>
+  </section>
+{% endif %}
+
+<script>
+  // Set AI chat context when page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof aiChatContext !== 'undefined') {
+      aiChatContext = {
+        session_name: '{{ session.name|escapejs }}',
+        formula: '{{ session.formula|escapejs }}',
+        module: 'regression',
+        dataset_name: '{{ dataset.name|escapejs }}'
+      };
+    }
+    
+    // Update display when checkboxes change
+    const checkboxes = document.querySelectorAll('#regressionOptionsForm input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', updateMultiRegressionDisplay);
+    });
+    
+    // Initial display update
+    updateMultiRegressionDisplay();
+  });
+  
+  // Correlation heatmap functionality (from results.html)
+  const continuousVars = {{ continuous_vars_json|safe }};
+  let correlationHeatmapAdded = false;
+  
+  // Make functions globally accessible
+  window.addCorrelationHeatmap = function() {
+    console.log('addCorrelationHeatmap called');
+    
+    // Mark heatmap as added
+    correlationHeatmapAdded = true;
+    
+    // Hide the button
+    const button = document.querySelector('button[onclick="addCorrelationHeatmap()"]');
+    if (button) {
+      button.style.display = 'none';
+    }
+    
+    // Generate correlation heatmap
+    generateCorrelationHeatmap();
+  };
+  
+  function generateCorrelationHeatmap(customOptions = {}) {
+    console.log('Generating correlation heatmap');
+    console.log('Custom options:', customOptions);
+    
+    // Make AJAX call to generate correlation heatmap
+    const formData = new FormData();
+    
+    // Add selected variables (default to all continuous variables)
+    const xVars = customOptions.xVars || continuousVars;
+    const yVars = customOptions.yVars || continuousVars;
+    
+    xVars.forEach(variable => formData.append('x_vars[]', variable));
+    yVars.forEach(variable => formData.append('y_vars[]', variable));
+    
+    // Add custom options if provided
+    if (customOptions.showSignificance !== undefined) {
+      formData.append('show_significance', customOptions.showSignificance);
+    }
+    if (customOptions.colorScheme) {
+      formData.append('color_scheme', customOptions.colorScheme);
+    }
+    
+    const url = `{% url 'generate_correlation_heatmap' session.id %}`;
+    
+    // Get CSRF token from cookie or form
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+    
+    fetch(url, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-CSRFToken': csrfToken || ''
+      }
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.text().then(text => {
+          throw new Error(`HTTP ${response.status}: ${text}`);
+        });
+      }
+      return response.text();
+    })
+    .then(data => {
+      // Create a new correlation heatmap section
+      const container = document.getElementById('dynamic-plots-container');
+      const timestamp = Date.now();
+      const plotId = `correlation-heatmap-${timestamp}`;
+      
+      // Create new plot section
+      const plotSection = document.createElement('section');
+      plotSection.id = plotId;
+      plotSection.className = 'card plot-card';
+      plotSection.style.marginBottom = '16px';
+      plotSection.innerHTML = `
+        <div class="card-head">
+          <h3 class="card-title">Correlation Heatmap</h3>
+          <div class="muted small">Pearson correlation coefficients with significance levels</div>
+          <div style="margin-left: auto; display: flex; gap: 8px;">
+            <button type="button" class="btn btn-ghost" onclick="removeCorrelationHeatmap('${plotId}')">×</button>
+          </div>
+        </div>
+        <div class="plot-container" id="plot-${plotId}"></div>
+      `;
+      
+      container.appendChild(plotSection);
+      
+      // Render the plot
+      const plotContainer = document.getElementById(`plot-${plotId}`);
+      if (plotContainer && data) {
+        try {
+          const plotData = JSON.parse(data);
+          Plotly.newPlot(plotContainer, plotData.data || plotData, plotData.layout || {}, plotData.config || {});
+        } catch (parseError) {
+          console.error('Error parsing plot data:', parseError);
+          plotContainer.innerHTML = `<div class="error">Error parsing plot data: ${parseError.message}</div>`;
+        }
+      }
+    })
+    .catch(error => {
+      console.error('Error generating correlation heatmap:', error);
+      alert(`Failed to generate correlation heatmap: ${error.message}`);
+      
+      // Show button again on error
+      const button = document.querySelector('button[onclick="addCorrelationHeatmap()"]');
+      if (button) {
+        button.style.display = 'flex';
+      }
+      correlationHeatmapAdded = false;
+    });
+  }
+  
+  window.removeCorrelationHeatmap = function(plotId) {
+    // Mark heatmap as not added
+    correlationHeatmapAdded = false;
+    
+    // Remove the plot section
+    const plotSection = document.getElementById(plotId);
+    if (plotSection) {
+      plotSection.remove();
+    }
+    
+    // Show the button again
+    const button = document.querySelector('button[onclick="addCorrelationHeatmap()"]');
+    if (button) {
+      button.style.display = 'flex';
+    }
+  };
+  
+  function updateMultiRegressionDisplay() {
+    const showSe = document.querySelector('input[name="show_se"]')?.checked || false;
+    const showCi = document.querySelector('input[name="show_ci"]')?.checked || false;
+    const showT = document.querySelector('input[name="show_t"]')?.checked || false;
+    const showP = document.querySelector('input[name="show_p"]')?.checked || false;
+    
+    console.log('updateMultiRegressionDisplay called:', { showSe, showCi, showT, showP });
+    
+    // Update all cells to show/hide additional info
+    document.querySelectorAll('.multi-reg-cell').forEach(cell => {
+      const seEl = cell.querySelector('.cell-se');
+      const ciEl = cell.querySelector('.cell-ci');
+      const tEl = cell.querySelector('.cell-t');
+      const pEl = cell.querySelector('.cell-p');
+      
+      if (seEl) {
+        seEl.style.display = showSe ? 'block' : 'none';
+        console.log('SE element found, setting display to:', showSe ? 'block' : 'none');
+      }
+      if (ciEl) {
+        ciEl.style.display = showCi ? 'block' : 'none';
+        console.log('CI element found, setting display to:', showCi ? 'block' : 'none');
+      }
+      if (tEl) {
+        tEl.style.display = showT ? 'block' : 'none';
+        console.log('T element found, setting display to:', showT ? 'block' : 'none');
+      }
+      if (pEl) {
+        pEl.style.display = showP ? 'block' : 'none';
+        console.log('P element found, setting display to:', showP ? 'block' : 'none');
+      }
+    });
+    
+    // Show/hide model fit statistic rows (N is always shown, no toggle needed)
+    const showR2 = document.querySelector('input[name="show_r2"]')?.checked || false;
+    const showAic = document.querySelector('input[name="show_aic"]')?.checked || false;
+    const showBic = document.querySelector('input[name="show_bic"]')?.checked || false;
+    
+    document.querySelectorAll('.model-fit-row-r2').forEach(row => {
+      row.style.display = showR2 ? '' : 'none';
+    });
+    document.querySelectorAll('.model-fit-row-aic').forEach(row => {
+      row.style.display = showAic ? '' : 'none';
+    });
+    document.querySelectorAll('.model-fit-row-bic').forEach(row => {
+      row.style.display = showBic ? '' : 'none';
+    });
+  }
+  
+  // Function to add model errors to dataset (for multi-equation regression)
+  function addModelErrorsToDataset() {
+    const sessionId = {{ session.id }};
+    const datasetId = {{ dataset.id }};
+    const btn = document.getElementById('addErrorsBtn');
+    
+    if (!sessionId || !datasetId) {
+      alert('Session or dataset ID not found');
+      return;
+    }
+
+    // Show loading state
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 6v6l4 2"/></svg>Processing...';
+
+    fetch(`/session/${sessionId}/add-model-errors/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+      },
+      body: JSON.stringify({
+        dataset_id: datasetId
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+      
+      if (data.success) {
+        alert(`Successfully added ${data.columns_added} error column(s) to dataset:\n${data.column_names.join(', ')}`);
+      } else {
+        alert(data.error || 'Failed to add model errors to dataset');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+      alert('Error adding model errors to dataset. Please try again.');
+    });
+  }
+</script>
+{% endblock %}
+

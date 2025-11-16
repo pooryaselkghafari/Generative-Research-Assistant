@@ -1,0 +1,84 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage - Exception Paths",
+  "score": 91.66666666666666,
+  "passed": true,
+  "total_tests": 12,
+  "passed_tests": 11,
+  "failed_tests": 1,
+  "execution_time": 3.680643081665039,
+  "test_results": [
+    {
+      "test_name": "add_model_errors_get_method",
+      "passed": true,
+      "message": "Should return 405 for GET method (got 405)",
+      "details": {}
+    },
+    {
+      "test_name": "add_model_errors_invalid_json",
+      "passed": true,
+      "message": "Should return 400 for invalid JSON (got 400)",
+      "details": {}
+    },
+    {
+      "test_name": "add_model_errors_no_dataset_id",
+      "passed": true,
+      "message": "Should return 400 when dataset_id is missing (got 400)",
+      "details": {}
+    },
+    {
+      "test_name": "add_model_errors_no_session",
+      "passed": false,
+      "message": "Should return 404/403 for invalid session (got 500)",
+      "details": {}
+    },
+    {
+      "test_name": "get_dataset_variables_invalid_id",
+      "passed": true,
+      "message": "Should return 400/404 for invalid ID (got 404)",
+      "details": {}
+    },
+    {
+      "test_name": "get_dataset_variables_unauthenticated",
+      "passed": true,
+      "message": "Should return 401 for unauthenticated request (got 401)",
+      "details": {}
+    },
+    {
+      "test_name": "run_analysis_get_method",
+      "passed": true,
+      "message": "Should return 405 for GET method (got 405)",
+      "details": {}
+    },
+    {
+      "test_name": "run_analysis_invalid_dataset",
+      "passed": true,
+      "message": "Should return 404/403 for invalid dataset (got 404)",
+      "details": {}
+    },
+    {
+      "test_name": "run_analysis_no_dataset_id",
+      "passed": true,
+      "message": "Should return 400 when dataset_id is missing (got 400)",
+      "details": {}
+    },
+    {
+      "test_name": "run_analysis_unauthenticated",
+      "passed": true,
+      "message": "Should require authentication (got 302)",
+      "details": {}
+    },
+    {
+      "test_name": "upload_dataset_get_method",
+      "passed": true,
+      "message": "Should return 405 or redirect for GET method (got 405)",
+      "details": {}
+    },
+    {
+      "test_name": "upload_dataset_no_file",
+      "passed": true,
+      "message": "Should return 400 when no file provided (got 400)",
+      "details": {}
+    }
+  ]
+}

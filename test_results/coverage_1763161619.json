@@ -1,0 +1,30 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage - Helper Functions",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 3,
+  "passed_tests": 3,
+  "failed_tests": 0,
+  "execution_time": 0.9321451187133789,
+  "test_results": [
+    {
+      "test_name": "count_equations_empty",
+      "passed": true,
+      "message": "Empty string should return 0 equations (got 0)",
+      "details": {}
+    },
+    {
+      "test_name": "count_equations_single",
+      "passed": true,
+      "message": "Single equation should return 1 (got 1)",
+      "details": {}
+    },
+    {
+      "test_name": "count_dependent_variables_single",
+      "passed": true,
+      "message": "Single DV should return 1 (got 1)",
+      "details": {}
+    }
+  ]
+}

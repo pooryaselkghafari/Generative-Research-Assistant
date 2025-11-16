@@ -1,0 +1,74 @@
+{
+  "category": "static_analysis",
+  "test_name": "Static Analysis Tests",
+  "score": 60.0,
+  "passed": false,
+  "total_tests": 5,
+  "passed_tests": 3,
+  "failed_tests": 2,
+  "execution_time": 2.2029662132263184,
+  "test_results": [
+    {
+      "test_name": "file_size_limits",
+      "passed": true,
+      "message": "All files within size limits",
+      "details": {
+        "large_files": []
+      }
+    },
+    {
+      "test_name": "function_complexity",
+      "passed": false,
+      "message": "Found 24 overly complex functions",
+      "details": {
+        "complex_functions": [
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:453 _build_correlation_heatmap_json (complexity: 17)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:583 _build_spotlight_json (complexity: 133)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:1419 generate_spotlight_for_interaction (complexity: 17)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:1809 _fit_models (complexity: 209)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:3040 _pre_generate_multinomial_predictions (complexity: 35)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:3291 _pre_generate_ordinal_predictions (complexity: 26)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:3594 _run_multi_equation (complexity: 51)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/VARMAX.py:77 fit_varmax_per_eq_exog (complexity: 16)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/VARMAX.py:229 run (complexity: 53)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/ANOVA.py:297 generate_anova_plot (complexity: 35)"
+        ]
+      }
+    },
+    {
+      "test_name": "import_errors",
+      "passed": true,
+      "message": "No import errors",
+      "details": {
+        "errors": []
+      }
+    },
+    {
+      "test_name": "python_syntax_errors",
+      "passed": true,
+      "message": "No syntax errors",
+      "details": {
+        "errors": []
+      }
+    },
+    {
+      "test_name": "security_patterns",
+      "passed": false,
+      "message": "Found 15 potential security issues",
+      "details": {
+        "issues": [
+          "/Users/pooryaselkghafari/Desktop/GRA/accounts/backends.py:16 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/accounts/backends.py:21 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/accounts/views.py:184 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/engine/dataprep/views.py Uses eval/exec (security risk)",
+          "/Users/pooryaselkghafari/Desktop/GRA/engine/services/row_filtering_service.py Uses eval/exec (security risk)",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/frontend/test_frontend.py:99 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/security/test_security.py:67 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/security/test_security.py:107 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/security/test_security.py:133 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/security/test_security.py:146 Potential hardcoded secret"
+        ]
+      }
+    }
+  ]
+}

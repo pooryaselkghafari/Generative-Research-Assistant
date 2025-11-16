@@ -1,0 +1,54 @@
+{
+  "category": "security",
+  "test_name": "Security Tests",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 7,
+  "passed_tests": 7,
+  "failed_tests": 0,
+  "execution_time": 3.09458589553833,
+  "test_results": [
+    {
+      "test_name": "api_auth_required__api_dataset_1_variables_",
+      "passed": true,
+      "message": "/api/dataset/1/variables/ should require authentication",
+      "details": {}
+    },
+    {
+      "test_name": "csrf_protection",
+      "passed": true,
+      "message": "POST endpoints should be protected by CSRF",
+      "details": {}
+    },
+    {
+      "test_name": "inactive_user_cannot_login",
+      "passed": true,
+      "message": "Inactive users should not be able to log in",
+      "details": {}
+    },
+    {
+      "test_name": "sql_injection_prevention",
+      "passed": true,
+      "message": "Should prevent SQL injection attacks",
+      "details": {}
+    },
+    {
+      "test_name": "user_data_isolation_datasets_own",
+      "passed": true,
+      "message": "Users should be able to access their own datasets (got 404)",
+      "details": {}
+    },
+    {
+      "test_name": "user_data_isolation_datasets_other",
+      "passed": true,
+      "message": "Users should not access other users' datasets (got 403, expected 403)",
+      "details": {}
+    },
+    {
+      "test_name": "user_data_isolation_sessions",
+      "passed": true,
+      "message": "Users should not access other users' sessions",
+      "details": {}
+    }
+  ]
+}

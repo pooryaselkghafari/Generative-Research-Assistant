@@ -1,0 +1,24 @@
+{
+  "category": "security",
+  "test_name": "Security Tests",
+  "score": 50.0,
+  "passed": false,
+  "total_tests": 2,
+  "passed_tests": 1,
+  "failed_tests": 1,
+  "execution_time": 0.45108675956726074,
+  "test_results": [
+    {
+      "test_name": "user_data_isolation_datasets_own",
+      "passed": false,
+      "message": "Users should be able to access their own datasets",
+      "details": {}
+    },
+    {
+      "test_name": "user_data_isolation_datasets_other",
+      "passed": true,
+      "message": "Users should not access other users' datasets",
+      "details": {}
+    }
+  ]
+}

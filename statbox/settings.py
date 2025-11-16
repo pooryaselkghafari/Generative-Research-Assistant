@@ -89,9 +89,11 @@ SITE_ID = 1  # Required for allauth
 
 # Allauth Configuration
 AUTHENTICATION_BACKENDS = [
-    # Django's default authentication backend
+    # Custom backend that enforces email verification (active users only)
+    'accounts.backends.ActiveUserBackend',
+    # Django's default authentication backend (fallback)
     'django.contrib.auth.backends.ModelBackend',
-    # Allauth authentication backend
+    # Allauth authentication backend (for social auth)
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
@@ -242,6 +244,61 @@ CKEDITOR_CONFIGS = {
         ],
     },
 }
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'django.log'),  # Convert Path to string
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'engine': {
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'accounts': {
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# Ensure logs directory exists
+import os
+logs_dir = BASE_DIR / 'logs'
+os.makedirs(logs_dir, exist_ok=True)
 
 # Check if CKEditor is installed (after CKEDITOR settings are defined)
 try:

@@ -117,7 +117,8 @@ class AnalysisSession(models.Model):
     formula = models.TextField()
     analysis_type = models.CharField(max_length=20, default='frequentist')
     options = models.JSONField(default=dict)
-    dataset = models.ForeignKey(Dataset, null=True, blank=True, on_delete=models.SET_NULL, related_name='sessions')
+    # Foreign key with proper constraint: null/blank allowed but if set, must be valid
+    dataset = models.ForeignKey(Dataset, null=True, blank=True, on_delete=models.SET_NULL, related_name='sessions', db_constraint=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -125,6 +126,22 @@ class AnalysisSession(models.Model):
     fitted_model = models.BinaryField(null=True, blank=True)  # Store pickled fitted model
     ordinal_predictions = models.JSONField(null=True, blank=True)  # Store pre-generated ordinal predictions
     multinomial_predictions = models.JSONField(null=True, blank=True)  # Store pre-generated multinomial predictions
+
+    def clean(self):
+        """Validate foreign key constraint when dataset is explicitly set."""
+        from django.core.exceptions import ValidationError
+        if self.dataset_id is not None:
+            # If dataset_id is set, verify it exists
+            if not Dataset.objects.filter(pk=self.dataset_id).exists():
+                raise ValidationError({'dataset': f"Dataset with id {self.dataset_id} does not exist."})
+    
+    def save(self, *args, **kwargs):
+        """Override save to validate dataset foreign key constraint."""
+        # Only validate the dataset foreign key, not all fields
+        # This allows saving with partial data (e.g., during migrations or initial creation)
+        if self.dataset_id is not None:
+            self.clean()  # Only calls clean(), not full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.user.username if self.user else 'No User'})"
@@ -288,3 +305,45 @@ class TermsOfService(models.Model):
     
     def __str__(self):
         return f"Terms of Service v{self.version} ({self.effective_date})"
+
+class TestResult(models.Model):
+    """Store test execution results for tracking."""
+    TEST_CATEGORIES = [
+        ('security', 'Security Tests'),
+        ('database', 'Database Tests'),
+        ('performance', 'Performance Tests'),
+        ('unit', 'Unit Tests'),
+        ('integration', 'Integration Tests'),
+        ('api', 'API Tests'),
+        ('e2e', 'End-to-End Tests'),
+        ('static_analysis', 'Static Analysis Tests'),
+        ('dependency_scan', 'Dependency Vulnerability Scan'),
+        ('coverage', 'Coverage Check'),
+        ('backup', 'Backup/Restore Tests'),
+        ('monitoring', 'Monitoring/Logging Tests'),
+        ('cron', 'Cron/Scheduled Task Tests'),
+        ('frontend', 'Frontend Tests'),
+    ]
+    
+    category = models.CharField(max_length=20, choices=TEST_CATEGORIES)
+    test_name = models.CharField(max_length=200)
+    passed = models.BooleanField()
+    score = models.FloatField(null=True, blank=True)  # 0-100
+    total_tests = models.IntegerField()
+    passed_tests = models.IntegerField()
+    failed_tests = models.IntegerField()
+    execution_time = models.FloatField()  # seconds
+    details = models.JSONField(default=dict)  # Store detailed results
+    error_message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['category', '-created_at']),
+            models.Index(fields=['test_name', '-created_at']),
+        ]
+    
+    def __str__(self):
+        status = "✅ PASS" if self.passed else "❌ FAIL"
+        return f"{self.category}/{self.test_name} - {status} ({self.score}%)"

@@ -1,0 +1,30 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage Check",
+  "score": 66.66666666666666,
+  "passed": false,
+  "total_tests": 3,
+  "passed_tests": 2,
+  "failed_tests": 1,
+  "execution_time": 3.6130950450897217,
+  "test_results": [
+    {
+      "test_name": "code_coverage",
+      "passed": false,
+      "message": "Could not generate coverage report",
+      "details": {}
+    },
+    {
+      "test_name": "coverage_tool_available",
+      "passed": true,
+      "message": "coverage.py available",
+      "details": {}
+    },
+    {
+      "test_name": "critical_paths_covered",
+      "passed": true,
+      "message": "Critical paths coverage check (requires coverage report)",
+      "details": {}
+    }
+  ]
+}

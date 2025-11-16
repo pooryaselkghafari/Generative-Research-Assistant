@@ -166,16 +166,26 @@ def login_view(request):
     if request.method == 'POST':
         username = request.POST['username']
         password = request.POST['password']
+        
+        # First check if user exists and is inactive (before authentication)
+        # This helps us show a better error message
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            # Try to get user by username or email
+            user_obj = User.objects.get(username=username)
+        except User.DoesNotExist:
+            try:
+                user_obj = User.objects.get(email=username)
+            except User.DoesNotExist:
+                user_obj = None
+        
+        # Authenticate user
         user = authenticate(request, username=username, password=password)
         
         # Handle AJAX requests for modal login
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             if user is not None:
-                if not user.is_active:
-                    return JsonResponse({
-                        'success': False,
-                        'message': 'Your account is not activated. Please check your email for the verification link.'
-                    }, status=400)
                 login(request, user)
                 return JsonResponse({
                     'success': True,
@@ -183,6 +193,12 @@ def login_view(request):
                     'redirect_url': '/app/'
                 })
             else:
+                # Check if user exists but is inactive
+                if user_obj is not None and not user_obj.is_active:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'Your account is not activated. Please check your email for the verification link to activate your account.'
+                    }, status=400)
                 return JsonResponse({
                     'success': False,
                     'message': 'Invalid username or password.'
@@ -190,14 +206,15 @@ def login_view(request):
         
         # Regular form submission (non-AJAX)
         if user is not None:
-            if not user.is_active:
-                messages.error(request, 'Your account is not activated. Please check your email for the verification link.')
-                return render(request, 'accounts/login.html')
             login(request, user)
             messages.success(request, f'Welcome back, {user.username}!')
             return redirect('index')
         else:
-            messages.error(request, 'Invalid username or password.')
+            # Check if user exists but is inactive (authentication failed due to inactive status)
+            if user_obj is not None and not user_obj.is_active:
+                messages.error(request, 'Your account is not activated. Please check your email for the verification link to activate your account.')
+            else:
+                messages.error(request, 'Invalid username or password.')
     
     return render(request, 'accounts/login.html')
 

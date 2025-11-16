@@ -1,0 +1,42 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage - AI Chat & API",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 5,
+  "passed_tests": 5,
+  "failed_tests": 0,
+  "execution_time": 1.726412057876587,
+  "test_results": [
+    {
+      "test_name": "ai_chat_invalid_json",
+      "passed": true,
+      "message": "Should return 400 for invalid JSON (got 400)",
+      "details": {}
+    },
+    {
+      "test_name": "ai_chat_no_message",
+      "passed": true,
+      "message": "Should return 400 when message missing (got 400)",
+      "details": {}
+    },
+    {
+      "test_name": "ai_chat_unauthenticated",
+      "passed": true,
+      "message": "Should return 401 for unauthenticated request (got 401)",
+      "details": {}
+    },
+    {
+      "test_name": "ai_chat_valid_request",
+      "passed": true,
+      "message": "Should return 200 for valid request (got 200)",
+      "details": {}
+    },
+    {
+      "test_name": "ai_chat_with_context",
+      "passed": true,
+      "message": "Should handle context parameter (got 200)",
+      "details": {}
+    }
+  ]
+}

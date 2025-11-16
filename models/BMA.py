@@ -14,6 +14,9 @@ import re
 
 def _quote_column_names_with_special_chars(df, formula):
     """Handle column names with spaces, dots, and other special characters for R processing"""
+    # Clean formula: remove carriage returns and normalize whitespace
+    formula = formula.replace('\r', '').replace('\n', ' ').strip()
+    
     # For R, we need to temporarily rename columns with special characters
     # and update the formula accordingly
     column_mapping = {}
@@ -103,7 +106,8 @@ def run_bma_analysis_bas(df, response_var, predictor_vars, categorical_vars=None
         ''')
         
         # Use the processed formula (already handles special characters)
-        formula_str = formula
+        # Clean formula: remove carriage returns and strip whitespace
+        formula_str = formula.replace('\r', '').replace('\n', ' ').strip()
         
         # Load BAS and run bas.lm with MCMC method
         # Set default media path if not provided
@@ -474,7 +478,8 @@ def run_bma_analysis(df, response_var, predictor_vars, categorical_vars=None, or
         ''')
         
         # Use the processed formula (already handles special characters)
-        formula_str = formula
+        # Clean formula: remove carriage returns and strip whitespace
+        formula_str = formula.replace('\r', '').replace('\n', ' ').strip()
         
         # Load BMA and run bic.glm with plotting
         r_code = f'''

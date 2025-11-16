@@ -1,0 +1,144 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage - Helper Functions",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 22,
+  "passed_tests": 22,
+  "failed_tests": 0,
+  "execution_time": 7.006052732467651,
+  "test_results": [
+    {
+      "test_name": "count_dependent_variables_empty",
+      "passed": true,
+      "message": "Empty string should return 0 DVs (got 0)",
+      "details": {}
+    },
+    {
+      "test_name": "count_dependent_variables_multi_equation",
+      "passed": true,
+      "message": "Two equations with one DV each should return 2 (got 2)",
+      "details": {}
+    },
+    {
+      "test_name": "count_dependent_variables_multiple",
+      "passed": true,
+      "message": "Two DVs should return 2 (got 2)",
+      "details": {}
+    },
+    {
+      "test_name": "count_dependent_variables_single",
+      "passed": true,
+      "message": "Single DV should return 1 (got 1)",
+      "details": {}
+    },
+    {
+      "test_name": "count_equations_empty",
+      "passed": true,
+      "message": "Empty string should return 0 equations (got 0)",
+      "details": {}
+    },
+    {
+      "test_name": "count_equations_multi",
+      "passed": true,
+      "message": "Two equations should return 2 (got 2)",
+      "details": {}
+    },
+    {
+      "test_name": "count_equations_single",
+      "passed": true,
+      "message": "Single equation should return 1 (got 1)",
+      "details": {}
+    },
+    {
+      "test_name": "count_equations_whitespace",
+      "passed": true,
+      "message": "Whitespace-only string should return 0 equations (got 0)",
+      "details": {}
+    },
+    {
+      "test_name": "count_equations_with_comments",
+      "passed": true,
+      "message": "Should only count lines with ~ (got 1)",
+      "details": {}
+    },
+    {
+      "test_name": "determine_template_bayesian",
+      "passed": true,
+      "message": "Should return Bayesian template (got engine/bayesian_results.html)",
+      "details": {}
+    },
+    {
+      "test_name": "determine_template_default",
+      "passed": true,
+      "message": "Should return default template (got engine/results.html)",
+      "details": {}
+    },
+    {
+      "test_name": "determine_template_multi_equation",
+      "passed": true,
+      "message": "Should return multi-regression template (got engine/results_multi_regression.html)",
+      "details": {}
+    },
+    {
+      "test_name": "determine_template_override",
+      "passed": true,
+      "message": "Should return override template (got engine/custom_template.html)",
+      "details": {}
+    },
+    {
+      "test_name": "prepare_options_basic",
+      "passed": true,
+      "message": "Should return options dictionary with request parameters",
+      "details": {}
+    },
+    {
+      "test_name": "validate_equation_multi_equation_multiple_dvs_per_line",
+      "passed": true,
+      "message": "Should return error when multi-equation regression has multiple DVs per line",
+      "details": {}
+    },
+    {
+      "test_name": "validate_equation_multi_equation_non_regression",
+      "passed": true,
+      "message": "Should return error when non-regression model has multiple equations",
+      "details": {}
+    },
+    {
+      "test_name": "validate_equation_non_regression_multiple_dvs",
+      "passed": true,
+      "message": "Should return error when non-regression model has multiple DVs",
+      "details": {}
+    },
+    {
+      "test_name": "validate_equation_valid_multi_equation",
+      "passed": true,
+      "message": "Should pass validation for valid multi-equation regression",
+      "details": {}
+    },
+    {
+      "test_name": "validate_equation_valid_single",
+      "passed": true,
+      "message": "Should pass validation for valid single equation",
+      "details": {}
+    },
+    {
+      "test_name": "validate_equation_valid_varx",
+      "passed": true,
+      "message": "Should pass validation for valid VARX equation",
+      "details": {}
+    },
+    {
+      "test_name": "validate_equation_varx_insufficient_dvs",
+      "passed": true,
+      "message": "Should return error when VARX has < 2 DVs",
+      "details": {}
+    },
+    {
+      "test_name": "validate_equation_varx_multiple_equations",
+      "passed": true,
+      "message": "Should return error when VARX has multiple equations",
+      "details": {}
+    }
+  ]
+}

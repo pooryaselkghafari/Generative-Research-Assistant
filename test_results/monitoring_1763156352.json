@@ -1,0 +1,109 @@
+{
+  "category": "monitoring",
+  "test_name": "Monitoring/Logging Tests",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 5,
+  "passed_tests": 5,
+  "failed_tests": 0,
+  "execution_time": 0.0025980472564697266,
+  "test_results": [
+    {
+      "test_name": "debug_logging",
+      "passed": true,
+      "message": "Debug logging not working",
+      "details": {}
+    },
+    {
+      "test_name": "error_logging",
+      "passed": true,
+      "message": "Error logging works",
+      "details": {}
+    },
+    {
+      "test_name": "log_levels",
+      "passed": true,
+      "message": "Working log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL",
+      "details": {
+        "working_levels": [
+          "DEBUG",
+          "INFO",
+          "WARNING",
+          "ERROR",
+          "CRITICAL"
+        ]
+      }
+    },
+    {
+      "test_name": "logger_available",
+      "passed": true,
+      "message": "Logger is available and functional",
+      "details": {}
+    },
+    {
+      "test_name": "logging_configured",
+      "passed": {
+        "version": 1,
+        "disable_existing_loggers": false,
+        "formatters": {
+          "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{"
+          },
+          "simple": {
+            "format": "{levelname} {message}",
+            "style": "{"
+          }
+        },
+        "handlers": {
+          "file": {
+            "level": "INFO",
+            "class": "logging.FileHandler",
+            "filename": "/Users/pooryaselkghafari/Desktop/GRA/logs/django.log",
+            "formatter": "verbose"
+          },
+          "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "simple"
+          }
+        },
+        "root": {
+          "handlers": [
+            "console",
+            "file"
+          ],
+          "level": "INFO"
+        },
+        "loggers": {
+          "django": {
+            "handlers": [
+              "file",
+              "console"
+            ],
+            "level": "INFO",
+            "propagate": false
+          },
+          "engine": {
+            "handlers": [
+              "file",
+              "console"
+            ],
+            "level": "DEBUG",
+            "propagate": false
+          },
+          "accounts": {
+            "handlers": [
+              "file",
+              "console"
+            ],
+            "level": "DEBUG",
+            "propagate": false
+          }
+        }
+      },
+      "message": "Logging is configured",
+      "details": {}
+    }
+  ]
+}

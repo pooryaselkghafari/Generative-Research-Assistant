@@ -70,6 +70,21 @@
         window.sbOpenModal = function(url){
           if (!modal || !frame) return;
           
+          // Convert relative URL to absolute URL
+          // This prevents issues with iframe loading from wrong origin (e.g., 127.0.0.1)
+          let absoluteUrl = url;
+          if (url && !url.match(/^https?:\/\//)) {
+            // Relative URL - convert to absolute using current origin
+            const currentOrigin = window.location.origin;
+            // Ensure URL starts with /
+            if (!url.startsWith('/')) {
+              url = '/' + url;
+            }
+            absoluteUrl = currentOrigin + url;
+          }
+          
+          console.log('Opening modal with URL:', absoluteUrl);
+          
           // Clear any existing timeout
           if (loadTimeout) {
             clearTimeout(loadTimeout);
@@ -86,7 +101,13 @@
             try {
               // Check if iframe loaded successfully
               if (frame.contentWindow && frame.contentWindow.location.href === 'about:blank') {
-                console.warn('Iframe failed to load:', url);
+                console.warn('Iframe failed to load:', absoluteUrl);
+                // Show error message to user
+                frame.style.display = 'none';
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = 'padding: 40px; text-align: center; color: #dc2626;';
+                errorDiv.innerHTML = '<div style="font-size: 48px; margin-bottom: 16px;">⚠️</div><div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Failed to load dataset editor</div><div style="font-size: 14px; color: #6b7280;">The dataset editor could not be loaded. Please try again or contact support if the problem persists.</div>';
+                frame.parentElement.appendChild(errorDiv);
               }
             } catch (e) {
               // Cross-origin error is expected, means iframe loaded
@@ -113,15 +134,21 @@
           };
           
           frame.onerror = function() {
-            console.error('Iframe failed to load:', url);
+            console.error('Iframe failed to load:', absoluteUrl);
             if (loadTimeout) {
               clearTimeout(loadTimeout);
               loadTimeout = null;
             }
+            // Show error message
+            frame.style.display = 'none';
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'padding: 40px; text-align: center; color: #dc2626;';
+            errorDiv.innerHTML = '<div style="font-size: 48px; margin-bottom: 16px;">⚠️</div><div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Failed to load dataset editor</div><div style="font-size: 14px; color: #6b7280;">The dataset editor could not be loaded. Please try again or contact support if the problem persists.</div>';
+            frame.parentElement.appendChild(errorDiv);
           };
           
-          // Set the URL last to trigger load
-          frame.src = url;
+          // Set the absolute URL to trigger load
+          frame.src = absoluteUrl;
         };
         
         window.sbCloseModal = function(){
@@ -133,7 +160,12 @@
             loadTimeout = null;
           }
           
+          // Remove any error messages that might have been added
+          const errorDivs = frame.parentElement.querySelectorAll('div[style*="padding: 40px"]');
+          errorDivs.forEach(div => div.remove());
+          
           modal.style.display = 'none';
+          frame.style.display = 'block'; // Reset display in case it was hidden for error
           frame.src = 'about:blank';
           frame.onload = null;
           frame.onerror = null;

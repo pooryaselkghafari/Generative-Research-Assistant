@@ -1,0 +1,30 @@
+{
+  "category": "integration",
+  "test_name": "Integration Tests",
+  "score": 33.33333333333333,
+  "passed": false,
+  "total_tests": 3,
+  "passed_tests": 1,
+  "failed_tests": 2,
+  "execution_time": 0.6047532558441162,
+  "test_results": [
+    {
+      "test_name": "dataset_upload_workflow_accessible",
+      "passed": false,
+      "message": "Dataset upload workflow should be accessible",
+      "details": {}
+    },
+    {
+      "test_name": "session_creation_workflow_list",
+      "passed": false,
+      "message": "Session list should be accessible",
+      "details": {}
+    },
+    {
+      "test_name": "session_creation_workflow_detail",
+      "passed": true,
+      "message": "Session detail should be accessible",
+      "details": {}
+    }
+  ]
+}

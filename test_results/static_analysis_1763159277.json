@@ -1,0 +1,31 @@
+{
+  "category": "static_analysis",
+  "test_name": "Static Analysis Tests",
+  "score": 0.0,
+  "passed": false,
+  "total_tests": 1,
+  "passed_tests": 0,
+  "failed_tests": 1,
+  "execution_time": 0.17206287384033203,
+  "test_results": [
+    {
+      "test_name": "security_patterns",
+      "passed": false,
+      "message": "Found 16 potential security issues",
+      "details": {
+        "issues": [
+          "/Users/pooryaselkghafari/Desktop/GRA/accounts/backends.py:16 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/accounts/backends.py:21 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/accounts/views.py:184 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/engine/dataprep/views.py:559 Uses eval/exec (security risk)",
+          "/Users/pooryaselkghafari/Desktop/GRA/engine/dataprep/views.py:728 Uses eval/exec (security risk)",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/frontend/test_frontend.py:99 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/security/test_security.py:67 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/security/test_security.py:108 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/security/test_security.py:134 Potential hardcoded secret",
+          "/Users/pooryaselkghafari/Desktop/GRA/tests/security/test_security.py:147 Potential hardcoded secret"
+        ]
+      }
+    }
+  ]
+}

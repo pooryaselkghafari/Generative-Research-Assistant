@@ -1,0 +1,54 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage - Services",
+  "score": 85.71428571428571,
+  "passed": true,
+  "total_tests": 7,
+  "passed_tests": 6,
+  "failed_tests": 1,
+  "execution_time": 1.074819803237915,
+  "test_results": [
+    {
+      "test_name": "dataset_validation_file_size_large",
+      "passed": true,
+      "message": "Should calculate size correctly for large file (got 100.0MB)",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_validation_file_size_valid",
+      "passed": true,
+      "message": "Should return valid for 1MB file (got 1.0MB, valid=True)",
+      "details": {}
+    },
+    {
+      "test_name": "irf_service_validate_invalid_module",
+      "passed": true,
+      "message": "Should reject non-VARX session (got valid=False)",
+      "details": {}
+    },
+    {
+      "test_name": "irf_service_validate_no_dataset",
+      "passed": true,
+      "message": "Should reject session without dataset (got valid=False)",
+      "details": {}
+    },
+    {
+      "test_name": "irf_service_validate_valid",
+      "passed": true,
+      "message": "Should validate or fail on file issue (got valid=True, error=None)",
+      "details": {}
+    },
+    {
+      "test_name": "row_filtering_validate_condition_invalid",
+      "passed": false,
+      "message": "Should reject invalid formula (got valid=True)",
+      "details": {}
+    },
+    {
+      "test_name": "row_filtering_validate_condition_valid",
+      "passed": true,
+      "message": "Should validate correct formula (got valid=True, error=None)",
+      "details": {}
+    }
+  ]
+}

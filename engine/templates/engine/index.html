@@ -239,7 +239,23 @@
 {% endblock %}
 
 {% block content %}
-<form action="/run/" method="post" class="card form" id="analysisForm" onsubmit="return handleFormSubmission()">
+{% if error_message %}
+<div class="card" style="background-color: #fef2f2; border-left: 4px solid #dc2626; margin-bottom: 20px; padding: 16px;">
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="15" y1="9" x2="9" y2="15"></line>
+      <line x1="9" y1="9" x2="15" y2="15"></line>
+    </svg>
+    <div>
+      <h3 style="margin: 0 0 4px 0; color: #dc2626; font-size: 16px; font-weight: 600;">Model-Equation Mismatch</h3>
+      <p style="margin: 0; color: #374151; line-height: 1.6;">{{ error_message }}</p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<form action="/run/" method="post" class="card form" id="analysisForm" onsubmit="event.preventDefault(); return handleFormSubmission(event);">
   {% csrf_token %}
   <input type="hidden" name="action" value="{% if current %}update{% else %}new{% endif %}">
   {% if current %}<input type="hidden" name="session_id" value="{{current.id}}">{% endif %}
@@ -372,7 +388,7 @@ Examples
     </div>
     <div class="error-modal-body">
       <div id="errorModalMessage" class="error-modal-message"></div>
-      <div class="error-modal-equation">
+      <div class="error-modal-equation" style="display: none;">
         <label>Original:</label>
         <div class="equation-display" id="originalEquation"></div>
       </div>
@@ -687,16 +703,155 @@ function startProgressSimulation() {
   }, 2000); // Update every 2 seconds
 }
 
-function handleFormSubmission() {
-  // First validate the form
+// Function to count dependent variables in equation
+function countDependentVariables(formula) {
+  if (!formula || !formula.trim()) return 0;
+  
+  // Split by newlines to handle multi-line equations (VARX format)
+  const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  let totalDVs = 0;
+  for (const line of lines) {
+    if (line.includes('~')) {
+      const lhs = line.split('~')[0].trim();
+      // Count variables on LHS (dependent variables)
+      // Split by + and count non-empty parts
+      const vars = lhs.split('+').map(v => v.trim()).filter(v => v.length > 0);
+      totalDVs += vars.length;
+    }
+  }
+  
+  return totalDVs;
+}
+
+// Function to count number of equations (lines with ~)
+function countEquations(formula) {
+  if (!formula || !formula.trim()) return 0;
+  const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  return lines.filter(line => line.includes('~')).length;
+}
+
+// Function to validate equation format matches selected model
+function validateEquationModelMatch(formula, moduleValue) {
+  if (!formula || !formula.trim()) return { valid: true };
+  
+  const equationCount = countEquations(formula);
+  const dvCount = countDependentVariables(formula);
+  
+  // DIAGNOSTICS: Log validation info
+  console.log('=== VALIDATE EQUATION MODEL MATCH DIAGNOSTICS ===');
+  console.log('Formula:', formula);
+  console.log('Module:', moduleValue);
+  console.log('Equation count:', equationCount);
+  console.log('Total dependent variables:', dvCount);
+  
+  // Check for multi-equation format (multiple lines with ~)
+  if (equationCount > 1) {
+    console.log('✓ MULTI-EQUATION FORMAT DETECTED:', equationCount, 'equations');
+    // Only regression model supports multi-equation format
+    if (moduleValue !== 'regression') {
+      return {
+        valid: false,
+        error: 'Multi-equation format not supported',
+        message: `You have ${equationCount} equation(s) (one per line), but ${moduleValue.toUpperCase()} models only support a single equation.\n\nPlease use only one equation, or select Regression model for multiple equations.`
+      };
+    }
+    // For regression with multiple equations, each equation should have exactly 1 DV
+    const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0 && line.includes('~'));
+    console.log('Validating each equation has exactly 1 DV...');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lhs = line.split('~')[0].trim();
+      const vars = lhs.split('+').map(v => v.trim()).filter(v => v.length > 0);
+      console.log(`  Line ${i + 1}: "${line}" - DVs: ${vars.length} (${vars.join(', ')})`);
+      if (vars.length > 1) {
+        console.log('✗ VALIDATION FAILED: Line', i + 1, 'has', vars.length, 'dependent variables');
+        console.log('=== END VALIDATE EQUATION MODEL MATCH DIAGNOSTICS ===');
+        return {
+          valid: false,
+          error: 'Multiple dependent variables in one equation',
+          message: `Line ${i + 1} has ${vars.length} dependent variable(s). In multi-equation regression, each equation must have exactly one dependent variable.\n\nPlease use one dependent variable per line, for example:\ny1 ~ x1 + x2\ny2 ~ x1 + x3`
+        };
+      }
+    }
+    console.log('✓ All equations validated: each has exactly 1 DV');
+  }
+  
+  // VARX requires 2+ dependent variables (but only in single equation format)
+  if (moduleValue === 'varx' || moduleValue === 'varmax') {
+    if (equationCount > 1) {
+      return {
+        valid: false,
+        error: 'Multi-equation format not supported for VARX',
+        message: `VARX/VARMAX models require a single equation with 2+ dependent variables, not multiple equations.\n\nPlease combine into one equation, for example:\ny1 + y2 ~ x1 + x2`
+      };
+    }
+    if (dvCount < 2) {
+      return {
+        valid: false,
+        error: 'VARX/VARMAX models require at least 2 dependent variables',
+        message: `Your equation has ${dvCount} dependent variable(s), but VARX/VARMAX requires at least 2 dependent variables.\n\nPlease add more dependent variables before the ~ symbol, for example:\ny1 + y2 ~ x1 + x2`
+      };
+    }
+  } else if (moduleValue !== 'regression' || equationCount === 1) {
+    // For non-regression models, or single-equation regression, require exactly 1 dependent variable
+    if (dvCount > 1) {
+      return {
+        valid: false,
+        error: 'Multiple dependent variables not supported',
+        message: `Your equation has ${dvCount} dependent variable(s), but ${moduleValue.toUpperCase()} models only support a single dependent variable.\n\nPlease use only one dependent variable before the ~ symbol, or select VARX model for multiple dependent variables.`
+      };
+    } else if (dvCount === 0) {
+      return {
+        valid: false,
+        error: 'No dependent variable found',
+        message: 'Your equation must have at least one dependent variable before the ~ symbol.'
+      };
+    }
+  }
+  
+  console.log('✓ VALIDATION PASSED');
+  console.log('=== END VALIDATE EQUATION MODEL MATCH DIAGNOSTICS ===');
+  return { valid: true };
+}
+
+function handleFormSubmission(event) {
+  // Always prevent default form submission first
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  
+  console.log('handleFormSubmission called, module:', document.getElementById('moduleSelect')?.value);
+  
+  // Get the selected analysis type and module BEFORE other validations
+  const analysisType = document.querySelector('input[name="analysis_type"]:checked')?.value;
+  const moduleValue = document.getElementById('moduleSelect')?.value;
+  const formula = document.getElementById('equationBox')?.value;
+  
+  console.log('Form values:', { analysisType, moduleValue, formula });
+  
+  // Validate equation format matches selected model FIRST (before other validations)
+  if (moduleValue && formula) {
+    const equationValidation = validateEquationModelMatch(formula, moduleValue);
+    console.log('Equation validation result:', equationValidation);
+    if (!equationValidation.valid) {
+      console.log('Equation-model mismatch detected:', equationValidation);
+      // Show modal immediately
+      showEquationModelErrorModal(equationValidation.error, equationValidation.message);
+      // Ensure we prevent submission
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return false; // Prevent form submission
+    }
+  }
+  
+  // Then validate the form (basic checks)
   if (!validateFormSubmission()) {
     return false;
   }
-  
-  // Get the selected analysis type
-  const analysisType = document.querySelector('input[name="analysis_type"]:checked').value;
-  const moduleValue = document.getElementById('moduleSelect').value;
-  const formula = document.getElementById('equationBox').value;
   
   // Check for Bayesian regression with non-numeric DV before starting progress
   if (moduleValue === 'regression' && analysisType === 'bayesian' && formula) {
@@ -730,6 +885,11 @@ function handleFormSubmission() {
     }
   }
   
+  // All validations passed - proceed with form submission
+  // The form will submit normally, or if there's a handleFormSubmission in app.js for AJAX, it will handle it
+  // But we've already prevented default, so we need to submit manually
+  const form = document.getElementById('analysisForm');
+  
   // Add a hidden input to indicate which template to use
   const templateInput = document.createElement('input');
   templateInput.type = 'hidden';
@@ -737,10 +897,12 @@ function handleFormSubmission() {
   templateInput.value = analysisType === 'bayesian' ? 'bayesian_results' : 'results';
   
   // Add it to the form
-  document.getElementById('analysisForm').appendChild(templateInput);
+  form.appendChild(templateInput);
   
-  // Let the form submit normally - the backend will handle the routing
-  return true;
+  // Submit the form normally (not via AJAX for now, to avoid conflicts)
+  // If you need AJAX submission, it should be handled separately
+  form.submit();
+  return false; // Already prevented default
 }
 
 // Function to cancel Bayesian analysis
@@ -958,6 +1120,84 @@ function closeBayesianDVErrorModal() {
     window.currentModal.remove();
     window.currentModal = null;
   }
+}
+
+// Function to show equation-model mismatch error modal
+function showEquationModelErrorModal(errorTitle, errorMessage) {
+  console.log('showEquationModelErrorModal called with:', errorTitle, errorMessage);
+  
+  const modal = document.getElementById('errorFixModal');
+  const messageDiv = document.getElementById('errorModalMessage');
+  const titleDiv = document.getElementById('errorModalTitle');
+  
+  console.log('Modal elements:', { modal: !!modal, messageDiv: !!messageDiv, titleDiv: !!titleDiv });
+  
+  if (!modal || !messageDiv) {
+    // Fallback to alert if modal not found
+    console.warn('Error modal elements not found, using alert fallback');
+    alert(errorTitle + '\n\n' + errorMessage);
+    return;
+  }
+  
+  // Set title and message
+  if (titleDiv) {
+    titleDiv.textContent = errorTitle;
+  }
+  
+  messageDiv.innerHTML = `
+    <div style="margin-bottom: 16px;">
+      <div style="display: flex; align-items: center; margin-bottom: 12px; padding: 12px; background-color: #fef2f2; border-radius: 8px; border-left: 4px solid #dc2626;">
+        <div style="margin-right: 12px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+        </div>
+        <div>
+          <p style="margin: 0; font-weight: 600; color: #dc2626;">Model-Equation Mismatch</p>
+        </div>
+      </div>
+      <p style="margin: 0; color: #374151; line-height: 1.6; white-space: pre-line;">${errorMessage}</p>
+    </div>
+  `;
+  
+  // Hide sections that aren't relevant for this error
+  const originalEqDiv = document.getElementById('originalEquation');
+  const fixedEqSection = document.getElementById('fixedEquationSection');
+  const unknownVarsSection = document.getElementById('unknownVarsSection');
+  
+  if (originalEqDiv) originalEqDiv.style.display = 'none';
+  if (fixedEqSection) fixedEqSection.style.display = 'none';
+  if (unknownVarsSection) unknownVarsSection.style.display = 'none';
+  
+  // Show modal - check CSS to see if it uses flex or block
+  console.log('Showing error modal');
+  // Try flex first (common for modals)
+  modal.style.display = 'flex';
+  
+  // Force visibility
+  modal.style.visibility = 'visible';
+  modal.style.opacity = '1';
+  modal.style.zIndex = '10000';
+  
+  // Ensure modal stays visible and is on top
+  setTimeout(() => {
+    if (modal.style.display === 'none' || modal.style.display === '') {
+      console.warn('Modal was hidden, forcing to flex');
+      modal.style.display = 'flex';
+    }
+    // Bring to front
+    modal.style.zIndex = '10000';
+  }, 50);
+  
+  // Also check if backdrop exists and show it
+  const backdrop = modal.querySelector('.error-modal-backdrop');
+  if (backdrop) {
+    backdrop.style.display = 'block';
+  }
+  
+  console.log('Modal should now be visible. Display:', modal.style.display, 'Visibility:', modal.style.visibility);
 }
 
 // Switch to frequentist analysis

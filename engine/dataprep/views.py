@@ -39,7 +39,10 @@ def _dataset_path(ds: Dataset) -> str:
 def open_cleaner(request, dataset_id):
     # Require authentication
     if not request.user.is_authenticated:
-        return HttpResponse("Authentication required", status=401)
+        response = HttpResponse("Authentication required", status=401)
+        # Allow this response to be loaded in iframe (for modal display)
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+        return response
     # Security: Only allow access to user's own datasets
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
     path = _dataset_path(dataset)
@@ -75,7 +78,9 @@ def open_cleaner(request, dataset_id):
                     pass
         
     except Exception as e:
-        return HttpResponse(f"Failed to read dataset: {e}", status=400, content_type="text/plain")
+        response = HttpResponse(f"Failed to read dataset: {e}", status=400, content_type="text/plain")
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+        return response
     
     # detect columns whose non-null values are all strings (character columns)
     # but allow numeric for categorical/ordinal columns that can be converted back
@@ -180,7 +185,11 @@ def open_cleaner(request, dataset_id):
         "is_large_dataset": total_rows > 10000,
         "date_columns_with_formats_json": json.dumps(date_columns_with_formats),
     }
-    return render(request, "dataprep/cleaner.html", ctx)
+    response = render(request, "dataprep/cleaner.html", ctx)
+    # Explicitly allow this view to be loaded in an iframe (for modal display)
+    # This overrides any default X-Frame-Options from middleware
+    response['X-Frame-Options'] = 'SAMEORIGIN'
+    return response
 
 def _make_unique(names):
     seen = {}
@@ -542,7 +551,7 @@ def merge_columns_preview(request, dataset_id):
             return HttpResponse(json.dumps({"error": f"Column '{column_name}' already exists"}), status=400, content_type="application/json")
         
         # Add statistical functions support
-        from engine.views import add_statistical_functions
+        from data_prep.cleaning import add_statistical_functions
         formula_with_functions = add_statistical_functions(df, formula)
         
         # Try to evaluate the formula
@@ -711,7 +720,7 @@ def merge_columns(request, dataset_id):
             return HttpResponse(json.dumps({"error": f"Column '{column_name}' already exists"}), status=400, content_type="application/json")
         
         # Add statistical functions support
-        from engine.views import add_statistical_functions
+        from data_prep.cleaning import add_statistical_functions
         formula_with_functions = add_statistical_functions(df, formula)
         
         # Try to evaluate the formula

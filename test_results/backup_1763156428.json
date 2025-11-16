@@ -1,0 +1,36 @@
+{
+  "category": "backup",
+  "test_name": "Backup/Restore Tests",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 4,
+  "passed_tests": 4,
+  "failed_tests": 0,
+  "execution_time": 0.034628868103027344,
+  "test_results": [
+    {
+      "test_name": "backup_file_not_empty",
+      "passed": true,
+      "message": "Backup file contains data (14593 bytes)",
+      "details": {}
+    },
+    {
+      "test_name": "database_backup_creates_file",
+      "passed": true,
+      "message": "Backup file created successfully",
+      "details": {}
+    },
+    {
+      "test_name": "media_backup_structure",
+      "passed": true,
+      "message": "Media directory exists and ready for backup",
+      "details": {}
+    },
+    {
+      "test_name": "restore_capability",
+      "passed": true,
+      "message": "Restore capability available",
+      "details": {}
+    }
+  ]
+}

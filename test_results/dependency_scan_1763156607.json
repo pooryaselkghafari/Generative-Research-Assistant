@@ -1,0 +1,20 @@
+{
+  "category": "dependency_scan",
+  "test_name": "Dependency Vulnerability Scan",
+  "score": 0.0,
+  "passed": false,
+  "total_tests": 1,
+  "passed_tests": 0,
+  "failed_tests": 1,
+  "execution_time": 18.64267587661743,
+  "test_results": [
+    {
+      "test_name": "outdated_dependencies",
+      "passed": false,
+      "message": "Found 268 outdated packages",
+      "details": {
+        "outdated_count": 268
+      }
+    }
+  ]
+}

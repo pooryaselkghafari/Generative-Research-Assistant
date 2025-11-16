@@ -1,0 +1,35 @@
+{
+  "category": "static_analysis",
+  "test_name": "Static Analysis Tests",
+  "score": 0.0,
+  "passed": false,
+  "total_tests": 1,
+  "passed_tests": 0,
+  "failed_tests": 1,
+  "execution_time": 0.26989102363586426,
+  "test_results": [
+    {
+      "test_name": "function_complexity",
+      "passed": false,
+      "message": "Found 19 overly complex functions (max allowed: 5)",
+      "details": {
+        "complex_functions": [
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:3022 _pre_generate_multinomial_predictions (complexity: 35)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:3273 _pre_generate_ordinal_predictions (complexity: 26)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/regression.py:3575 _run_multi_equation (complexity: 51)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/VARMAX.py:77 fit_varmax_per_eq_exog (complexity: 16)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/VARMAX.py:229 run (complexity: 53)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/ANOVA.py:297 generate_anova_plot (complexity: 35)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/ANOVA.py:11 run (complexity: 37)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/BMA.py:45 run_bma_analysis_bas (complexity: 16)",
+          "/Users/pooryaselkghafari/Desktop/GRA/models/VARX.py:79 run (complexity: 178)",
+          "/Users/pooryaselkghafari/Desktop/GRA/accounts/resend_backend.py:26 send_messages (complexity: 16)"
+        ],
+        "excluded_functions": [
+          "_build_spotlight_json",
+          "_fit_models"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage - Decorators",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 6,
+  "passed_tests": 6,
+  "failed_tests": 0,
+  "execution_time": 1.4834532737731934,
+  "test_results": [
+    {
+      "test_name": "require_authentication_authenticated",
+      "passed": true,
+      "message": "Should allow authenticated user (got 200)",
+      "details": {}
+    },
+    {
+      "test_name": "require_authentication_unauthenticated_ajax",
+      "passed": true,
+      "message": "Should return 401 for unauthenticated AJAX (got 401)",
+      "details": {}
+    },
+    {
+      "test_name": "require_authentication_unauthenticated_regular",
+      "passed": true,
+      "message": "Should redirect to login for unauthenticated request (got 302)",
+      "details": {}
+    },
+    {
+      "test_name": "require_post_method_get",
+      "passed": true,
+      "message": "Should return 405 for non-POST method (got 405)",
+      "details": {}
+    },
+    {
+      "test_name": "require_post_method_post",
+      "passed": true,
+      "message": "Should allow POST method (got 200)",
+      "details": {}
+    },
+    {
+      "test_name": "require_user_ownership_no_id",
+      "passed": true,
+      "message": "Should return 400 when object ID missing (got 400)",
+      "details": {}
+    }
+  ]
+}

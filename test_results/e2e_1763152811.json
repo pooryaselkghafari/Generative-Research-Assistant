@@ -1,0 +1,30 @@
+{
+  "category": "e2e",
+  "test_name": "End-to-End Tests",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 3,
+  "passed_tests": 3,
+  "failed_tests": 0,
+  "execution_time": 0.31247901916503906,
+  "test_results": [
+    {
+      "test_name": "user_login_page_accessible",
+      "passed": true,
+      "message": "Login page should be accessible",
+      "details": {}
+    },
+    {
+      "test_name": "user_login_successful",
+      "passed": true,
+      "message": "User should be able to log in",
+      "details": {}
+    },
+    {
+      "test_name": "user_registration_page_accessible",
+      "passed": true,
+      "message": "Registration page should be accessible",
+      "details": {}
+    }
+  ]
+}

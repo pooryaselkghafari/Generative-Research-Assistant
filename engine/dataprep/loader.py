@@ -32,7 +32,7 @@ def _auto_detect_column_types(df: pd.DataFrame) -> dict:
         unique_values = df[col].dropna().nunique()
         if unique_values == 2:
             column_types[col] = 'binary'
-            print(f"DEBUG: Auto-detected binary variable '{col}' with values: {df[col].dropna().unique().tolist()}")
+            # Removed debug print to reduce log noise during polling
             continue
             
         # Skip if already numeric

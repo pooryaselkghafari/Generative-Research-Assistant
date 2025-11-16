@@ -340,6 +340,61 @@
   </section>
   {% endif %}
 
+  <!-- Model Fit Diagnostics Table (for all regression types) -->
+  {% if diagnostics %}
+  <section class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Model Fit Diagnostics</h3>
+      <div class="muted small" style="color: var(--muted);">
+        {% if regression_type == "OLS regression" %}
+          Diagnostic tests for OLS regression assumptions
+        {% elif regression_type == "Binomial Logistic Regression" %}
+          Diagnostic tests for binomial logistic regression
+        {% elif regression_type == "Multinomial regression" %}
+          Diagnostic tests for multinomial logistic regression
+        {% elif regression_type == "Ordinal regression" %}
+          Diagnostic tests for ordinal logistic regression
+        {% else %}
+          Diagnostic tests for regression model
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Diagnostic</th>
+            <th>Value</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for diag in diagnostics %}
+          <tr>
+            <td><strong>{{ diag.Diagnostic }}</strong></td>
+            <td class="mono">
+              {% if diag.Value is not None %}
+                {% if diag.Diagnostic == "Jarque-Bera p-value" %}
+                  {{ diag.Value|floatformat:4 }}
+                {% elif diag.Diagnostic == "Number of Classes" or diag.Diagnostic == "Threshold Count" or diag.Diagnostic == "DF Residuals" %}
+                  {{ diag.Value|floatformat:0 }}
+                {% else %}
+                  {{ diag.Value|floatformat:4 }}
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td style="font-size: 0.875rem; color: var(--muted);">{{ diag.Description }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
   <!-- Summary Statistics -->
   {% if summary_stats %}
   <section class="card" id="summary-table-section" style="margin-bottom: 16px;">
@@ -664,16 +719,52 @@
       let currentSessionId = {{ session.id }};
       let currentDatasetId = {{ dataset.id }};
       let isUpdating = false;
+      let pollInterval = null;
+      let consecutiveErrors = 0;
+      const MAX_CONSECUTIVE_ERRORS = 3; // Stop polling after 3 consecutive errors
       
       // Function to get current dataset variables
       async function getCurrentDatasetVariables() {
         try {
           const response = await fetch(`/api/dataset/${currentDatasetId}/variables/`);
+          
+          // Check for authentication/authorization errors
+          if (response.status === 401 || response.status === 403) {
+            console.warn('Unauthorized access to dataset. Stopping polling.');
+            stopPolling();
+            return null;
+          }
+          
+          if (!response.ok) {
+            consecutiveErrors++;
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+              console.warn('Too many errors. Stopping polling.');
+              stopPolling();
+            }
+            return null;
+          }
+          
+          // Reset error counter on success
+          consecutiveErrors = 0;
           const data = await response.json();
           return data.success ? data.variables : null;
         } catch (error) {
           console.error('Error fetching dataset variables:', error);
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            console.warn('Too many errors. Stopping polling.');
+            stopPolling();
+          }
           return null;
+        }
+      }
+      
+      // Function to stop polling
+      function stopPolling() {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          console.log('Stopped polling for dataset variable changes');
         }
       }
       
@@ -698,6 +789,10 @@
           }
         } catch (error) {
           console.error('Error checking for variable changes:', error);
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            stopPolling();
+          }
         }
       }
       
@@ -858,8 +953,19 @@
         }, 3000);
       }
       
-      // Check for changes every 2 seconds
-      setInterval(checkForVariableChanges, 2000);
+      // Check for changes every 2 seconds, but only for a limited time (5 minutes max)
+      // This prevents infinite polling when user is just viewing results
+      let pollCount = 0;
+      const maxPolls = 150; // 150 * 2 seconds = 5 minutes
+      
+      pollInterval = setInterval(() => {
+        pollCount++;
+        if (pollCount >= maxPolls) {
+          stopPolling();
+          return;
+        }
+        checkForVariableChanges();
+      }, 2000);
       
       // Initial check
       checkForVariableChanges();

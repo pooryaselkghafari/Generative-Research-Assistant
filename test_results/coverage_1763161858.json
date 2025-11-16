@@ -1,0 +1,66 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage - Validation Services",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 9,
+  "passed_tests": 9,
+  "failed_tests": 0,
+  "execution_time": 1.411759853363037,
+  "test_results": [
+    {
+      "test_name": "dataset_merge_validate_columns_missing_col1",
+      "passed": true,
+      "message": "Should return error for missing column (got Column \"missing_col\" not found in first dataset)",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_merge_validate_columns_missing_col2",
+      "passed": true,
+      "message": "Should return error for missing column (got Column \"missing_col\" not found in dataset Dataset2)",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_merge_validate_columns_type_mismatch",
+      "passed": true,
+      "message": "Should return error for type mismatch (got These two columns don't have common values. Column \"x\" has int64 data type while column \"y\" has object data type. Please select columns with the same data type.)",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_merge_validate_columns_valid",
+      "passed": true,
+      "message": "Should return None for valid columns (got None)",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_validation_session_limits",
+      "passed": true,
+      "message": "Should check session limits (got None)",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_validation_session_limits_unauthenticated",
+      "passed": true,
+      "message": "Should return None for unauthenticated user",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_validation_user_limits_dataset_count",
+      "passed": true,
+      "message": "Should return error when dataset limit reached (got 403)",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_validation_user_limits_file_size",
+      "passed": true,
+      "message": "Should return error when file size exceeds limit (got 403)",
+      "details": {}
+    },
+    {
+      "test_name": "dataset_validation_user_limits_no_user",
+      "passed": true,
+      "message": "Should return None when no user provided",
+      "details": {}
+    }
+  ]
+}

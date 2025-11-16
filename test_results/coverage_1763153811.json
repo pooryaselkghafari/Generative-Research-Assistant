@@ -1,0 +1,30 @@
+{
+  "category": "coverage",
+  "test_name": "Coverage Check",
+  "score": 66.66666666666666,
+  "passed": false,
+  "total_tests": 3,
+  "passed_tests": 2,
+  "failed_tests": 1,
+  "execution_time": 0.013944149017333984,
+  "test_results": [
+    {
+      "test_name": "code_coverage",
+      "passed": true,
+      "message": "Coverage tool not available: [Errno 2] No such file or directory: 'coverage'",
+      "details": {}
+    },
+    {
+      "test_name": "coverage_tool_available",
+      "passed": false,
+      "message": "coverage.py not installed (install with: pip install coverage)",
+      "details": {}
+    },
+    {
+      "test_name": "critical_paths_covered",
+      "passed": true,
+      "message": "Critical paths coverage check (requires coverage report)",
+      "details": {}
+    }
+  ]
+}

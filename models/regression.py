@@ -20,6 +20,295 @@ def _stars(p):
     if p < 0.10:  return "."
     return ""
 
+def _calculate_ols_diagnostics(model):
+    """
+    Calculate diagnostic metrics for OLS regression models.
+    
+    Parameters:
+    - model: Fitted statsmodels OLS model
+    
+    Returns:
+    - DataFrame with diagnostic metrics
+    """
+    try:
+        from statsmodels.stats.stattools import durbin_watson
+        from statsmodels.stats.stattools import jarque_bera
+        
+        # Get residuals
+        residuals = model.resid
+        
+        # Durbin-Watson test for autocorrelation
+        dw = durbin_watson(residuals)
+        
+        # Jarque-Bera test for normality
+        jb_stat, jb_p, skew, kurt = jarque_bera(residuals)
+        
+        # Condition number for multicollinearity
+        condition_number = model.condition_number
+        
+        # Create diagnostic table
+        diagnostics_data = {
+            "Diagnostic": [
+                "Durbin-Watson (Autocorrelation)",
+                "Jarque-Bera (Normality Statistic)",
+                "Jarque-Bera p-value",
+                "Skewness",
+                "Kurtosis",
+                "Condition Number (Multicollinearity)"
+            ],
+            "Value": [
+                float(dw) if not np.isnan(dw) else np.nan,
+                float(jb_stat) if not np.isnan(jb_stat) else np.nan,
+                float(jb_p) if not np.isnan(jb_p) else np.nan,
+                float(skew) if not np.isnan(skew) else np.nan,
+                float(kurt) if not np.isnan(kurt) else np.nan,
+                float(condition_number) if not np.isnan(condition_number) else np.nan
+            ],
+            "Description": [
+                "≈2 is ideal → near 0 or 4 indicates autocorrelation.",
+                "High value → residuals deviate from normality.",
+                "p < 0.05 → violation of normality assumption.",
+                "Large magnitude (>1) → asymmetric residuals.",
+                "Ideal ≈ 3 → higher = heavy tails.",
+                ">30 → possible multicollinearity."
+            ]
+        }
+        
+        diagnostics_df = pd.DataFrame(diagnostics_data)
+        return diagnostics_df
+        
+    except Exception as e:
+        print(f"DEBUG: Error in _calculate_ols_diagnostics: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def _calculate_binomial_diagnostics(model):
+    """
+    Calculate diagnostic metrics for binomial logistic regression models.
+    
+    Parameters:
+    - model: Fitted statsmodels GLM model with Binomial family
+    
+    Returns:
+    - DataFrame with diagnostic metrics
+    """
+    try:
+        # Standardized Pearson residuals
+        pearson_resid = model.resid_pearson
+        dispersion = (pearson_resid ** 2).sum() / model.df_resid
+        
+        diagnostics_data = {
+            "Diagnostic": [
+                "Pearson Dispersion",
+                "Max |Standardized Residual|",
+                "DF Residuals"
+            ],
+            "Value": [
+                float(dispersion) if not np.isnan(dispersion) else np.nan,
+                float(abs(pearson_resid).max()) if len(pearson_resid) > 0 else np.nan,
+                float(model.df_resid) if hasattr(model, 'df_resid') else np.nan
+            ],
+            "Description": [
+                "≈1 → good; >>1 → overdispersion.",
+                "Values >3 → outliers or poor fit.",
+                "Low DF → too many predictors."
+            ]
+        }
+        
+        diagnostics_df = pd.DataFrame(diagnostics_data)
+        return diagnostics_df
+        
+    except Exception as e:
+        print(f"DEBUG: Error in _calculate_binomial_diagnostics: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def _calculate_pearson_dispersion(model):
+    """Calculate Pearson dispersion for multinomial model."""
+    try:
+        if hasattr(model, 'resid_pearson') and hasattr(model, 'df_resid') and model.df_resid > 0:
+            return float((model.resid_pearson ** 2).sum() / model.df_resid)
+    except Exception:
+        pass
+    return np.nan
+
+def _calculate_max_residual(model):
+    """Calculate max standardized residual for multinomial model."""
+    try:
+        if hasattr(model, 'resid_pearson') and len(model.resid_pearson) > 0:
+            return float(abs(model.resid_pearson).max())
+    except Exception:
+        pass
+    return np.nan
+
+def _count_classes(y_data, model):
+    """Count number of unique classes in y_data."""
+    try:
+        if hasattr(y_data, 'unique'):
+            return len(y_data.unique())
+        elif hasattr(y_data, 'nunique'):
+            return y_data.nunique()
+        elif isinstance(y_data, (list, pd.Series)):
+            return len(set(y_data))
+        elif isinstance(y_data, np.ndarray):
+            return len(np.unique(y_data))
+        elif hasattr(y_data, '__iter__'):
+            return len(pd.Series(y_data).unique())
+        elif hasattr(model, 'model') and hasattr(model.model, 'endog'):
+            endog = model.model.endog
+            return len(np.unique(endog)) if hasattr(endog, '__len__') else np.nan
+    except Exception:
+        pass
+    return np.nan
+
+def _get_df_residuals(model):
+    """Get degrees of freedom for residuals."""
+    try:
+        if hasattr(model, 'df_resid'):
+            return float(model.df_resid)
+    except Exception:
+        pass
+    return np.nan
+
+def _calculate_multinomial_diagnostics(model, y_data):
+    """
+    Calculate diagnostic metrics for multinomial logistic regression models.
+    
+    Parameters:
+    - model: Fitted statsmodels MNLogit model
+    - y_data: Original dependent variable data (to count classes)
+    
+    Returns:
+    - DataFrame with diagnostic metrics (always returns a DataFrame, even if some values are NaN)
+    """
+    # Calculate each diagnostic metric using helper functions
+    disp = _calculate_pearson_dispersion(model)
+    max_resid = _calculate_max_residual(model)
+    n_classes = _count_classes(y_data, model)
+    df_resid = _get_df_residuals(model)
+    
+    # Always return a DataFrame, even if some values are NaN
+    diagnostics_data = {
+        "Diagnostic": [
+            "Pearson Dispersion",
+            "Max |Standardized Residual|",
+            "Number of Classes",
+            "DF Residuals"
+        ],
+        "Value": [
+            float(disp) if not np.isnan(disp) else np.nan,
+            float(max_resid) if not np.isnan(max_resid) else np.nan,
+            int(n_classes) if not np.isnan(n_classes) else np.nan,
+            float(df_resid) if not np.isnan(df_resid) else np.nan
+        ],
+        "Description": [
+            "≈1 → good; >>1 → overdispersion or mis-specification.",
+            "Residuals >3 → outliers/misfit.",
+            "More classes → higher complexity.",
+            "Low DF → possible overfitting."
+        ]
+    }
+    
+    diagnostics_df = pd.DataFrame(diagnostics_data)
+    print(f"DEBUG: Multinomial diagnostics calculated - disp={disp}, max_resid={max_resid}, n_classes={n_classes}, df_resid={df_resid}")
+    return diagnostics_df
+
+def _calculate_ordinal_diagnostics(model):
+    """
+    Calculate diagnostic metrics for ordinal regression models.
+    
+    Parameters:
+    - model: Fitted OrderedModel
+    
+    Returns:
+    - DataFrame with diagnostic metrics (always returns a DataFrame, even if some values are NaN)
+    """
+    # Initialize all values as NaN - we'll try to calculate each one
+    disp = np.nan
+    max_resid = np.nan
+    threshold_count = np.nan
+    df_resid = np.nan
+    
+    # Try to calculate Pearson Dispersion
+    try:
+        if hasattr(model, 'resid_pearson'):
+            pearson = model.resid_pearson
+            if hasattr(model, 'df_resid') and model.df_resid > 0:
+                disp = float((pearson ** 2).sum() / model.df_resid)
+            else:
+                print(f"DEBUG: Ordinal diagnostics - model.df_resid not available or <= 0")
+        else:
+            print(f"DEBUG: Ordinal diagnostics - model.resid_pearson not available")
+    except Exception as e:
+        print(f"DEBUG: Error calculating Pearson Dispersion for ordinal: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # Try to calculate Max |Standardized Residual|
+    try:
+        if hasattr(model, 'resid_pearson'):
+            pearson = model.resid_pearson
+            if len(pearson) > 0:
+                max_resid = float(abs(pearson).max())
+            else:
+                print(f"DEBUG: Ordinal diagnostics - resid_pearson is empty")
+        else:
+            print(f"DEBUG: Ordinal diagnostics - model.resid_pearson not available for max residual")
+    except Exception as e:
+        print(f"DEBUG: Error calculating Max |Standardized Residual| for ordinal: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # Try to get Threshold Count
+    try:
+        if hasattr(model, 'model') and hasattr(model.model, '_thresholds'):
+            threshold_count = len(model.model._thresholds)
+        else:
+            print(f"DEBUG: Ordinal diagnostics - model.model._thresholds not available")
+    except Exception as e:
+        print(f"DEBUG: Error calculating Threshold Count for ordinal: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # Try to get DF Residuals
+    try:
+        if hasattr(model, 'df_resid'):
+            df_resid = float(model.df_resid)
+        else:
+            print(f"DEBUG: Ordinal diagnostics - model.df_resid not available")
+    except Exception as e:
+        print(f"DEBUG: Error getting DF Residuals for ordinal: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # Always return a DataFrame, even if some values are NaN
+    diagnostics_data = {
+        "Diagnostic": [
+            "Pearson Dispersion",
+            "Max |Standardized Residual|",
+            "Threshold Count",
+            "DF Residuals"
+        ],
+        "Value": [
+            float(disp) if not np.isnan(disp) else np.nan,
+            float(max_resid) if not np.isnan(max_resid) else np.nan,
+            int(threshold_count) if not np.isnan(threshold_count) else np.nan,
+            float(df_resid) if not np.isnan(df_resid) else np.nan
+        ],
+        "Description": [
+            "≈1 → good; >>1 → overdispersion.",
+            "Residuals >3 → poor fit or influential points.",
+            "More thresholds = more category boundaries.",
+            "Low DF → possible overfitting."
+        ]
+    }
+    
+    diagnostics_df = pd.DataFrame(diagnostics_data)
+    print(f"DEBUG: Ordinal diagnostics calculated - disp={disp}, max_resid={max_resid}, threshold_count={threshold_count}, df_resid={df_resid}")
+    return diagnostics_df
+
 def _calculate_pseudo_r2(model):
     """Calculate pseudo R² measures for models that don't provide direct R²."""
     try:
@@ -143,50 +432,35 @@ def _partial_corr(y, x, controls_df):
     rx = sm.OLS(df["x"], Xc).fit().resid
     return _corr_pvalue(ry, rx)
 
-
-def _build_correlation_heatmap_json(df, x_vars, y_vars, options):
-    """Build correlation heatmap JSON for Plotly."""
-    import plotly.graph_objects as go
-    import plotly.io as pio
-    from scipy.stats import pearsonr
-    
-    # Filter to only continuous variables that exist in the dataset
-    x_vars = [var for var in x_vars if var in df.columns and pd.api.types.is_numeric_dtype(df[var])]
-    y_vars = [var for var in y_vars if var in df.columns and pd.api.types.is_numeric_dtype(df[var])]
-    
-    if len(x_vars) < 1 or len(y_vars) < 1:
-        return None
-    
-    # Calculate correlation matrix between x and y variables
-    # Use corr() method to get proper 2D matrix
+def _calculate_correlation_matrix(df, x_vars, y_vars):
+    """Calculate correlation matrix between x and y variables."""
     all_vars = list(set(x_vars + y_vars))
     corr_data = df[all_vars].corr()
     
-    # Extract the correlation matrix for x_vars vs y_vars
     corr_matrix = np.zeros((len(y_vars), len(x_vars)))
     for i, y_var in enumerate(y_vars):
         for j, x_var in enumerate(x_vars):
             if y_var == x_var:
-                # Same variable - correlation is 1.0
                 corr_matrix[i, j] = 1.0
             elif y_var in corr_data.index and x_var in corr_data.columns:
                 corr_matrix[i, j] = corr_data.loc[y_var, x_var]
             else:
                 corr_matrix[i, j] = np.nan
-    
-    # Calculate p-values for significance
+    return corr_matrix
+
+def _calculate_p_values(df, x_vars, y_vars):
+    """Calculate p-values for correlation significance."""
+    from scipy.stats import pearsonr
     p_values = np.ones((len(y_vars), len(x_vars)))
+    
     for i, y_var in enumerate(y_vars):
         for j, x_var in enumerate(x_vars):
             if y_var == x_var:
-                # Same variable - p-value is 0 (perfect correlation)
                 p_values[i, j] = 0.0
             else:
                 try:
-                    # Get valid data for both variables
                     data1 = df[y_var].dropna()
                     data2 = df[x_var].dropna()
-                    # Find common indices
                     common_idx = data1.index.intersection(data2.index)
                     if len(common_idx) >= 3:
                         _, p_val = pearsonr(data1[common_idx], data2[common_idx])
@@ -195,6 +469,37 @@ def _build_correlation_heatmap_json(df, x_vars, y_vars, options):
                         p_values[i, j] = np.nan
                 except Exception:
                     p_values[i, j] = np.nan
+    return p_values
+
+def _format_correlation_text(corr_val, p_val, show_significance):
+    """Format correlation value with significance asterisks."""
+    corr_str = f"{corr_val:.3f}"
+    if show_significance and not np.isnan(p_val):
+        if p_val < 0.001:
+            corr_str += "***"
+        elif p_val < 0.01:
+            corr_str += "**"
+        elif p_val < 0.05:
+            corr_str += "*"
+        elif p_val < 0.10:
+            corr_str += "."
+    return corr_str
+
+def _build_correlation_heatmap_json(df, x_vars, y_vars, options):
+    """Build correlation heatmap JSON for Plotly."""
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    
+    # Filter to only continuous variables that exist in the dataset
+    x_vars = [var for var in x_vars if var in df.columns and pd.api.types.is_numeric_dtype(df[var])]
+    y_vars = [var for var in y_vars if var in df.columns and pd.api.types.is_numeric_dtype(df[var])]
+    
+    if len(x_vars) < 1 or len(y_vars) < 1:
+        return None
+    
+    # Calculate correlation matrix and p-values using helper functions
+    corr_matrix = _calculate_correlation_matrix(df, x_vars, y_vars)
+    p_values = _calculate_p_values(df, x_vars, y_vars)
     
     # Create text matrix with correlation coefficients and significance
     show_significance = options.get('show_significance', True)
@@ -202,23 +507,7 @@ def _build_correlation_heatmap_json(df, x_vars, y_vars, options):
     for i in range(len(y_vars)):
         row = []
         for j in range(len(x_vars)):
-            corr_val = corr_matrix[i, j]
-            p_val = p_values[i, j]
-            
-            # Format correlation value to 3 decimal places
-            corr_str = f"{corr_val:.3f}"
-            
-            # Add significance asterisks if enabled
-            if show_significance and not np.isnan(p_val):
-                if p_val < 0.001:
-                    corr_str += "***"
-                elif p_val < 0.01:
-                    corr_str += "**"
-                elif p_val < 0.05:
-                    corr_str += "*"
-                elif p_val < 0.10:
-                    corr_str += "."
-            
+            corr_str = _format_correlation_text(corr_matrix[i, j], p_values[i, j], show_significance)
             row.append(corr_str)
         text_matrix.append(row)
     
@@ -1110,106 +1399,76 @@ def _build_spotlight_json(model, df, x, moderator, opts):
     )
     return pio.to_json(fig, pretty=False)
 
+def _parse_interaction_variables(interaction):
+    """Parse interaction string to extract x and moderator variables."""
+    if "*" in interaction:
+        parts = [p.strip() for p in interaction.split("*")]
+    else:
+        parts = [p.strip() for p in interaction.split(":")]
+    
+    if len(parts) >= 2:
+        x, m = parts[0], parts[1]
+        if len(parts) > 2:
+            print(f"DEBUG: Multi-way interaction detected: {interaction}, using {x} and {m} for spotlight plot")
+        return x, m
+    return None, None
+
+def _get_category_selection_response(y_var, categories, interaction, x, m, response_type):
+    """Create category selection response for ordinal/multinomial regression."""
+    return {
+        'type': response_type,
+        'categories': categories,
+        'dependent_variable': y_var,
+        'interaction': interaction,
+        'x_variable': x,
+        'moderator_variable': m
+    }
+
+def _handle_regression_categories(fitted_model, df, options, is_ordinal, is_multinomial, interaction, x, m):
+    """Handle category selection for ordinal/multinomial regression."""
+    y_var = fitted_model.model.endog_names
+    if hasattr(fitted_model, "_column_mapping"):
+        y_var = getattr(fitted_model, "_column_mapping", {}).get(y_var, y_var)
+    
+    if y_var not in df.columns:
+        print(f"Warning: Could not find dependent variable '{y_var}' in dataset")
+        return None
+    
+    categories = sorted(df[y_var].dropna().unique())
+    regression_type = "Ordinal" if is_ordinal else "Multinomial"
+    print(f"{regression_type} regression detected. Available categories for {y_var}: {categories}")
+    
+    category_key = 'ordinal_category' if is_ordinal else 'multinomial_category'
+    selected_category = options.get(category_key)
+    
+    if not selected_category:
+        response_type = 'ordinal_category_selection' if is_ordinal else 'multinomial_category_selection'
+        return _get_category_selection_response(y_var, categories, interaction, x, m, response_type)
+    
+    return None
+
 def generate_spotlight_for_interaction(fitted_model, df, interaction, options, is_ordinal=False, is_multinomial=False):
     """Generate spotlight plot for a specific interaction."""
-    if "*" in interaction:
-        # Handle both two-way and three-way interactions
-        parts = [p.strip() for p in interaction.split("*")]
-        if len(parts) == 2:
-            x, m = parts[0], parts[1]
-        elif len(parts) == 3:
-            # For three-way interactions, use first two variables for spotlight plot
-            x, m = parts[0], parts[1]
-            print(f"DEBUG: Three-way interaction detected: {interaction}, using {x} and {m} for spotlight plot")
-        else:
-            print(f"DEBUG: Unsupported interaction format: {interaction}")
-            return None
-    else:
-        # Handle explicit interactions (x:y or x:y:z format)
-        parts = interaction.split(":")
-        if len(parts) == 2:
-            x, m = parts[0].strip(), parts[1].strip()
-        elif len(parts) == 3:
-            # For three-way interactions, use first two variables for spotlight plot
-            x, m = parts[0].strip(), parts[1].strip()
-            print(f"DEBUG: Three-way interaction detected: {interaction}, using {x} and {m} for spotlight plot")
-        else:
-            print(f"DEBUG: Unsupported interaction format: {interaction}")
-            return None
+    x, m = _parse_interaction_variables(interaction)
+    if not x or not m:
+        print(f"DEBUG: Unsupported interaction format: {interaction}")
+        return None
     
-    # Store original moderator for the actual analysis
     original_moderator = m
-    
-    # Override moderator display name if custom moderator variable is provided
     custom_moderator_display = options.get('moderator_var')
     if custom_moderator_display:
         print(f"Using custom moderator display name: '{custom_moderator_display}' (original was: '{original_moderator}')")
     
-    # Check if both variables exist in the dataset (use original moderator for analysis)
-    if x not in df.columns:
-        print(f"Warning: Variable '{x}' not found in dataset columns: {list(df.columns)}")
-        return None
-    if original_moderator not in df.columns:
-        print(f"Warning: Moderator variable '{original_moderator}' not found in dataset columns: {list(df.columns)}")
+    if x not in df.columns or original_moderator not in df.columns:
+        print(f"Warning: Variables not found in dataset columns: {list(df.columns)}")
         return None
     
     print(f"Generating spotlight plot with X='{x}' and moderator='{original_moderator}' (display: '{custom_moderator_display or original_moderator}')")
     
-    # Handle ordinal regression - get available categories
-    if is_ordinal:
-        # Get the dependent variable name from the model
-        y_var = fitted_model.model.endog_names
-        # Translate safe name to original if mapping is available
-        if hasattr(fitted_model, "_column_mapping"):
-            y_var = getattr(fitted_model, "_column_mapping", {}).get(y_var, y_var)
-        if y_var in df.columns:
-            # Get unique categories from the original data
-            categories = sorted(df[y_var].dropna().unique())
-            print(f"Ordinal regression detected. Available categories for {y_var}: {categories}")
-            
-            # Check if user specified a category to plot
-            selected_category = options.get('ordinal_category')
-            if not selected_category:
-                # Return a special response indicating category selection is needed
-                return {
-                    'type': 'ordinal_category_selection',
-                    'categories': categories,
-                    'dependent_variable': y_var,
-                    'interaction': interaction,
-                    'x_variable': x,
-                    'moderator_variable': original_moderator
-                }
-        else:
-            print(f"Warning: Could not find dependent variable '{y_var}' in dataset")
-            return None
-    
-    # Handle multinomial regression - get available categories
-    elif is_multinomial:
-        # Get the dependent variable name from the model
-        y_var = fitted_model.model.endog_names
-        # Translate safe name to original if mapping is available
-        if hasattr(fitted_model, "_column_mapping"):
-            y_var = getattr(fitted_model, "_column_mapping", {}).get(y_var, y_var)
-        if y_var in df.columns:
-            # Get unique categories from the original data
-            categories = sorted(df[y_var].dropna().unique())
-            print(f"Multinomial regression detected. Available categories for {y_var}: {categories}")
-            
-            # Check if user specified a category to plot
-            selected_category = options.get('multinomial_category')
-            if not selected_category:
-                # Return a special response indicating category selection is needed
-                return {
-                    'type': 'multinomial_category_selection',
-                    'categories': categories,
-                    'dependent_variable': y_var,
-                    'interaction': interaction,
-                    'x_variable': x,
-                    'moderator_variable': original_moderator
-                }
-        else:
-            print(f"Warning: Could not find dependent variable '{y_var}' in dataset")
-            return None
+    if is_ordinal or is_multinomial:
+        category_response = _handle_regression_categories(fitted_model, df, options, is_ordinal, is_multinomial, interaction, x, original_moderator)
+        if category_response:
+            return category_response
     
     # Use the original moderator for analysis, but pass custom display name to the plot
     plot_options = options.copy()
@@ -1252,6 +1511,18 @@ def _get_all_numeric_variables(df):
             numeric_vars.append(col)
     return numeric_vars
 
+def _wrap_part_with_c(part, df, categorical_vars):
+    """Wrap a single part with C() if it's categorical."""
+    if part in df.columns and part in categorical_vars:
+        return f"C({part})"
+    return part
+
+def _handle_interaction_term(term, df, categorical_vars, separator):
+    """Handle interaction term by wrapping categorical parts."""
+    parts = [part.strip() for part in term.split(separator)]
+    modified_parts = [_wrap_part_with_c(part, df, categorical_vars) for part in parts]
+    return separator.join(modified_parts)
+
 def _wrap_categorical_vars_in_formula(formula, df):
     """
     Wrap non-numeric variables in formula with C() to handle them as categorical.
@@ -1266,8 +1537,6 @@ def _wrap_categorical_vars_in_formula(formula, df):
     Returns:
         Modified formula with C() wrapper for categorical variables
     """
-    import re
-    
     # Parse the formula to get LHS and RHS
     lhs, rhs = formula.split("~", 1)
     
@@ -1275,14 +1544,7 @@ def _wrap_categorical_vars_in_formula(formula, df):
     numeric_vars = _get_all_numeric_variables(df)
     
     # Identify categorical variables (non-numeric variables)
-    categorical_vars = []
-    for col in df.columns:
-        if col not in numeric_vars:
-            # Any non-numeric variable should be treated as categorical
-            categorical_vars.append(col)
-            sample_values = df[col].dropna().head(5)
-            print(f"DEBUG: Detected categorical variable '{col}' with sample values: {sample_values.tolist()}")
-    
+    categorical_vars = [col for col in df.columns if col not in numeric_vars]
     print(f"DEBUG: Detected categorical variables: {categorical_vars}")
     
     # Split RHS into terms
@@ -1292,37 +1554,16 @@ def _wrap_categorical_vars_in_formula(formula, df):
     for term in terms:
         if not term:
             continue
-            
-        # Handle interaction terms (e.g., "var1*var2" or "var1:var2")
-        if "*" in term or ":" in term:
-            # For interactions, we need to handle each variable separately
-            if "*" in term:
-                # Split by * and handle each part
-                parts = [part.strip() for part in term.split("*")]
-                modified_parts = []
-                for part in parts:
-                    if part in df.columns and part in categorical_vars:
-                        modified_parts.append(f"C({part})")
-                    else:
-                        modified_parts.append(part)
-                modified_term = "*".join(modified_parts)
-            else:  # ":" in term
-                # Split by : and handle each part
-                parts = [part.strip() for part in term.split(":")]
-                modified_parts = []
-                for part in parts:
-                    if part in df.columns and part in categorical_vars:
-                        modified_parts.append(f"C({part})")
-                    else:
-                        modified_parts.append(part)
-                modified_term = ":".join(modified_parts)
+        
+        if "*" in term:
+            modified_term = _handle_interaction_term(term, df, categorical_vars, "*")
+            modified_terms.append(modified_term)
+        elif ":" in term:
+            modified_term = _handle_interaction_term(term, df, categorical_vars, ":")
             modified_terms.append(modified_term)
         else:
             # Single variable term
-            if term in df.columns and term in categorical_vars:
-                modified_terms.append(f"C({term})")
-            else:
-                modified_terms.append(term)
+            modified_terms.append(_wrap_part_with_c(term, df, categorical_vars))
     
     # Reconstruct the formula
     modified_rhs = " + ".join(modified_terms)
@@ -1372,6 +1613,181 @@ def _generate_summary_stats(df, formula, fitted_model=None):
 
 class RegressionModule:
     @staticmethod
+    def _validate_dependent_variable(y, df_renamed, df, column_mapping):
+        """Validate that dependent variable exists in dataset."""
+        if y not in df_renamed.columns:
+            available_cols = list(df.columns)
+            suggestions = [col for col in available_cols if col.lower() == y.lower() or y.lower() in col.lower()]
+            original_y = column_mapping.get(y, y)
+            error_msg = f"Variable '{original_y}' not found in dataset. Available columns: {available_cols}"
+            if suggestions:
+                error_msg += f". Did you mean: {suggestions}?"
+            return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": error_msg}], {"N": int(df.shape[0])}, None, "Error"
+        return None
+    
+    @staticmethod
+    def _convert_dependent_variable(dependent_var, df_renamed, original_categories):
+        """Convert dependent variable to numeric codes if needed."""
+        if dependent_var not in df_renamed.columns:
+            return None, original_categories
+        
+        col = dependent_var
+        original_dtype = df_renamed[col].dtype
+        original_non_null_count = df_renamed[col].notna().sum()
+        
+        if not pd.api.types.is_numeric_dtype(df_renamed[col]):
+            if hasattr(df_renamed[col].dtype, 'categories'):
+                original_categories[col] = list(df_renamed[col].cat.categories)
+                df_renamed[col] = df_renamed[col].cat.codes
+                df_renamed[col] = df_renamed[col].replace(-1, np.nan)
+            else:
+                codes, categories = pd.factorize(df_renamed[col])
+                original_categories[col] = list(categories)
+                df_renamed[col] = codes
+                df_renamed[col] = df_renamed[col].replace(-1, np.nan)
+            
+            final_non_null_count = df_renamed[col].notna().sum()
+            if final_non_null_count == 0 and original_non_null_count > 0:
+                return f"Dependent variable '{col}' could not be converted to numeric values. Original type: {original_dtype}, Non-null values: {original_non_null_count}. Please check the data type and values.", original_categories
+            
+            print(f"DEBUG: Converted dependent variable '{col}' to numeric codes")
+        
+        return None, original_categories
+    
+    @staticmethod
+    def _clean_dataframe(df_renamed, df):
+        """Clean dataframe: remove infinite values and check for all-NaN columns."""
+        df_renamed = df_renamed.replace([np.inf, -np.inf], np.nan)
+        
+        for col in df_renamed.columns:
+            if df_renamed[col].isna().all():
+                return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Column '{col}' contains only missing values after data cleaning. Please check your data."}], {"N": int(df.shape[0])}, None, "Error", None
+        
+        return None, None, None, None, None, df_renamed
+    
+    @staticmethod
+    def _validate_y_series(y, df_renamed, df, original_categories):
+        """Validate dependent variable series after conversion."""
+        y_series = df_renamed[y].dropna()
+        if len(y_series) == 0:
+            original_y = df[y].dropna() if y in df.columns else pd.Series()
+            original_count = len(original_y)
+            original_dtype = df[y].dtype if y in df.columns else "unknown"
+            
+            if original_count > 0:
+                try:
+                    df_renamed[y] = pd.factorize(df[y])[0]
+                    df_renamed[y] = df_renamed[y].replace(-1, np.nan)
+                    y_series = df_renamed[y].dropna()
+                    if len(y_series) == 0:
+                        return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{y}' could not be converted to numeric values. Original: {original_count} values, type: {original_dtype}."}], {"N": int(df.shape[0])}, None, "Error", None
+                except Exception as e:
+                    return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{y}' conversion failed: {str(e)}. Original: {original_count} values, type: {original_dtype}"}], {"N": int(df.shape[0])}, None, "Error", None
+            else:
+                return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{y}' has no valid values in the original dataset"}], {"N": int(df.shape[0])}, None, "Error", None
+        
+        y_vals = y_series.unique()
+        if len(y_vals) < 2:
+            return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{y}' has only one unique value after conversion"}], {"N": int(df.shape[0])}, None, "Error", None
+        
+        return None, None, None, None, None, y_vals
+    
+    @staticmethod
+    def _determine_regression_type(y, y_vals, df_renamed, schema_types):
+        """Determine regression type based on schema and data characteristics."""
+        is_ordinal = False
+        is_multinomial = False
+        is_binary = False
+        
+        if schema_types is None:
+            schema_types = {}
+        
+        if y in schema_types:
+            var_type = schema_types[y]
+            if var_type == "ordinal":
+                is_ordinal = True
+            elif var_type == "categorical":
+                is_multinomial = True
+            elif var_type == "binary":
+                is_binary = True
+        else:
+            num_unique = len(y_vals)
+            if pd.api.types.is_numeric_dtype(df_renamed[y]):
+                if num_unique == 2:
+                    is_binary = True
+                elif num_unique <= 10 and df_renamed[y].dtype in ['int64', 'int32', 'int16', 'int8']:
+                    is_multinomial = True
+            else:
+                if num_unique == 2:
+                    is_binary = True
+                elif num_unique > 2:
+                    is_multinomial = True
+        
+        y_bin = len(y_vals) <= 2
+        return is_ordinal, is_multinomial, is_binary, y_bin
+    
+    @staticmethod
+    def _prepare_clean_data(df_renamed, formula, df):
+        """Prepare clean data by dropping rows with missing values in equation variables."""
+        outcomes, predictors, _ = _parse_formula(formula)
+        equation_vars = [var for var in (outcomes + predictors) if var in df_renamed.columns]
+        
+        df_clean = df_renamed[equation_vars].dropna()
+        df_clean = df_renamed.loc[df_clean.index]
+        
+        if len(df_clean) == 0:
+            return ["Term", "Estimate"], [{"Term": "Model Error", "Estimate": "No valid data remaining after removing missing values. Please check your data for missing values."}], {"N": int(df.shape[0])}, None, "Error", None
+        
+        return None, None, None, None, None, df_clean
+    
+    @staticmethod
+    def _parse_formula_terms(formula, df_clean):
+        """Parse formula and extract predictor variables and interaction terms."""
+        _, rhs = formula.split("~", 1)
+        predictor_vars = []
+        interaction_terms = []
+        
+        for term in rhs.split("+"):
+            term = term.strip()
+            if not term:
+                continue
+            
+            if "*" in term:
+                parts = [var.strip() for var in term.split("*") if var.strip()]
+                if len(parts) >= 2 and all(part in df_clean.columns for part in parts):
+                    predictor_vars.extend(parts)
+                    from itertools import combinations
+                    for r in range(2, len(parts) + 1):
+                        for combo in combinations(parts, r):
+                            interaction_name = ":".join(combo)
+                            interaction_terms.append(interaction_name)
+                            predictor_vars.append(interaction_name)
+            elif ":" in term:
+                parts = [var.strip() for var in term.split(":") if var.strip()]
+                if len(parts) == 2 and all(part in df_clean.columns for part in parts):
+                    predictor_vars.extend(parts)
+                    interaction_terms.append(term)
+                    predictor_vars.append(term)
+            else:
+                if term in df_clean.columns:
+                    predictor_vars.append(term)
+        
+        predictor_vars = list(dict.fromkeys(predictor_vars))
+        return predictor_vars, interaction_terms
+    
+    @staticmethod
+    def _create_interaction_terms(df_clean, interaction_terms):
+        """Create interaction terms in the dataframe."""
+        for interaction in interaction_terms:
+            if ":" in interaction:
+                parts = interaction.split(":")
+                if len(parts) >= 2 and all(part in df_clean.columns for part in parts):
+                    interaction_value = df_clean[parts[0]]
+                    for part in parts[1:]:
+                        interaction_value = interaction_value * df_clean[part]
+                    df_clean[interaction] = interaction_value
+    
+    @staticmethod
     def _fit_models(df, formula, options, schema_types=None, schema_orders=None):
         # Handle column names with spaces for proper processing
         formula, df_renamed, column_mapping = _quote_column_names_with_spaces(df, formula)
@@ -1381,22 +1797,10 @@ class RegressionModule:
         lhs, _ = formula.split("~", 1)
         y = [s.strip() for s in lhs.split("+") if s.strip()][0]
         
-        # Check if the dependent variable exists in the dataset
-        if y not in df_renamed.columns:
-            available_cols = list(df.columns)
-            # Create a more helpful error message with suggestions
-            suggestions = []
-            for col in available_cols:
-                if col.lower() == y.lower() or y.lower() in col.lower():
-                    suggestions.append(col)
-            
-            # Convert back to original name if it was mapped
-            original_y = column_mapping.get(y, y)
-            error_msg = f"Variable '{original_y}' not found in dataset. Available columns: {available_cols}"
-            if suggestions:
-                error_msg += f". Did you mean: {suggestions}?"
-            
-            return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": error_msg}], {"N": int(df.shape[0])}, None, "Error"
+        # Validate dependent variable
+        error_result = RegressionModule._validate_dependent_variable(y, df_renamed, df, column_mapping)
+        if error_result:
+            return error_result
         
         # Store original categories for ordinal variables before conversion
         original_categories = {}
@@ -1409,143 +1813,31 @@ class RegressionModule:
         print(f"DEBUG: Dependent variable: {dependent_var}")
         print(f"DEBUG: Independent variables: {independent_vars}")
         
-        # Convert ONLY the dependent variable to numeric codes (if needed)
-        # Independent variables will be handled by C() wrapper in the formula
-        if dependent_var in df_renamed.columns:
-            col = dependent_var
-            original_dtype = df_renamed[col].dtype
-            original_has_nulls = df_renamed[col].isnull().any()
-            original_non_null_count = df_renamed[col].notna().sum()
-            
-            # Check if dependent variable is already numeric
-            if not pd.api.types.is_numeric_dtype(df_renamed[col]):
-                # Convert dependent variable to numeric codes
-                if hasattr(df_renamed[col].dtype, 'categories'):
-                    # Store original categories before conversion
-                    original_categories[col] = list(df_renamed[col].cat.categories)
-                    # For categorical/ordinal variables, convert to numeric codes
-                    df_renamed[col] = df_renamed[col].cat.codes
-                    # Replace -1 (missing values) with NaN
-                    df_renamed[col] = df_renamed[col].replace(-1, np.nan)
-                else:
-                    # For other types, use factorize and store the categories
-                    codes, categories = pd.factorize(df_renamed[col])
-                    original_categories[col] = list(categories)
-                    df_renamed[col] = codes
-                    df_renamed[col] = df_renamed[col].replace(-1, np.nan)
-                
-                # Check if conversion resulted in all NaN values
-                final_non_null_count = df_renamed[col].notna().sum()
-                if final_non_null_count == 0 and original_non_null_count > 0:
-                    return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{col}' could not be converted to numeric values. Original type: {original_dtype}, Non-null values: {original_non_null_count}. Please check the data type and values."}], {"N": int(df.shape[0])}, None, "Error"
-                
-                print(f"DEBUG: Converted dependent variable '{col}' to numeric codes")
+        # Convert dependent variable to numeric codes if needed
+        error_msg, original_categories = RegressionModule._convert_dependent_variable(dependent_var, df_renamed, original_categories)
+        if error_msg:
+            return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": error_msg}], {"N": int(df.shape[0])}, None, "Error"
         
-        # Clean data: remove infinite values and handle NaN values
-        df_renamed = df_renamed.replace([np.inf, -np.inf], np.nan)
+        # Clean dataframe
+        error_result = RegressionModule._clean_dataframe(df_renamed, df)
+        if error_result[0]:  # Check if error tuple returned
+            return error_result[:5]  # Return first 5 elements (error result)
+        df_renamed = error_result[5]  # Get cleaned dataframe
         
-        # Check for columns with all NaN values after cleaning
-        for col in df_renamed.columns:
-            if df_renamed[col].isna().all():
-                return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Column '{col}' contains only missing values after data cleaning. Please check your data."}], {"N": int(df.shape[0])}, None, "Error"
+        # Validate y series
+        error_result = RegressionModule._validate_y_series(y, df_renamed, df, original_categories)
+        if error_result[0]:  # Check if error tuple returned
+            return error_result[:5]  # Return first 5 elements (error result)
+        y_vals = error_result[5]  # Get y_vals
         
-        # Validate dependent variable after conversion
-        y_series = df_renamed[y].dropna()
-        if len(y_series) == 0:
-            # Try to get more information about what went wrong
-            original_y = df[y].dropna() if y in df.columns else pd.Series()
-            original_count = len(original_y)
-            converted_count = len(y_series)
-            original_dtype = df[y].dtype if y in df.columns else "unknown"
-            converted_dtype = df_renamed[y].dtype
-            
-            # Try a different conversion approach for the dependent variable
-            if original_count > 0:
-                try:
-                    # Force conversion using the original data
-                    df_renamed[y] = pd.factorize(df[y])[0]
-                    df_renamed[y] = df_renamed[y].replace(-1, np.nan)
-                    y_series = df_renamed[y].dropna()
-                    if len(y_series) == 0:
-                        return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{y}' could not be converted to numeric values. Original: {original_count} values, type: {original_dtype}. After conversion: {converted_count} values, type: {converted_dtype}"}], {"N": int(df.shape[0])}, None, "Error"
-                except Exception as e:
-                    return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{y}' conversion failed: {str(e)}. Original: {original_count} values, type: {original_dtype}"}], {"N": int(df.shape[0])}, None, "Error"
-            else:
-                return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{y}' has no valid values in the original dataset"}], {"N": int(df.shape[0])}, None, "Error"
+        # Determine regression type
+        is_ordinal, is_multinomial, is_binary, y_bin = RegressionModule._determine_regression_type(y, y_vals, df_renamed, schema_types)
         
-        y_vals = y_series.unique()
-        if len(y_vals) < 2:
-            return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Dependent variable '{y}' has only one unique value after conversion"}], {"N": int(df.shape[0])}, None, "Error"
-        
-        # Check the dependent variable type using saved schema
-        is_ordinal = False
-        is_multinomial = False
-        is_binary = False
-        
-        # Use schema types passed as parameter
-        if schema_types is None:
-            schema_types = {}
-        
-        print(f"DEBUG: schema_types = {schema_types}")
-        print(f"DEBUG: dependent variable y = '{y}'")
-        print(f"DEBUG: y in schema_types = {y in schema_types}")
-        
-        if y in schema_types:
-            var_type = schema_types[y]
-            print(f"DEBUG: Found schema type for y='{y}': {var_type}")
-            if var_type == "ordinal":
-                is_ordinal = True
-                print(f"DEBUG: Set is_ordinal = True")
-            elif var_type == "categorical":
-                is_multinomial = True
-                print(f"DEBUG: Set is_multinomial = True")
-            elif var_type == "binary":
-                is_binary = True
-                print(f"DEBUG: Set is_binary = True")
-            else:
-                print(f"DEBUG: Unknown schema type: {var_type}")
-        else:
-            print(f"DEBUG: No schema type found for y='{y}', using fallback logic")
-            # Fallback: determine regression type based on number of unique values and data type
-            num_unique = len(y_vals)
-            print(f"DEBUG: num_unique = {num_unique}")
-            
-            # Check if the variable is numeric (continuous) or categorical
-            if pd.api.types.is_numeric_dtype(df_renamed[y]):
-                # For numeric variables, use OLS regression unless it has very few unique values
-                if num_unique == 2:
-                    is_binary = True
-                    print(f"DEBUG: Set is_binary = True (fallback - numeric with 2 values)")
-                elif num_unique <= 10:
-                    # For numeric variables with few unique values, check if they're integers
-                    if df_renamed[y].dtype in ['int64', 'int32', 'int16', 'int8']:
-                        # Integer variables with few values might be ordinal or multinomial
-                        is_multinomial = True
-                        print(f"DEBUG: Set is_multinomial = True (fallback - integer with few values)")
-                    else:
-                        # Float variables with few values are still continuous
-                        print(f"DEBUG: Using OLS regression (fallback - numeric float with few values)")
-                else:
-                    # Many unique values = continuous variable = OLS
-                    print(f"DEBUG: Using OLS regression (fallback - numeric with many values)")
-            else:
-                # For non-numeric variables, use the original logic
-                if num_unique == 2:
-                    is_binary = True
-                    print(f"DEBUG: Set is_binary = True (fallback - categorical with 2 values)")
-                elif num_unique > 2:
-                    # Check if the variable is ordered (ordinal) or unordered (multinomial)
-                    # For now, default to multinomial for >2 levels unless explicitly set as ordinal
-                    is_multinomial = True
-                    print(f"DEBUG: Set is_multinomial = True (fallback - categorical with >2 values)")
-        
-        y_bin = len(y_vals) <= 2
-
         print(f"DEBUG: is_ordinal = {is_ordinal}")
         print(f"DEBUG: is_multinomial = {is_multinomial}")
         print(f"DEBUG: is_binary = {is_binary}")
         print(f"DEBUG: y_bin = {y_bin}")
-        print(f"DEBUG: schema_types for y='{y}': {schema_types.get(y, 'Not found')}")
+        print(f"DEBUG: schema_types for y='{y}': {schema_types.get(y, 'Not found') if schema_types else 'Not found'}")
         print(f"DEBUG: regression_type will be determined based on these flags")
 
         try:
@@ -1558,27 +1850,14 @@ class RegressionModule:
                 if missing_count > 0:
                     print(f"  {col}: {missing_count} missing values")
             
-            # Only drop rows with missing values in variables used in the equation
-            # Parse formula to get variables used
-            outcomes, predictors, _ = _parse_formula(formula)
-            equation_vars = outcomes + predictors
-            
-            # Filter to only variables that exist in the dataset
-            equation_vars = [var for var in equation_vars if var in df_renamed.columns]
-            
-            print(f"DEBUG: Variables used in equation: {equation_vars}")
-            
-            # Drop rows with missing values only in equation variables
-            df_clean = df_renamed[equation_vars].dropna()
-            
-            # Add back the other columns (they may have missing values, but that's OK)
-            df_clean = df_renamed.loc[df_clean.index]
+            # Prepare clean data
+            error_result = RegressionModule._prepare_clean_data(df_renamed, formula, df)
+            if error_result[0]:  # Check if error tuple returned
+                return error_result[:5]  # Return first 5 elements (error result)
+            df_clean = error_result[5]  # Get cleaned dataframe
             
             print(f"DEBUG: Clean dataset shape: {df_clean.shape}")
             print(f"DEBUG: Rows dropped: {df_renamed.shape[0] - df_clean.shape[0]}")
-            
-            if len(df_clean) == 0:
-                return ["Term", "Estimate"], [{"Term": "Model Error", "Estimate": "No valid data remaining after removing missing values. Please check your data for missing values."}], {"N": int(df.shape[0])}, None, "Error"
             
             if is_ordinal:
                 print(f"DEBUG: Taking ordinal regression branch")
@@ -1847,6 +2126,14 @@ class RegressionModule:
                     print(f"DEBUG: Model converged: {model.mle_retvals.get('converged', 'Unknown')}")
                     print(f"DEBUG: Model loglik: {model.llf}")
                     
+                    # Calculate diagnostic metrics for ordinal regression
+                    try:
+                        diagnostics = _calculate_ordinal_diagnostics(model)
+                        setattr(model, "_diagnostics", diagnostics)
+                    except Exception as e:
+                        print(f"DEBUG: Error calculating ordinal diagnostics: {e}")
+                        setattr(model, "_diagnostics", None)
+                    
                 except Exception as e:
                     print(f"DEBUG: Error creating/fitting OrderedModel: {e}")
                     print(f"DEBUG: Error type: {type(e)}")
@@ -2051,6 +2338,9 @@ class RegressionModule:
                 original_y_categories = df_formula[y].astype("category").cat.categories.tolist()
                 print(f"DEBUG: Original y categories: {original_y_categories}")
                 
+                # Store original y data for diagnostics
+                y_original_data = df_formula[y].copy()
+                
                 df_formula[y] = df_formula[y].astype("category").cat.codes
                 print(f"DEBUG: Converted y values: {df_formula[y].unique()}")
                 
@@ -2074,6 +2364,14 @@ class RegressionModule:
                 print(f"DEBUG: Model converged: {model.mle_retvals.get('converged', 'Unknown')}")
                 print(f"DEBUG: Model loglik: {model.llf}")
                 
+                # Calculate diagnostic metrics for multinomial logistic regression
+                try:
+                    diagnostics = _calculate_multinomial_diagnostics(model, y_original_data)
+                    setattr(model, "_diagnostics", diagnostics)
+                except Exception as e:
+                    print(f"DEBUG: Error calculating multinomial diagnostics: {e}")
+                    setattr(model, "_diagnostics", None)
+                
             elif y_bin:
                 # For binary dependent variables, use binomial logistic regression
                 # No need to wrap with C() since binary variables don't need reference levels
@@ -2088,6 +2386,14 @@ class RegressionModule:
                 setattr(model, "_column_mapping", column_mapping)
                 setattr(model, "_original_endog_name", column_mapping.get(y, y))
                 regression_type = "Binomial Logistic Regression"
+                
+                # Calculate diagnostic metrics for binomial logistic regression
+                try:
+                    diagnostics = _calculate_binomial_diagnostics(model)
+                    setattr(model, "_diagnostics", diagnostics)
+                except Exception as e:
+                    print(f"DEBUG: Error calculating binomial diagnostics: {e}")
+                    setattr(model, "_diagnostics", None)
             else:
                 # Ensure proper data types: numerics as numeric, non-numerics as Categorical
                 df_clean_typed = df_clean.copy()
@@ -2116,6 +2422,14 @@ class RegressionModule:
                 setattr(model, "_column_mapping", column_mapping)
                 setattr(model, "_original_endog_name", column_mapping.get(y, y))
                 regression_type = "OLS regression"
+                
+                # Calculate diagnostic metrics for OLS regression
+                try:
+                    diagnostics = _calculate_ols_diagnostics(model)
+                    setattr(model, "_diagnostics", diagnostics)
+                except Exception as e:
+                    print(f"DEBUG: Error calculating OLS diagnostics: {e}")
+                    setattr(model, "_diagnostics", None)
         except Exception as e:
             # Check if it's a variable not found error
             error_msg = str(e)
@@ -2696,8 +3010,13 @@ class RegressionModule:
                 stats_filtered["Adj. R²"] = stats_all.get("Adj. R²")
         if options.get("show_aic"): stats_filtered["AIC"] = stats_all["AIC"]
         if options.get("show_bic"): stats_filtered["BIC"] = stats_all["BIC"]
+        
+        # Get diagnostics if available (for all regression types)
+        diagnostics = None
+        if hasattr(model, "_diagnostics") and model._diagnostics is not None:
+            diagnostics = model._diagnostics
 
-        return cols, rows, stats_filtered, model, regression_type
+        return cols, rows, stats_filtered, model, regression_type, diagnostics
 
     @staticmethod
     def _pre_generate_multinomial_predictions(fitted_model, df, interactions):
@@ -3111,28 +3430,58 @@ class RegressionModule:
         return predictions
 
     @staticmethod
+    def _unpack_fit_result(fit_result):
+        """Unpack fit result handling both old and new return formats."""
+        if len(fit_result) == 5:
+            return fit_result + (None,)
+        elif len(fit_result) == 6:
+            return fit_result
+        else:
+            return fit_result[:5] + (None,)
+    
+    @staticmethod
+    def _generate_predictions(fitted_model, regression_type, df, interactions):
+        """Generate ordinal/multinomial predictions if applicable."""
+        ordinal_predictions = None
+        multinomial_predictions = None
+        
+        if fitted_model is not None:
+            if 'Ordinal regression' in regression_type:
+                ordinal_predictions = RegressionModule._pre_generate_ordinal_predictions(fitted_model, df, interactions)
+            elif 'Multinomial regression' in regression_type:
+                multinomial_predictions = RegressionModule._pre_generate_multinomial_predictions(fitted_model, df, interactions)
+        
+        return ordinal_predictions, multinomial_predictions
+    
     def run(df, formula, analysis_type, outdir, options, schema_types=None, schema_orders=None):
-        # 1) Fit model + table
-        model_cols, model_rows, model_stats, fitted_model, regression_type = RegressionModule._fit_models(df, formula, options, schema_types, schema_orders)
+        # Check if this is a multi-equation format (multiple lines with ~)
+        lines = [line.strip() for line in formula.split('\n') if line.strip()]
+        equation_lines = [line for line in lines if '~' in line]
+        
+        print(f"=== REGRESSION MODULE DIAGNOSTICS ===")
+        print(f"Formula: {formula}")
+        print(f"Total lines (non-empty): {len(lines)}")
+        print(f"Equation lines (with ~): {len(equation_lines)}")
+        print(f"Equation lines: {equation_lines}")
+        
+        # If multiple equations, use multi-equation handler
+        if len(equation_lines) > 1:
+            print(f"✓ MULTI-EQUATION DETECTED: Routing to _run_multi_equation with {len(equation_lines)} equations")
+            print(f"=== END REGRESSION MODULE DIAGNOSTICS ===")
+            return RegressionModule._run_multi_equation(df, equation_lines, analysis_type, outdir, options, schema_types, schema_orders)
+        
+        print(f"Single equation detected - using standard fit_models")
+        print(f"=== END REGRESSION MODULE DIAGNOSTICS ===")
+        
+        # 1) Fit model + table (single equation)
+        fit_result = RegressionModule._fit_models(df, formula, options, schema_types, schema_orders)
+        model_cols, model_rows, model_stats, fitted_model, regression_type, diagnostics = RegressionModule._unpack_fit_result(fit_result)
 
         # 2) Parse formula to get interactions
         _, _, interactions = _parse_formula(formula)
 
-        # 2.5) Pre-generate ordinal regression predictions if applicable
-        ordinal_predictions = None
-        if fitted_model is not None and 'Ordinal regression' in regression_type:
-            ordinal_predictions = RegressionModule._pre_generate_ordinal_predictions(fitted_model, df, interactions)
-        
-        # 2.6) Pre-generate multinomial regression predictions if applicable
-        multinomial_predictions = None
-        print(f"DEBUG: regression_type = {regression_type}")
-        print(f"DEBUG: fitted_model is not None = {fitted_model is not None}")
-        if fitted_model is not None and 'Multinomial regression' in regression_type:
-            print(f"DEBUG: Generating multinomial predictions")
-            multinomial_predictions = RegressionModule._pre_generate_multinomial_predictions(fitted_model, df, interactions)
-            print(f"DEBUG: multinomial_predictions result = {multinomial_predictions}")
-        else:
-            print(f"DEBUG: Not generating multinomial predictions")
+        # 2.5) Pre-generate predictions if applicable
+        ordinal_predictions, multinomial_predictions = RegressionModule._generate_predictions(fitted_model, regression_type, df, interactions)
 
         # 3) Interactive spotlight (generate for all interactions)
         spotlight_json = None
@@ -3169,6 +3518,19 @@ class RegressionModule:
 
         # VIF is now included in summary_stats
 
+        # Convert diagnostics DataFrame to list of dicts for template
+        diagnostics_list = None
+        if diagnostics is not None:
+            try:
+                if hasattr(diagnostics, 'to_dict'):
+                    diagnostics_list = diagnostics.to_dict('records')
+                else:
+                    # Already a list
+                    diagnostics_list = diagnostics if isinstance(diagnostics, list) else None
+            except Exception as e:
+                print(f"DEBUG: Error converting diagnostics to list: {e}")
+                diagnostics_list = None
+
         return {
             # interactive figures as JSON blobs
             "spotlight_json": spotlight_json,
@@ -3201,7 +3563,342 @@ class RegressionModule:
 
             # regression type
             "regression_type": regression_type,
+            
+            # OLS diagnostics (for all regression types)
+            "diagnostics": diagnostics_list,
 
             # backward-compat keys (no images now)
             "spotlight_path": None, "spotlight_rel": None,
         }
+    
+    @staticmethod
+    def _run_multi_equation(df, equation_lines, analysis_type, outdir, options, schema_types=None, schema_orders=None):
+        """
+        Handle multiple equations (one per line) for regression.
+        Each equation is fitted separately, and results are organized in a grid format.
+        """
+        try:
+            # DIAGNOSTICS: Log multi-equation processing
+            print(f"=== MULTI-EQUATION PROCESSING DIAGNOSTICS ===")
+            print(f"Processing {len(equation_lines)} equations")
+            
+            # Parse each equation
+            equations_data = []
+            all_rhs_vars = set()  # Collect all RHS variables across equations
+            dependent_vars = []  # Collect all LHS (DV) variables
+            
+            for eq_line in equation_lines:
+                if '~' not in eq_line:
+                    continue
+                
+                lhs, rhs = eq_line.split('~', 1)
+                dv = lhs.strip()
+                rhs_vars = [v.strip() for v in rhs.split('+') if v.strip()]
+                
+                print(f"  Equation: '{eq_line}'")
+                print(f"    DV: {dv}")
+                print(f"    RHS vars ({len(rhs_vars)}): {', '.join(rhs_vars)}")
+                
+                dependent_vars.append(dv)
+                # Add all RHS vars - a variable can be DV in one equation and IV in another
+                all_rhs_vars.update(rhs_vars)
+            
+            print(f"Total unique dependent variables: {len(dependent_vars)} ({', '.join(dependent_vars)})")
+            print(f"Total unique RHS variables: {len(all_rhs_vars)} ({', '.join(sorted(all_rhs_vars))})")
+            print(f"Note: Variables can be DV in one equation and IV in another")
+            
+            # Fit each equation separately
+            equation_results = []
+            for i, eq_line in enumerate(equation_lines):
+                if '~' not in eq_line:
+                    continue
+                
+                # For multi-equation regression, ensure all columns are included
+                # Create a copy of options with all display flags enabled
+                multi_eq_options = options.copy() if options else {}
+                multi_eq_options['show_se'] = True  # Always show standard errors
+                multi_eq_options['show_p'] = True   # Always show p-values
+                multi_eq_options['show_ci'] = True # Always show confidence intervals
+                multi_eq_options['show_t'] = True  # Always show t/z statistics
+                multi_eq_options['show_r2'] = True  # Always include R² for model fit stats
+                multi_eq_options['show_aic'] = True  # Always include AIC for model fit stats
+                multi_eq_options['show_bic'] = True  # Always include BIC for model fit stats
+                multi_eq_options['show_n'] = True  # Always include N for model fit stats
+                
+                # Fit this equation
+                fit_result = RegressionModule._fit_models(df, eq_line, multi_eq_options, schema_types, schema_orders)
+                
+                # Unpack results
+                if len(fit_result) == 5:
+                    model_cols, model_rows, model_stats, fitted_model, regression_type = fit_result
+                    diagnostics = None
+                elif len(fit_result) == 6:
+                    model_cols, model_rows, model_stats, fitted_model, regression_type, diagnostics = fit_result
+                else:
+                    model_cols, model_rows, model_stats, fitted_model, regression_type = fit_result[:5]
+                    diagnostics = None
+                
+                # Extract DV from equation
+                lhs, _ = eq_line.split('~', 1)
+                dv = lhs.strip()
+                
+                # Store results for this equation
+                equation_results.append({
+                    'dependent_var': dv,
+                    'formula': eq_line,
+                    'model_cols': model_cols,
+                    'model_rows': model_rows,
+                    'model_stats': model_stats,
+                    'fitted_model': fitted_model,
+                    'regression_type': regression_type,
+                    'diagnostics': diagnostics
+                })
+            
+            # Organize results in grid format: rows = RHS vars, cols = DVs
+            # Build a nested dict: {rhs_var: {dv: {coef, se, ci_low, ci_high, t, p, sig}}}
+            grid_data = {}  # {rhs_var: {dv: {coef, se, ci_low, ci_high, t, p, sig}}}
+            
+            for eq_result in equation_results:
+                dv = eq_result['dependent_var']
+                rows = eq_result['model_rows']
+                model_cols = eq_result['model_cols']
+                
+                print(f"  Processing equation for DV: {dv}")
+                print(f"    Model cols: {model_cols}")
+                print(f"    Number of rows: {len(rows)}")
+                
+                # Process each row to extract parameter info
+                for row_idx, row in enumerate(rows):
+                    print(f"    Row {row_idx}: {row}")
+                    
+                    # Find the term name (first column)
+                    term = None
+                    if model_cols and len(model_cols) > 0:
+                        first_col = model_cols[0]
+                        if first_col in row:
+                            term = row[first_col]
+                            print(f"      Found term from first column '{first_col}': {term}")
+                    
+                    if term is None:
+                        # Try to find any key that looks like a term name
+                        for key in row.keys():
+                            if key not in ['Estimate', 'Coefficient', 'coef', 'Std. Error', 'Std Error', 'std_err', 
+                                         't', 'z', 't value', 'z value', 'p', 'p-value', 'pvalue', 
+                                         'CI_low', '2.5%', 'ci_low', 'CI_high', '97.5%', 'ci_high']:
+                                term = key
+                                print(f"      Found term from key '{key}': {term}")
+                                break
+                    
+                    if term is None or term in ['Intercept', '(Intercept)', 'Intercept:']:
+                        # Handle intercept separately if needed
+                        term = 'Intercept'
+                        print(f"      Using default term: {term}")
+                    
+                    # Clean up term name - remove any extra formatting
+                    # Handle cases like "Intercept", "(Intercept)", "Intercept:", etc.
+                    if term and term.strip():
+                        term_clean = term.strip()
+                        if term_clean.startswith('(') and term_clean.endswith(')'):
+                            term_clean = term_clean[1:-1]
+                        if term_clean.endswith(':'):
+                            term_clean = term_clean[:-1]
+                        if term_clean in ['Intercept', '(Intercept)']:
+                            term_clean = 'Intercept'
+                        term = term_clean
+                    
+                    # Extract parameter values
+                    coef_raw = row.get('Estimate') or row.get('Coefficient') or row.get('coef')
+                    se = row.get('Std. Error') or row.get('Std Error') or row.get('std_err')
+                    t_stat = row.get('t / z') or row.get('t') or row.get('z') or row.get('t value') or row.get('z value')
+                    p_val = row.get('p') or row.get('p-value') or row.get('pvalue')
+                    ci_str = row.get('95% CI') or row.get('CI') or row.get('ci')
+                    ci_low = row.get('CI_low') or row.get('2.5%') or row.get('ci_low')
+                    ci_high = row.get('CI_high') or row.get('97.5%') or row.get('ci_high')
+                    
+                    # Parse coefficient - it may include significance stars (e.g., "1.667**")
+                    coef = None
+                    sig = ""
+                    if coef_raw:
+                        import re
+                        # Extract numeric value and stars separately
+                        # Pattern: optional minus, digits, decimal point, digits, optional stars
+                        match = re.match(r'([-]?\d+\.?\d*)(\**)?', str(coef_raw))
+                        if match:
+                            coef = match.group(1)
+                            sig = match.group(2) or ""
+                        else:
+                            # Fallback: try to extract just the number
+                            coef = str(coef_raw).strip()
+                    
+                    # Parse CI string if provided (format: "[low, high]")
+                    if ci_str and not ci_low and not ci_high:
+                        import re
+                        ci_match = re.match(r'\[([-]?\d+\.?\d*),\s*([-]?\d+\.?\d*)\]', str(ci_str))
+                        if ci_match:
+                            ci_low = ci_match.group(1)
+                            ci_high = ci_match.group(2)
+                    
+                    # Convert string values to appropriate types
+                    try:
+                        if coef:
+                            coef = float(coef)
+                    except (ValueError, TypeError):
+                        coef = None
+                    
+                    try:
+                        if se:
+                            se = float(se) if isinstance(se, str) else se
+                    except (ValueError, TypeError):
+                        se = None
+                    
+                    try:
+                        if p_val:
+                            p_val = float(p_val) if isinstance(p_val, str) else p_val
+                    except (ValueError, TypeError):
+                        p_val = None
+                    
+                    try:
+                        if ci_low:
+                            ci_low = float(ci_low) if isinstance(ci_low, str) else ci_low
+                    except (ValueError, TypeError):
+                        ci_low = None
+                    
+                    try:
+                        if ci_high:
+                            ci_high = float(ci_high) if isinstance(ci_high, str) else ci_high
+                    except (ValueError, TypeError):
+                        ci_high = None
+                    
+                    try:
+                        if t_stat:
+                            t_stat = float(t_stat) if isinstance(t_stat, str) else t_stat
+                    except (ValueError, TypeError):
+                        t_stat = None
+                    
+                    # If we don't have significance stars from parsing, calculate them from p_val
+                    if not sig and p_val is not None:
+                        sig = _stars(p_val)
+                    
+                    print(f"      Final term: {term}, coef: {coef}, se: {se}, p_val: {p_val}, sig: {sig}")
+                    
+                    # Store in grid (nested dict structure)
+                    if term not in grid_data:
+                        grid_data[term] = {}
+                    grid_data[term][dv] = {
+                        'coef': coef,
+                        'se': se,
+                        't_stat': t_stat,
+                        'p_val': p_val,
+                        'ci_low': ci_low,
+                        'ci_high': ci_high,
+                        'sig': sig
+                    }
+            
+            # Get all unique RHS variables (terms) for rows
+            # Use terms from grid_data (actual model results) as the source of truth
+            # IMPORTANT: A variable can be DV in one equation and IV in another, so include ALL terms
+            all_rhs_vars_list = []
+            
+            # First, add all terms from grid_data (these are the actual terms from model results)
+            # Don't exclude DVs - they can be IVs in other equations
+            for term in grid_data.keys():
+                if term not in all_rhs_vars_list:
+                    all_rhs_vars_list.append(term)
+            
+            # Then, add any RHS vars from original equations that aren't in grid_data yet
+            # (This handles cases where a variable might be in the formula but not in results)
+            # Don't exclude DVs - they can be IVs in other equations
+            for rhs_var in sorted(all_rhs_vars):
+                if rhs_var not in all_rhs_vars_list:
+                    all_rhs_vars_list.append(rhs_var)
+            
+            # Sort the list, but keep Intercept first if it exists
+            if 'Intercept' in all_rhs_vars_list:
+                all_rhs_vars_list.remove('Intercept')
+                all_rhs_vars_list.insert(0, 'Intercept')
+            else:
+                all_rhs_vars_list = sorted(all_rhs_vars_list)
+            
+            print(f"  Grid data keys (terms): {list(grid_data.keys())}")
+            print(f"  Dependent vars: {dependent_vars}")
+            print(f"  Final RHS vars list (can include DVs from other equations): {all_rhs_vars_list}")
+            
+            print(f"✓ Multi-equation processing complete")
+            print(f"  Grid data entries: {len(grid_data)}")
+            print(f"  RHS vars for grid rows: {len(all_rhs_vars_list)} ({', '.join(all_rhs_vars_list)})")
+            print(f"  Dependent vars for grid cols: {len(dependent_vars)} ({', '.join(dependent_vars)})")
+            print(f"=== END MULTI-EQUATION PROCESSING DIAGNOSTICS ===")
+            
+            # Generate summary statistics for all variables (RHS and LHS from all equations)
+            all_vars = list(set(dependent_vars + all_rhs_vars_list))
+            # Remove 'Intercept' from variables list for summary stats (it's not a real variable)
+            all_vars = [v for v in all_vars if v != 'Intercept']
+            
+            # Create a combined formula string for summary stats generation
+            # _generate_summary_stats expects a formula with ~, so we create a dummy formula
+            # Use the first variable as DV and the rest as predictors (or just the first if only one)
+            combined_formula = ''
+            if all_vars:
+                if len(all_vars) == 1:
+                    # If only one variable, use it as both DV and predictor
+                    combined_formula = f"{all_vars[0]} ~ {all_vars[0]}"
+                else:
+                    # Use first variable as DV, rest as predictors
+                    combined_formula = f"{all_vars[0]} ~ {' + '.join(all_vars[1:])}"
+                summary_stats = _generate_summary_stats(df, combined_formula, None)
+            else:
+                summary_stats = {}
+            
+            # Get continuous variables for correlation heatmap (all numeric variables from equations)
+            if combined_formula:
+                continuous_vars = _get_continuous_variables_from_formula(df, combined_formula)
+                # If no continuous variables in equation, fall back to all continuous variables
+                if len(continuous_vars) < 2:
+                    continuous_vars = _get_continuous_variables(df)
+            else:
+                # If no formula, just get all continuous variables
+                continuous_vars = _get_continuous_variables(df)
+            
+            # Calculate correlation matrix for continuous variables
+            correlation_matrix = {}
+            if len(continuous_vars) >= 2:
+                try:
+                    # Get numeric columns that exist in the dataframe
+                    available_vars = [v for v in continuous_vars if v in df.columns and pd.api.types.is_numeric_dtype(df[v])]
+                    if len(available_vars) >= 2:
+                        corr_df = df[available_vars].corr()
+                        # Convert to dictionary format for template
+                        for i, var_row in enumerate(available_vars):
+                            for j, var_col in enumerate(available_vars):
+                                correlation_matrix[f"{var_row}_{var_col}"] = float(corr_df.loc[var_row, var_col])
+                except Exception as e:
+                    print(f"DEBUG: Error calculating correlation matrix: {e}")
+                    correlation_matrix = {}
+            
+            # Get all numeric variables for summary table editing
+            all_numeric_vars = _get_all_numeric_variables(df)
+            
+            return {
+                'has_results': True,
+                'is_multi_equation': True,
+                'dependent_vars': dependent_vars,
+                'rhs_vars': all_rhs_vars_list,
+                'grid_data': grid_data,
+                'equation_results': equation_results,  # Store full results for each equation
+                'formula': '\n'.join(equation_lines),
+                'regression_type': 'Multi-equation regression',
+                'summary_stats': summary_stats,
+                'continuous_vars': continuous_vars,
+                'correlation_matrix': correlation_matrix,
+                'all_numeric_vars': all_numeric_vars,
+                'error': None
+            }
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {
+                'has_results': False,
+                'is_multi_equation': True,
+                'error': f'Error running multi-equation regression: {str(e)}'
+            }

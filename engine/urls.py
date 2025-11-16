@@ -1,16 +1,31 @@
 from django.urls import path
-from engine import views
 from engine.dataprep import views as dataprep_views   # ← absolute import
 
-from .views import (
-        landing_view, page_view, robots_txt, sitemap_xml, index, edit_session, run_analysis, download_file,
-        upload_dataset, delete_dataset, delete_session, bulk_delete_sessions, generate_spotlight_plot,
-        generate_correlation_heatmap, get_dataset_variables, update_sessions_for_variable_rename,
-        preview_drop_rows, apply_drop_rows, merge_datasets, calculate_summary_stats, visualize_data,
-        run_bma_analysis, run_anova_analysis, generate_anova_plot_view, download_session_history_view,
-        run_varx_analysis, generate_varx_irf_view, generate_varx_irf_data_view, ai_chat, add_model_errors_to_dataset,
-        privacy_policy_view, terms_of_service_view
-    )
+# Import from new modular views
+from engine.views.pages import (
+    landing_view, page_view, robots_txt, sitemap_xml,
+    privacy_policy_view, terms_of_service_view
+)
+from engine.views.sessions import (
+    index, edit_session, delete_session, bulk_delete_sessions,
+    download_session_history_view
+)
+from engine.views.analysis import (
+    run_analysis, run_bma_analysis, run_anova_analysis, run_varx_analysis,
+    generate_varx_irf_view, generate_varx_irf_data_view, calculate_summary_stats,
+    add_model_errors_to_dataset, ai_chat, cancel_bayesian_analysis
+)
+from engine.views.utils import download_file
+from engine.views.datasets import (
+    upload_dataset, delete_dataset, get_dataset_variables,
+    update_sessions_for_variable_rename, preview_drop_rows,
+    apply_drop_rows, merge_datasets
+)
+from engine.views.visualization import (
+    visualize_data, generate_plot, generate_spotlight_plot,
+    generate_correlation_heatmap, generate_anova_plot_view,
+    _generate_multinomial_ordinal_spotlight_from_predictions
+)
 
 urlpatterns = [
     path('', landing_view, name='landing'),
@@ -18,6 +33,7 @@ urlpatterns = [
     path('robots.txt', robots_txt, name='robots_txt'),
     path('sitemap.xml', sitemap_xml, name='sitemap_xml'),
     path('app/', index, name='index'),
+    path('session/', index, name='session_list'),  # Alias for session list
     path('session/<int:pk>/', edit_session, name='edit_session'),
     path('session/delete/<int:pk>/', delete_session, name='delete_session'),  # ← add this
     path('sessions/bulk-delete/', bulk_delete_sessions, name='bulk_delete_sessions'),
@@ -44,8 +60,8 @@ urlpatterns = [
     path('api/dataset/<int:dataset_id>/apply-drop/', apply_drop_rows, name='apply_drop_rows'),
     path('api/dataset/<int:dataset_id>/fix-stationary/', dataprep_views.fix_stationary, name='fix_stationary'),
     path('api/datasets/merge/', merge_datasets, name='merge_datasets'),
-    path('api/session/<int:session_id>/calculate-summary-stats/', views.calculate_summary_stats, name='calculate_summary_stats'),
-    path('cancel-bayesian-analysis/', views.cancel_bayesian_analysis, name='cancel_bayesian_analysis'),
+    path('api/session/<int:session_id>/calculate-summary-stats/', calculate_summary_stats, name='calculate_summary_stats'),
+    path('cancel-bayesian-analysis/', cancel_bayesian_analysis, name='cancel_bayesian_analysis'),
     path('bma/', run_bma_analysis, name='run_bma_analysis'),
     path('anova/', run_anova_analysis, name='run_anova_analysis'),
     path('session/<int:session_id>/anova-plot/', generate_anova_plot_view, name='generate_anova_plot'),
@@ -56,7 +72,7 @@ urlpatterns = [
     path('session/<int:session_id>/add-model-errors/', add_model_errors_to_dataset, name='add_model_errors_to_dataset'),
     path('api/ai-chat/', ai_chat, name='ai_chat'),
     # Privacy and Legal
-    path('privacy/', views.privacy_policy_view, name='privacy_policy'),
-    path('terms/', views.terms_of_service_view, name='terms_of_service'),
+    path('privacy/', privacy_policy_view, name='privacy_policy'),
+    path('terms/', terms_of_service_view, name='terms_of_service'),
 ]
 

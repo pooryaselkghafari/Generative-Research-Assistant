@@ -1,0 +1,37 @@
+{
+  "category": "performance",
+  "test_name": "Performance Tests",
+  "score": 100.0,
+  "passed": true,
+  "total_tests": 3,
+  "passed_tests": 3,
+  "failed_tests": 0,
+  "execution_time": 0.8950498104095459,
+  "test_results": [
+    {
+      "test_name": "api_response_time",
+      "passed": true,
+      "message": "API response time: 0.001s (target: <0.5s)",
+      "details": {
+        "response_time": 0.000885009765625
+      }
+    },
+    {
+      "test_name": "database_query_efficiency",
+      "passed": true,
+      "message": "Query count: 0 (should be < 5)",
+      "details": {
+        "query_count": 0
+      }
+    },
+    {
+      "test_name": "page_load__",
+      "passed": true,
+      "message": "Landing Page load time: 0.00s (target: <2s)",
+      "details": {
+        "load_time": 0.0019571781158447266,
+        "status_code": 200
+      }
+    }
+  ]
+}
