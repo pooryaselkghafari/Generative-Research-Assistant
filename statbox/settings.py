@@ -189,8 +189,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',  # Required for allauth
-    # 'ckeditor',  # Uncomment after installing: pip install django-ckeditor
-    # 'ckeditor_uploader',  # Uncomment after installing: pip install django-ckeditor
+    'ckeditor',  # Rich text editor for admin
+    'ckeditor_uploader',  # File upload support for CKEditor
     # django-allauth
     'allauth',
     'allauth.account',
@@ -319,17 +319,8 @@ import os
 logs_dir = BASE_DIR / 'logs'
 os.makedirs(logs_dir, exist_ok=True)
 
-# Check if CKEditor is installed (after CKEDITOR settings are defined)
-try:
-    import ckeditor
-    INSTALLED_APPS.insert(6, 'ckeditor')
-    try:
-        import ckeditor_uploader
-        INSTALLED_APPS.insert(7, 'ckeditor_uploader')
-    except ImportError:
-        pass
-except ImportError:
-    pass
+# CKEditor is now included in INSTALLED_APPS above
+# No need to add it dynamically since it's already in the list
 
 MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware',
