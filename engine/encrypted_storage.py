@@ -9,30 +9,43 @@ from .encryption import get_encryption
 from django.conf import settings
 
 
-def store_encrypted_file(uploaded_file, user_id=None):
+def store_encrypted_file(uploaded_file, user_id=None, destination_path=None):
     """
     Store an uploaded file in encrypted format.
     
     Args:
         uploaded_file: Django UploadedFile object
         user_id: User ID for user-specific encryption
+        destination_path: Optional destination path (without .encrypted extension)
+                          If provided, encrypted file will be saved at destination_path + '.encrypted'
+                          If not provided, uses a temporary file location
         
     Returns:
-        str: Path to the encrypted file
+        str: Path to the encrypted file (with .encrypted extension)
     """
     # Get encryption instance
     enc = get_encryption()
     
-    # Create temporary file for original upload
-    with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-        # Write uploaded file to temporary location
-        for chunk in uploaded_file.chunks():
-            tmp_file.write(chunk)
-        tmp_path = tmp_file.name
+    # Extract original file extension from uploaded file name
+    original_name = uploaded_file.name
+    original_ext = os.path.splitext(original_name)[1] if original_name else ''
+    
+    # Create temporary file for original upload (preserve extension for better debugging)
+    if destination_path:
+        # Use provided destination path
+        tmp_path = destination_path
+        encrypted_path = destination_path + '.encrypted'
+    else:
+        # Use temporary file with original extension
+        with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as tmp_file:
+            tmp_path = tmp_file.name
+        encrypted_path = tmp_path + '.encrypted'
     
     try:
-        # Determine encrypted file path (add .encrypted extension)
-        encrypted_path = tmp_path + '.encrypted'
+        # Write uploaded file to temporary location
+        with open(tmp_path, 'wb') as tmp_file:
+            for chunk in uploaded_file.chunks():
+                tmp_file.write(chunk)
         
         # Encrypt the file
         enc.encrypt_file(tmp_path, encrypted_path, user_id)
@@ -41,7 +54,10 @@ def store_encrypted_file(uploaded_file, user_id=None):
     finally:
         # Clean up temporary unencrypted file
         if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
 
 def read_encrypted_file(encrypted_path, user_id=None, as_dataframe=True, **kwargs):
@@ -63,7 +79,9 @@ def read_encrypted_file(encrypted_path, user_id=None, as_dataframe=True, **kwarg
     enc = get_encryption()
     
     # Determine file type from original path BEFORE creating temp file
-    original_ext = os.path.splitext(encrypted_path.replace('.encrypted', ''))[1].lower()
+    # Remove .encrypted extension to get original extension
+    path_without_encrypted = encrypted_path.replace('.encrypted', '')
+    original_ext = os.path.splitext(path_without_encrypted)[1].lower()
     
     # Create temporary file with correct extension for proper format detection
     # Use original extension so pandas can detect the format correctly
@@ -135,7 +153,9 @@ def get_decrypted_path(encrypted_path, user_id=None):
     enc = get_encryption()
     
     # Create temporary file with correct extension
-    original_ext = os.path.splitext(encrypted_path.replace('.encrypted', ''))[1]
+    # Remove .encrypted extension to get original extension
+    path_without_encrypted = encrypted_path.replace('.encrypted', '')
+    original_ext = os.path.splitext(path_without_encrypted)[1]
     if not original_ext:
         # Default to .csv if no extension found
         original_ext = '.csv'

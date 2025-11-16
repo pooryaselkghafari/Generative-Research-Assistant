@@ -177,8 +177,9 @@ def upload_dataset(request):
     # Check if encryption is enabled
     if getattr(settings, 'ENCRYPT_DATASETS', False):
         # Use encrypted storage
+        # Pass destination_path to preserve original file extension in encrypted filename
         from engine.encrypted_storage import store_encrypted_file
-        path = store_encrypted_file(f, user_id=user.id)
+        path = store_encrypted_file(f, user_id=user.id, destination_path=path)
     else:
         # Save unencrypted
         with open(path, 'wb') as dest:
