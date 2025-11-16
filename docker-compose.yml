@@ -23,18 +23,14 @@ services:
   web:
     build: .
     command: gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 2 statbox.wsgi:application
-    # Use host network to access host PostgreSQL (alternative to host.docker.internal)
-    # network_mode: "host"  # Uncomment this if host.docker.internal doesn't work
+    # Use host network to access host PostgreSQL directly
+    network_mode: "host"
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
-    # Port removed - web is only accessed through nginx
-    # If you need direct access for debugging, bind to localhost only:
-    # ports:
-    #   - "127.0.0.1:8000:8000"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # Maps host.docker.internal to host IP
+    # Note: When using host network mode, ports are not needed
+    # The container uses the host's network directly
     environment:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY}
@@ -59,9 +55,8 @@ services:
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
       - SITE_ID=${SITE_ID:-1}
-    depends_on:
-      - db
-      - redis
+    # Note: depends_on removed when using host network mode
+    # The web container can access host services directly via localhost
 
   nginx:
     image: nginx:alpine
