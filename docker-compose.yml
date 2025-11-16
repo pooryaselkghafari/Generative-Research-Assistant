@@ -60,16 +60,15 @@ services:
 
   nginx:
     image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
+    # Use host network to access web container on host network
+    network_mode: "host"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
       - static_volume:/app/staticfiles
       - media_volume:/app/media
       - ./ssl:/etc/nginx/ssl
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # Allows nginx to reach host network services
+    # Note: When using host network mode, ports mapping is not needed
+    # Nginx will listen directly on host's ports 80 and 443
     depends_on:
       - web
 
