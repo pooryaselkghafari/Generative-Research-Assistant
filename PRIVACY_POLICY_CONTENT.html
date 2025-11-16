@@ -1,0 +1,340 @@
+<h2>1. Introduction and Scope</h2>
+<p>Welcome to StatBox ("we," "our," or "us"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our statistical analysis platform and services (the "Service").</p>
+
+<p>By using our Service, you agree to the collection and use of information in accordance with this Privacy Policy. We are committed to protecting your privacy and ensuring the security of your personal information.</p>
+
+<p><strong>Effective Date:</strong> {{ policy.effective_date|date:"F d, Y" }}<br>
+<strong>Version:</strong> {{ policy.version }}</p>
+
+<h2>2. Information We Collect</h2>
+
+<h3>2.1 Personal Information You Provide</h3>
+<p>When you register for an account, we collect:</p>
+<ul>
+    <li><strong>Account Credentials:</strong> Username, email address, and password (encrypted using industry-standard PBKDF2 hashing with SHA-256)</li>
+    <li><strong>Profile Information:</strong> Subscription preferences, account settings, and user preferences</li>
+    <li><strong>Communication Data:</strong> Information you provide when contacting us for support or inquiries</li>
+</ul>
+
+<h3>2.2 Payment and Subscription Information</h3>
+<p>When you subscribe to our Service, we collect:</p>
+<ul>
+    <li><strong>Payment Processing:</strong> Stripe customer IDs and subscription IDs (encrypted at rest using AES-256-GCM encryption)</li>
+    <li><strong>Payment Intent IDs:</strong> Encrypted payment transaction identifiers</li>
+    <li><strong>Billing Information:</strong> Processed securely through Stripe (we do not store full credit card numbers)</li>
+    <li><strong>Subscription Details:</strong> Plan type, billing cycle, and subscription status</li>
+</ul>
+
+<h3>2.3 Data You Upload</h3>
+<p>When you use our Service, you may upload:</p>
+<ul>
+    <li><strong>Statistical Datasets:</strong> CSV, Excel, or other data files containing your research data</li>
+    <li><strong>Analysis Sessions:</strong> Statistical models, equations, variables, and analysis configurations</li>
+    <li><strong>Analysis Results:</strong> Generated reports, visualizations, and statistical outputs</li>
+    <li><strong>File Encryption:</strong> All uploaded datasets may be encrypted using AES-256-GCM encryption with user-specific encryption keys derived using PBKDF2 (100,000 iterations)</li>
+</ul>
+
+<h3>2.4 Automatically Collected Information</h3>
+<p>When you use our Service, we automatically collect:</p>
+<ul>
+    <li><strong>Usage Data:</strong> IP addresses, browser type and version, device information, operating system</li>
+    <li><strong>Log Data:</strong> Access times, pages viewed, features used, error logs, and diagnostic information</li>
+    <li><strong>Session Information:</strong> Login times, session duration, and activity patterns</li>
+    <li><strong>Technical Data:</strong> API usage, performance metrics, and system interactions</li>
+</ul>
+
+<h3>2.5 Third-Party Authentication</h3>
+<p>If you sign in using Google OAuth:</p>
+<ul>
+    <li>We receive your Google account email address and basic profile information</li>
+    <li>We do not access or store your Google password</li>
+    <li>Google's privacy policy applies to the authentication process</li>
+</ul>
+
+<h2>3. How We Use Your Information</h2>
+
+<h3>3.1 Service Provision</h3>
+<ul>
+    <li>To create and manage your account</li>
+    <li>To process and maintain your subscription</li>
+    <li>To provide statistical analysis tools and features</li>
+    <li>To store and manage your datasets and analysis sessions</li>
+    <li>To generate visualizations and reports</li>
+    <li>To provide AI-powered analysis assistance</li>
+</ul>
+
+<h3>3.2 Communication</h3>
+<ul>
+    <li>To send you important service updates and notifications</li>
+    <li>To respond to your inquiries and provide customer support</li>
+    <li>To send email verification messages and password reset links</li>
+    <li>To notify you about changes to our Service or policies</li>
+    <li>To send subscription-related communications (billing, renewals, cancellations)</li>
+</ul>
+
+<h3>3.3 Service Improvement</h3>
+<ul>
+    <li>To analyze usage patterns and improve our Service</li>
+    <li>To develop new features and functionality</li>
+    <li>To fix bugs and technical issues</li>
+    <li>To optimize performance and user experience</li>
+    <li>To conduct research and analytics (using aggregated, anonymized data)</li>
+</ul>
+
+<h3>3.4 Legal and Security</h3>
+<ul>
+    <li>To comply with legal obligations and regulatory requirements</li>
+    <li>To enforce our Terms of Service</li>
+    <li>To protect our rights, property, and safety</li>
+    <li>To prevent fraud, abuse, and security threats</li>
+    <li>To investigate potential violations of our policies</li>
+</ul>
+
+<h2>4. Data Security and Encryption</h2>
+
+<h3>4.1 Encryption Standards</h3>
+<p>We implement industry-standard encryption to protect your data:</p>
+<ul>
+    <li><strong>AES-256-GCM:</strong> Military-grade authenticated encryption for all sensitive data at rest</li>
+    <li><strong>PBKDF2:</strong> Key derivation algorithm with 100,000 iterations (NIST-recommended) for secure key generation</li>
+    <strong>TLS/HTTPS:</strong> Transport Layer Security for all data in transit</li>
+    <li><strong>Authenticated Encryption:</strong> Prevents tampering and ensures data integrity through authentication tags</li>
+</ul>
+
+<h3>4.2 What We Encrypt</h3>
+<p><strong>Database Fields (Automatic Encryption):</strong></p>
+<ul>
+    <li>Stripe customer IDs (EncryptedCharField)</li>
+    <li>Stripe subscription IDs (EncryptedCharField)</li>
+    <li>Stripe payment intent IDs (EncryptedCharField)</li>
+    <li>All sensitive PII stored in encrypted fields</li>
+</ul>
+
+<p><strong>Uploaded Files (Configurable Encryption):</strong></p>
+<ul>
+    <li>Dataset files can be encrypted when uploaded (controlled by ENCRYPT_DATASETS setting)</li>
+    <li>User-specific encryption keys for file-level encryption</li>
+    <li>Automatic encryption/decryption when files are accessed</li>
+</ul>
+
+<h3>4.3 Security Measures</h3>
+<ul>
+    <li><strong>Password Security:</strong> Passwords are hashed using Django's PBKDF2 password hasher with SHA-256</li>
+    <li><strong>Access Controls:</strong> Role-based access control and authentication requirements</li>
+    <li><strong>Admin Activity Logging:</strong> All administrative actions are logged for audit trails</li>
+    <li><strong>Regular Security Audits:</strong> We conduct regular vulnerability assessments and security reviews</li>
+    <li><strong>Secure Infrastructure:</strong> Our servers are secured with firewalls, intrusion detection, and monitoring</li>
+    <li><strong>Data Backup:</strong> Regular encrypted backups of all data</li>
+    <li><strong>Incident Response:</strong> Procedures in place for security incident detection and response</li>
+</ul>
+
+<h3>4.4 Key Management</h3>
+<ul>
+    <li>Encryption keys are stored separately from encrypted data</li>
+    <li>Master encryption keys are generated using cryptographically secure random number generators</li>
+    <li>User-specific keys are derived using PBKDF2 with unique salts</li>
+    <li>Keys are never transmitted or stored in plaintext</li>
+</ul>
+
+<h2>5. Data Sharing and Disclosure</h2>
+
+<h3>5.1 We Do Not Sell Your Data</h3>
+<p>We do not sell, rent, or trade your personal information to third parties for marketing purposes.</p>
+
+<h3>5.2 Service Providers</h3>
+<p>We may share your information with trusted third-party service providers who assist us in operating our Service:</p>
+<ul>
+    <li><strong>Stripe:</strong> Payment processing (see <a href="https://stripe.com/privacy" target="_blank">Stripe's Privacy Policy</a>)</li>
+    <li><strong>Google:</strong> OAuth authentication (see <a href="https://policies.google.com/privacy" target="_blank">Google's Privacy Policy</a>)</li>
+    <li><strong>Email Services:</strong> Resend API or SMTP providers for sending emails</li>
+    <li><strong>Hosting Providers:</strong> Cloud infrastructure providers for hosting our Service</li>
+</ul>
+<p>These service providers are contractually obligated to protect your information and use it only for the purposes we specify.</p>
+
+<h3>5.3 Legal Requirements</h3>
+<p>We may disclose your information if required by law or in response to:</p>
+<ul>
+    <li>Valid legal process (subpoenas, court orders, warrants)</li>
+    <li>Government requests or regulatory investigations</li>
+    <li>Protection of our rights, property, or safety</li>
+    <li>Prevention of fraud or security threats</li>
+</ul>
+
+<h3>5.4 Business Transfers</h3>
+<p>In the event of a merger, acquisition, or sale of assets, your information may be transferred to the acquiring entity, subject to the same privacy protections.</p>
+
+<h2>6. Data Retention</h2>
+
+<h3>6.1 Retention Periods</h3>
+<ul>
+    <li><strong>Account Data:</strong> Retained for as long as your account is active</li>
+    <li><strong>Uploaded Datasets:</strong> Retained until you delete them or close your account</li>
+    <li><strong>Analysis Sessions:</strong> Retained until you delete them or close your account</li>
+    <li><strong>Payment Records:</strong> Retained as required by law (typically 7 years for tax and accounting purposes)</li>
+    <li><strong>Log Data:</strong> Retained for up to 90 days for security and troubleshooting purposes</li>
+</ul>
+
+<h3>6.2 Account Deletion</h3>
+<p>When you delete your account:</p>
+<ul>
+    <li>Your personal information will be deleted within 30 days</li>
+    <li>Your datasets and analysis sessions will be permanently deleted</li>
+    <li>Some information may be retained as required by law or for legitimate business purposes</li>
+    <li>Backup copies may persist for up to 90 days before permanent deletion</li>
+</ul>
+
+<h2>7. Your Rights and Choices</h2>
+
+<h3>7.1 Access and Portability</h3>
+<ul>
+    <li>You have the right to access your personal information</li>
+    <li>You can view and download your datasets and analysis results at any time</li>
+    <li>You can export your data in standard formats (CSV, JSON)</li>
+    <li>You can request a copy of all your personal data</li>
+</ul>
+
+<h3>7.2 Correction and Updates</h3>
+<ul>
+    <li>You can update your account information at any time through your account settings</li>
+    <li>You can correct inaccurate or incomplete information</li>
+    <li>You can modify your subscription preferences</li>
+</ul>
+
+<h3>7.3 Deletion</h3>
+<ul>
+    <li>You can delete individual datasets or analysis sessions</li>
+    <li>You can request deletion of your entire account</li>
+    <li>You can request deletion of specific personal information</li>
+</ul>
+
+<h3>7.4 Opt-Out Rights</h3>
+<ul>
+    <li>You can opt out of marketing emails (transactional emails will still be sent)</li>
+    <li>You can disable certain features or data collection</li>
+    <li>You can withdraw consent for data processing (may limit Service functionality)</li>
+</ul>
+
+<h3>7.5 Data Portability</h3>
+<p>You have the right to receive your data in a structured, commonly used, and machine-readable format and to transmit that data to another service provider.</p>
+
+<h2>8. Compliance with Privacy Regulations</h2>
+
+<h3>8.1 PIPEDA (Personal Information Protection and Electronic Documents Act - Canada)</h3>
+<p>We comply with PIPEDA requirements:</p>
+<ul>
+    <li><strong>Consent:</strong> We obtain your consent before collecting, using, or disclosing personal information</li>
+    <li><strong>Purpose Limitation:</strong> We collect only information necessary for stated purposes</li>
+    <li><strong>Limiting Collection:</strong> We collect only information necessary for our Service</li>
+    <li><strong>Limiting Use, Disclosure, and Retention:</strong> We use and retain information only as necessary</li>
+    <li><strong>Accuracy:</strong> We maintain accurate and up-to-date information</li>
+    <li><strong>Safeguards:</strong> We implement appropriate security measures to protect your information</li>
+    <li><strong>Openness:</strong> We are transparent about our privacy practices</li>
+    <li><strong>Individual Access:</strong> You can access and correct your personal information</li>
+    <li><strong>Challenging Compliance:</strong> You can file complaints about our privacy practices</li>
+</ul>
+
+<h3>8.2 CCPA/CPRA (California Consumer Privacy Act / California Privacy Rights Act - USA)</h3>
+<p>If you are a California resident, you have the following rights:</p>
+<ul>
+    <li><strong>Right to Know:</strong> You can request disclosure of personal information we collect, use, and share</li>
+    <li><strong>Right to Delete:</strong> You can request deletion of your personal information</li>
+    <li><strong>Right to Opt-Out:</strong> You can opt out of the sale of personal information (we do not sell your data)</li>
+    <li><strong>Right to Non-Discrimination:</strong> We will not discriminate against you for exercising your privacy rights</li>
+    <li><strong>Right to Correct:</strong> You can request correction of inaccurate personal information</li>
+    <li><strong>Right to Limit Use:</strong> You can limit the use of sensitive personal information</li>
+</ul>
+<p>To exercise these rights, contact us at privacy@statbox.com.</p>
+
+<h3>8.3 HIPAA (Health Insurance Portability and Accountability Act - USA)</h3>
+<p>If you process health-related data through our Service, we comply with HIPAA requirements:</p>
+<ul>
+    <li><strong>Administrative Safeguards:</strong> Security management, workforce training, and access controls</li>
+    <li><strong>Physical Safeguards:</strong> Facility access controls and workstation security</li>
+    <li><strong>Technical Safeguards:</strong> Access control, audit controls, integrity controls, and transmission security</li>
+    <li><strong>Encryption:</strong> Health data is encrypted at rest and in transit</li>
+    <li><strong>Audit Logs:</strong> All access to health data is logged and monitored</li>
+    <li><strong>Business Associate Agreements:</strong> We enter into BAAs with service providers handling health data</li>
+</ul>
+
+<h3>8.4 GDPR (General Data Protection Regulation - EU)</h3>
+<p>If you are located in the European Union, you have additional rights under GDPR:</p>
+<ul>
+    <li><strong>Right to Access:</strong> You can request a copy of your personal data</li>
+    <li><strong>Right to Rectification:</strong> You can correct inaccurate data</li>
+    <li><strong>Right to Erasure:</strong> You can request deletion of your data ("right to be forgotten")</li>
+    <li><strong>Right to Restrict Processing:</strong> You can limit how we process your data</li>
+    <li><strong>Right to Data Portability:</strong> You can receive and transfer your data</li>
+    <li><strong>Right to Object:</strong> You can object to certain types of processing</li>
+    <li><strong>Right to Withdraw Consent:</strong> You can withdraw consent at any time</li>
+</ul>
+
+<h2>9. Cookies and Tracking Technologies</h2>
+
+<h3>9.1 Cookies We Use</h3>
+<ul>
+    <li><strong>Session Cookies:</strong> Essential for maintaining your login state and session</li>
+    <li><strong>Preference Cookies:</strong> Remember your settings and preferences</li>
+    <li><strong>Security Cookies:</strong> Help prevent fraud and ensure security</li>
+</ul>
+
+<h3>9.2 Third-Party Tracking</h3>
+<p>We do not use third-party tracking cookies or analytics without your explicit consent. We may use:</p>
+<ul>
+    <li>Server-side analytics (does not use cookies)</li>
+    <li>Error tracking for service improvement (anonymized)</li>
+</ul>
+
+<h3>9.3 Cookie Management</h3>
+<p>You can control cookies through your browser settings. However, disabling cookies may limit Service functionality.</p>
+
+<h2>10. Children's Privacy</h2>
+<p>Our Service is not intended for users under the age of 18 (or the age of majority in your jurisdiction). We do not knowingly collect personal information from children. If you believe we have collected information from a child, please contact us immediately, and we will delete such information.</p>
+
+<h2>11. International Data Transfers</h2>
+<p>Your information may be processed and stored in servers located outside your country of residence. We ensure appropriate safeguards are in place to protect your data in accordance with this Privacy Policy and applicable laws, including:</p>
+<ul>
+    <li>Standard contractual clauses for data transfers</li>
+    <li>Adequacy decisions where applicable</li>
+    <li>Encryption and security measures</li>
+</ul>
+
+<h2>12. Data Breach Notification</h2>
+<p>In the event of a data breach that may affect your personal information:</p>
+<ul>
+    <li>We will notify you within 72 hours of discovering the breach (as required by law)</li>
+    <li>We will notify relevant authorities as required by applicable regulations</li>
+    <li>We will provide information about the nature of the breach and steps we are taking</li>
+    <li>We will provide guidance on steps you can take to protect yourself</li>
+</ul>
+
+<h2>13. Changes to This Privacy Policy</h2>
+<p>We may update this Privacy Policy from time to time to reflect changes in our practices or legal requirements. We will notify you of material changes by:</p>
+<ul>
+    <li>Posting the updated Privacy Policy on this page</li>
+    <li>Updating the "Effective Date" at the top of this policy</li>
+    <li>Sending an email notification to your registered email address (for significant changes)</li>
+    <li>Displaying a notice on our Service</li>
+</ul>
+<p>Your continued use of the Service after changes constitutes acceptance of the updated Privacy Policy.</p>
+
+<h2>14. Contact Us</h2>
+<p>If you have questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us:</p>
+<ul>
+    <li><strong>Email:</strong> privacy@statbox.com</li>
+    <li><strong>Address:</strong> [Your Company Address]</li>
+    <li><strong>Data Protection Officer:</strong> dpo@statbox.com (if applicable)</li>
+</ul>
+
+<h2>15. Complaints</h2>
+<p>If you believe we have violated your privacy rights, you have the right to file a complaint with:</p>
+<ul>
+    <li><strong>Canada:</strong> Office of the Privacy Commissioner of Canada</li>
+    <li><strong>California:</strong> California Attorney General</li>
+    <li><strong>EU:</strong> Your local data protection authority</li>
+</ul>
+<p>We encourage you to contact us first to resolve any concerns.</p>
+
+<h2>16. Additional Information</h2>
+<p>For more information about our data practices, please also review our <a href="{% url 'terms_of_service' %}">Terms of Service</a>.</p>
+
+<p><em>This Privacy Policy is effective as of {{ policy.effective_date|date:"F d, Y" }} and applies to all users of the StatBox Service.</em></p>

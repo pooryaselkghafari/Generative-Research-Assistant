@@ -21,7 +21,47 @@
       </div>
     {% endif %}
     
-    <form method="post" class="auth-form">
+    <!-- User Agreement Modal -->
+    <div id="userAgreementModal" class="agreement-modal">
+      <div class="agreement-modal-content">
+        <div class="agreement-modal-header">
+          <h2>User Agreement & Privacy Policy</h2>
+        </div>
+        <div class="agreement-modal-body">
+          <p><strong>By creating an account, you agree to our Terms of Service and Privacy Policy.</strong></p>
+          
+          <div class="agreement-highlights">
+            <h3>Key Points:</h3>
+            <ul>
+              <li>✅ Your data is encrypted with <strong>AES-256-GCM</strong> military-grade encryption</li>
+              <li>✅ We comply with <strong>PIPEDA</strong> (Canada), <strong>CCPA/CPRA</strong> (USA), and <strong>HIPAA</strong> (health data)</li>
+              <li>✅ You own your data and can export or delete it at any time</li>
+              <li>✅ We never sell your personal information</li>
+              <li>✅ All sensitive fields are encrypted at rest in our database</li>
+              <li>✅ Uploaded files may be encrypted with user-specific keys</li>
+            </ul>
+          </div>
+          
+          <div class="agreement-links">
+            <a href="{% url 'terms_of_service' %}" target="_blank" class="agreement-link">Read Full Terms of Service</a>
+            <a href="{% url 'privacy_policy' %}" target="_blank" class="agreement-link">Read Full Privacy Policy</a>
+          </div>
+          
+          <div class="agreement-checkbox">
+            <label>
+              <input type="checkbox" id="agreeCheckbox" required>
+              <span>I have read and agree to the <a href="{% url 'terms_of_service' %}" target="_blank">Terms of Service</a> and <a href="{% url 'privacy_policy' %}" target="_blank">Privacy Policy</a></span>
+            </label>
+          </div>
+        </div>
+        <div class="agreement-modal-footer">
+          <button type="button" id="agreeButton" class="btn btn-primary" disabled>I Agree & Continue</button>
+          <button type="button" id="declineButton" class="btn btn-secondary">Decline</button>
+        </div>
+      </div>
+    </div>
+
+    <form method="post" class="auth-form" id="registerForm" style="display: none;">
       {% csrf_token %}
       <div class="form-group">
         <label for="id_username">Username</label>
@@ -237,5 +277,291 @@
   color: #991b1b;
   border: 1px solid #fca5a5;
 }
+
+/* User Agreement Modal Styles */
+.agreement-modal {
+  display: block;
+  position: fixed;
+  z-index: 10000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease;
+}
+
+.agreement-modal-content {
+  background-color: white;
+  margin: 5% auto;
+  padding: 0;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+.agreement-modal-header {
+  padding: 24px 30px;
+  border-bottom: 2px solid #e5e7eb;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.agreement-modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.agreement-modal-body {
+  padding: 30px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.agreement-modal-body p {
+  margin-bottom: 20px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.agreement-highlights {
+  background: #f0f9ff;
+  border-left: 4px solid #3b82f6;
+  padding: 20px;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.agreement-highlights h3 {
+  margin: 0 0 12px 0;
+  color: #1f2937;
+  font-size: 18px;
+}
+
+.agreement-highlights ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.agreement-highlights li {
+  margin-bottom: 10px;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.agreement-links {
+  display: flex;
+  gap: 15px;
+  margin: 25px 0;
+  flex-wrap: wrap;
+}
+
+.agreement-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 10px 16px;
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  transition: all 0.2s;
+  display: inline-block;
+}
+
+.agreement-link:hover {
+  background-color: #3b82f6;
+  color: white;
+  text-decoration: none;
+}
+
+.agreement-checkbox {
+  margin: 25px 0;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+}
+
+.agreement-checkbox label {
+  display: flex;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.agreement-checkbox input[type="checkbox"] {
+  margin-right: 12px;
+  margin-top: 3px;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.agreement-checkbox a {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.agreement-checkbox a:hover {
+  text-decoration: underline;
+}
+
+.agreement-modal-footer {
+  padding: 20px 30px;
+  border-top: 2px solid #e5e7eb;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  background: #f9fafb;
+}
+
+.agreement-modal-footer .btn {
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.agreement-modal-footer .btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.agreement-modal-footer .btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.agreement-modal-footer .btn-primary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.agreement-modal-footer .btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.agreement-modal-footer .btn-secondary:hover {
+  background: #4b5563;
+  transform: translateY(-1px);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .agreement-modal-content {
+    width: 95%;
+    margin: 10% auto;
+    max-height: 90vh;
+  }
+  
+  .agreement-modal-header,
+  .agreement-modal-body,
+  .agreement-modal-footer {
+    padding: 20px;
+  }
+  
+  .agreement-links {
+    flex-direction: column;
+  }
+  
+  .agreement-link {
+    width: 100%;
+    text-align: center;
+  }
+}
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const modal = document.getElementById('userAgreementModal');
+  const agreeCheckbox = document.getElementById('agreeCheckbox');
+  const agreeButton = document.getElementById('agreeButton');
+  const declineButton = document.getElementById('declineButton');
+  const registerForm = document.getElementById('registerForm');
+  
+  // Check if user has already agreed (stored in sessionStorage)
+  const hasAgreed = sessionStorage.getItem('userAgreementAccepted');
+  
+  if (hasAgreed) {
+    // User already agreed, hide modal and show form
+    modal.style.display = 'none';
+    registerForm.style.display = 'block';
+  } else {
+    // Show modal, hide form
+    modal.style.display = 'block';
+    registerForm.style.display = 'none';
+  }
+  
+  // Enable/disable agree button based on checkbox
+  agreeCheckbox.addEventListener('change', function() {
+    agreeButton.disabled = !this.checked;
+  });
+  
+  // Handle agree button click
+  agreeButton.addEventListener('click', function() {
+    if (agreeCheckbox.checked) {
+      // Store agreement in sessionStorage
+      sessionStorage.setItem('userAgreementAccepted', 'true');
+      
+      // Hide modal and show form
+      modal.style.display = 'none';
+      registerForm.style.display = 'block';
+      
+      // Smooth scroll to form
+      registerForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+  
+  // Handle decline button click
+  declineButton.addEventListener('click', function() {
+    if (confirm('You must agree to the Terms of Service and Privacy Policy to create an account. Would you like to return to the home page?')) {
+      window.location.href = '/';
+    }
+  });
+  
+  // Prevent form submission if agreement not accepted
+  registerForm.addEventListener('submit', function(e) {
+    if (!sessionStorage.getItem('userAgreementAccepted')) {
+      e.preventDefault();
+      alert('Please read and agree to the Terms of Service and Privacy Policy first.');
+      modal.style.display = 'block';
+      registerForm.style.display = 'none';
+      return false;
+    }
+  });
+});
+</script>
 {% endblock %}
