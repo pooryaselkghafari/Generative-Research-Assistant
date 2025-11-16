@@ -23,6 +23,8 @@ services:
   web:
     build: .
     command: gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 2 statbox.wsgi:application
+    # Use host network to access host PostgreSQL (alternative to host.docker.internal)
+    # network_mode: "host"  # Uncomment this if host.docker.internal doesn't work
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
@@ -31,6 +33,8 @@ services:
     # If you need direct access for debugging, bind to localhost only:
     # ports:
     #   - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Maps host.docker.internal to host IP
     environment:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY}
