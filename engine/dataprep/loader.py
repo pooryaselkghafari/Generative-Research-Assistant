@@ -229,12 +229,18 @@ def get_dataset_columns_only(path: str, *, sheet=None, user_id=None) -> tuple[li
     from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
     decrypted_path = None
     try:
-        if is_encrypted_file(str(path)):
+        path_str = str(path)
+        if is_encrypted_file(path_str):
             # Get temporary decrypted file path
-            decrypted_path = get_decrypted_path(str(path), user_id=user_id)
-            working_path = decrypted_path
+            if user_id is None:
+                raise ValueError("user_id is required for decrypting encrypted files")
+            try:
+                decrypted_path = get_decrypted_path(path_str, user_id=user_id)
+                working_path = decrypted_path
+            except Exception as decrypt_error:
+                raise RuntimeError(f"Failed to decrypt file {path_str}: {decrypt_error}") from decrypt_error
         else:
-            working_path = str(path)
+            working_path = path_str
         
         p = Path(working_path)
         ext = p.suffix.lower()
@@ -306,12 +312,18 @@ def load_dataframe_any(path: str, *, sheet=None, preview_rows=None, user_id=None
     from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
     decrypted_path = None
     try:
-        if is_encrypted_file(str(path)):
+        path_str = str(path)
+        if is_encrypted_file(path_str):
             # Get temporary decrypted file path
-            decrypted_path = get_decrypted_path(str(path), user_id=user_id)
-            working_path = decrypted_path
+            if user_id is None:
+                raise ValueError("user_id is required for decrypting encrypted files")
+            try:
+                decrypted_path = get_decrypted_path(path_str, user_id=user_id)
+                working_path = decrypted_path
+            except Exception as decrypt_error:
+                raise RuntimeError(f"Failed to decrypt file {path_str}: {decrypt_error}") from decrypt_error
         else:
-            working_path = str(path)
+            working_path = path_str
         
         p = Path(working_path)
         ext = p.suffix.lower()

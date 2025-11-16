@@ -124,17 +124,42 @@ def get_decrypted_path(encrypted_path, user_id=None):
         
     Returns:
         str: Path to temporary decrypted file
+        
+    Raises:
+        FileNotFoundError: If encrypted file doesn't exist
+        ValueError: If decryption fails
     """
+    if not os.path.exists(encrypted_path):
+        raise FileNotFoundError(f"Encrypted file not found: {encrypted_path}")
+    
     enc = get_encryption()
     
-    # Create temporary file
+    # Create temporary file with correct extension
     original_ext = os.path.splitext(encrypted_path.replace('.encrypted', ''))[1]
+    if not original_ext:
+        # Default to .csv if no extension found
+        original_ext = '.csv'
     with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as tmp_file:
         tmp_path = tmp_file.name
     
-    # Decrypt to temporary location
-    enc.decrypt_file(encrypted_path, tmp_path, user_id)
-    
-    return tmp_path
+    try:
+        # Decrypt to temporary location
+        enc.decrypt_file(encrypted_path, tmp_path, user_id)
+        
+        # Verify decrypted file exists and has content
+        if not os.path.exists(tmp_path):
+            raise ValueError("Decryption failed: output file was not created")
+        if os.path.getsize(tmp_path) == 0:
+            raise ValueError("Decryption failed: output file is empty")
+        
+        return tmp_path
+    except Exception as e:
+        # Clean up temp file on error
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+        raise ValueError(f"Failed to decrypt file {encrypted_path}: {e}") from e
 
 

@@ -41,29 +41,27 @@ def get_dataset_variables(request, dataset_id):
         return JsonResponse({'success': False, 'error': 'Invalid dataset ID'}, status=400)
     
     # Use efficient column-only loading for large datasets
+    # The loader functions now handle encryption automatically, so we can pass the original path
     from engine.dataprep.loader import get_dataset_columns_only
-    from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
     import os
     
     path = dataset.file_path
-    decrypted_path = None
-    
-    # Check if file is encrypted and handle accordingly
-    if is_encrypted_file(path):
-        decrypted_path = get_decrypted_path(path, user_id=request.user.id)
-        working_path = decrypted_path
-    else:
-        working_path = path
+    if not path:
+        return JsonResponse({
+            'success': False,
+            'error': f'Dataset has no file path: {dataset.name}'
+        }, status=400)
     
     try:
         # Check if file exists before trying to read it
-        if not os.path.exists(working_path):
+        if not os.path.exists(path):
             return JsonResponse({
                 'success': False,
                 'error': f'Dataset file not found: {dataset.name}'
             }, status=404)
         
-        variables, column_types = get_dataset_columns_only(working_path, user_id=request.user.id)
+        # Pass original path - loader will handle encryption automatically
+        variables, column_types = get_dataset_columns_only(path, user_id=request.user.id)
         return JsonResponse({
             'success': True,
             'variables': variables,

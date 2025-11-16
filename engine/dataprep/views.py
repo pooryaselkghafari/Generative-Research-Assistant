@@ -50,32 +50,16 @@ def open_cleaner(request, dataset_id):
         return HttpResponse("Dataset has no file path.", status=400)
     
     try:
-        # Check if file is encrypted and handle accordingly
-        from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
+        # Loader functions now handle encryption automatically
         from engine.dataprep.loader import get_dataset_columns_only, load_dataframe_any
         
-        # If encrypted, get decrypted temporary path
-        if is_encrypted_file(path):
-            decrypted_path = get_decrypted_path(path, user_id=request.user.id)
-            # Use decrypted path for loading
-            working_path = decrypted_path
-        else:
-            working_path = path
+        # Get column names and types efficiently
+        # Pass original path - loader will handle encryption automatically
+        columns, column_types = get_dataset_columns_only(path, user_id=request.user.id)
         
-        try:
-            # Get column names and types efficiently
-            columns, column_types = get_dataset_columns_only(working_path, user_id=request.user.id)
-            
-            # Load only a small sample for preview and analysis
-            MAX_PREVIEW_ROWS = 1000  # Limit preview to 1000 rows for large datasets
-            df_sample, _ = load_dataframe_any(working_path, preview_rows=MAX_PREVIEW_ROWS, user_id=request.user.id)
-        finally:
-            # Clean up temporary decrypted file if it was created
-            if is_encrypted_file(path) and os.path.exists(decrypted_path):
-                try:
-                    os.unlink(decrypted_path)
-                except:
-                    pass
+        # Load only a small sample for preview and analysis
+        MAX_PREVIEW_ROWS = 1000  # Limit preview to 1000 rows for large datasets
+        df_sample, _ = load_dataframe_any(path, preview_rows=MAX_PREVIEW_ROWS, user_id=request.user.id)
         
     except Exception as e:
         response = HttpResponse(f"Failed to read dataset: {e}", status=400, content_type="text/plain")
