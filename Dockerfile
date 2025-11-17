@@ -17,6 +17,10 @@ RUN apt-get update \
         r-base-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Install R BAS package for Bayesian Model Averaging
+# This must be done as root before switching to appuser
+RUN Rscript -e 'install.packages("BAS", repos="https://cloud.r-project.org", quiet=TRUE)' || echo "Warning: BAS package installation failed, will need manual installation"
+
 # Install Python dependencies
 COPY requirements-prod.txt /app/
 RUN pip install --no-cache-dir -r requirements-prod.txt
