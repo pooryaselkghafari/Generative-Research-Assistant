@@ -51,6 +51,30 @@ class RowFilteringService:
         return formula
     
     @staticmethod
+    def _quote_complex_columns(df: pd.DataFrame, formula: str) -> str:
+        """
+        Wrap column names that contain spaces or special characters in backticks so
+        pandas can parse them (e.g., `Week Number`).
+        """
+        unsafe_columns = [
+            col for col in df.columns
+            if not re.match(r'^[A-Za-z_]\w*$', str(col))
+        ]
+        
+        def replace_column(match):
+            matched = match.group(0)
+            return f'`{matched}`'
+        
+        for col in sorted(unsafe_columns, key=len, reverse=True):
+            if not col:
+                continue
+            pattern = re.compile(
+                rf'(?<![`])(?<!\w){re.escape(str(col))}(?!\w)(?![`])'
+            )
+            formula = pattern.sub(replace_column, formula)
+        return formula
+    
+    @staticmethod
     def evaluate_condition(df: pd.DataFrame, formula: str) -> pd.Series:
         """
         Evaluate a condition formula on a dataframe.
@@ -64,6 +88,9 @@ class RowFilteringService:
         """
         # Normalize formula
         formula = RowFilteringService.normalize_formula(formula)
+        
+        # Quote any column names that require it (spaces, punctuation, etc.)
+        formula = RowFilteringService._quote_complex_columns(df, formula)
         
         # Add support for statistical functions
         formula_with_functions = add_statistical_functions(df, formula)
