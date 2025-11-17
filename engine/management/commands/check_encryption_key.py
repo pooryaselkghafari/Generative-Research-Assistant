@@ -37,10 +37,17 @@ class Command(BaseCommand):
         # Try to get encryption instance
         try:
             enc = get_encryption()
-            if enc.key:
-                self.stdout.write(self.style.SUCCESS("\n✅ Encryption instance created successfully"))
-            else:
-                self.stdout.write(self.style.ERROR("\n❌ Encryption instance has no key"))
+            # Check if encryption is properly configured by trying to derive a test key
+            try:
+                test_salt = b'0' * 16
+                test_key = enc._derive_key(test_salt, None)
+                if test_key:
+                    self.stdout.write(self.style.SUCCESS("\n✅ Encryption instance created successfully"))
+                    self.stdout.write(f"   Key derivation working: Yes")
+                else:
+                    self.stdout.write(self.style.ERROR("\n❌ Encryption instance key derivation failed"))
+            except Exception as derive_error:
+                self.stdout.write(self.style.ERROR(f"\n❌ Key derivation failed: {derive_error}"))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"\n❌ Failed to create encryption instance: {e}"))
         
