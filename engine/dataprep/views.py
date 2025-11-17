@@ -21,7 +21,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
 from data_prep.date_detection import detect_date_formats, convert_date_column, standardize_date_column
 from models.VARX import adf_check
 
-PREVIEW_ROWS = 50
+INITIAL_PREVIEW_CHUNK = 200
+METADATA_SAMPLE_LIMIT = 1000
 
 VAR_TYPES = [
     ("auto", "Auto"),
@@ -57,9 +58,16 @@ def open_cleaner(request, dataset_id):
         # Pass original path - loader will handle encryption automatically
         columns, column_types = get_dataset_columns_only(path, user_id=request.user.id)
         
-        # Load only a small sample for preview and analysis
-        MAX_PREVIEW_ROWS = 1000  # Limit preview to 1000 rows for large datasets
-        df_sample, _ = load_dataframe_any(path, preview_rows=MAX_PREVIEW_ROWS, user_id=request.user.id)
+        # Load the full dataset so the editor can display every row
+        df_full, _ = load_dataframe_any(path, preview_rows=None, user_id=request.user.id)
+        total_rows = len(df_full)
+        
+        # Use a capped sample for type detection/uniques to avoid heavy operations
+        if total_rows <= METADATA_SAMPLE_LIMIT:
+            df_sample = df_full
+        else:
+            df_sample = df_full.head(METADATA_SAMPLE_LIMIT).copy()
+        df_preview = df_full  # Entire dataset will be available in the UI
         
     except Exception as e:
         response = HttpResponse(f"Failed to read dataset: {e}", status=400, content_type="text/plain")
@@ -84,9 +92,6 @@ def open_cleaner(request, dataset_id):
         
         # Allow numeric for categorical columns (can be converted back) or if not all-string
         all_str_cols[c] = is_all_str and not is_categorical
-    
-    # Create preview after schema detection
-    df_preview = df_sample.head(PREVIEW_ROWS)
     
     # Use detected column types as default, then override with existing schema
     existing_types = column_types.copy()
@@ -130,7 +135,8 @@ def open_cleaner(request, dataset_id):
         except Exception:
             pass
         return str(v)
-    rows = [dict(zip(columns, (_to_str(v) for v in r))) for r in df_preview.itertuples(index=False, name=None)]
+    rows_data = [dict(zip(columns, (_to_str(v) for v in r))) for r in df_preview.itertuples(index=False, name=None)]
+    initial_rows = rows_data[:INITIAL_PREVIEW_CHUNK] if rows_data else []
     
     # compute unique non-null values per column for ranking UI (stringified)
     # Use only sample data to avoid memory issues with large datasets
@@ -142,24 +148,12 @@ def open_cleaner(request, dataset_id):
         except Exception:
             uniques[c] = []
     
-    # Add dataset size information for user awareness
-    try:
-        # Get total row count efficiently
-        if path.endswith('.csv'):
-            # For CSV, count lines efficiently
-            with open(path, 'r', encoding='utf-8') as f:
-                total_rows = sum(1 for line in f) - 1  # Subtract header
-        else:
-            # For other formats, load a small sample to estimate
-            total_rows = len(df_sample)
-    except Exception:
-        total_rows = len(df_sample)
-    
     ctx = {
         "dataset": dataset,
         "columns": columns,
         "columns_json": json.dumps(columns),
-        "rows": rows,
+        "rows_initial": initial_rows,
+        "rows_data": rows_data,
         "var_types": VAR_TYPES,
         "all_str_cols": all_str_cols,
         "uniques_json": json.dumps(uniques),
@@ -168,6 +162,7 @@ def open_cleaner(request, dataset_id):
         "total_rows": total_rows,
         "is_large_dataset": total_rows > 10000,
         "date_columns_with_formats_json": json.dumps(date_columns_with_formats),
+        "row_chunk_size": INITIAL_PREVIEW_CHUNK,
     }
     response = render(request, "dataprep/cleaner.html", ctx)
     # Explicitly allow this view to be loaded in an iframe (for modal display)

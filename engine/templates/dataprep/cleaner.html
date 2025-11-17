@@ -196,8 +196,8 @@
         <div style="flex: 1;">
           <strong>Large Dataset Detected</strong><br>
           This dataset has {{ total_rows|floatformat:0|add:0|floatformat:0 }} rows. 
-          Only the first 1,000 rows are shown in the preview below for performance reasons.
-          The data editor will work with the full dataset when you make changes.
+          All rows are now available in the editor — keep scrolling to load more.
+          Very large datasets may take a moment to render additional rows.
         </div>
         <button 
           type="button" 
@@ -271,7 +271,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for row in rows %}
+          {% for row in rows_initial %}
             <tr>
               {% for col in columns %}
                 <td>{{ row|get_item:col }}</td>
@@ -592,10 +592,15 @@
 
   <script id="uniques-data" type="application/json">{{ uniques_json|safe }}</script>
   <script id="columns-data" type="application/json">{{ columns_json|safe }}</script>
+  {{ rows_data|json_script:"rows-data" }}
+  <script>
+    window.DATASET_ROW_CHUNK = {{ row_chunk_size|default:200 }};
+  </script>
   <script src="{% static 'engine/dataprep/cleaner.js' %}"></script>
   <script>
     // Drop Rows functionality
     let availableColumns = [];
+    let allRowsData = [];
     
     // Sorting functionality
     let currentSort = { column: null, direction: 'asc' };
@@ -1477,11 +1482,23 @@
       return null; // No validation errors
     }
     
+    function rebuildOriginalDataCache() {
+      if (!availableColumns || availableColumns.length === 0 || !allRowsData.length) {
+        return;
+      }
+      originalData = allRowsData.map(rowObj => {
+        return availableColumns.map(col => (rowObj && rowObj[col] !== undefined) ? rowObj[col] : '');
+      });
+    }
+    
     // Sorting functions
     function sortColumn(columnName) {
       console.log('Sorting column:', columnName);
       
       // Store original data if not already stored
+      if (originalData.length === 0) {
+        rebuildOriginalDataCache();
+      }
       if (originalData.length === 0) {
         const tbody = document.querySelector('tbody');
         const rows = Array.from(tbody.querySelectorAll('tr'));
@@ -1551,6 +1568,7 @@
         });
         tbody.appendChild(row);
       });
+      renderedRowCount = data.length;
     }
     
     function updateSortButtons(activeColumn) {
@@ -1570,76 +1588,63 @@
       }
     }
 
-    // Ensure proper scrolling behavior
+    // Infinite scrolling for dataset rows
+    let renderedRowCount = 0;
+    const ROW_CHUNK_SIZE = window.DATASET_ROW_CHUNK || 200;
+    
     document.addEventListener('DOMContentLoaded', function() {
+      const rowsDataEl = document.getElementById('rows-data');
       const scrollContainer = document.querySelector('.scroll-container');
-      if (scrollContainer) {
-        console.log('Setting up scrolling for container:', scrollContainer);
-        
-        // Ensure the container can scroll to the very bottom
-        scrollContainer.style.paddingBottom = '60px';
-        scrollContainer.style.boxSizing = 'border-box';
-        
-        // Ensure the last row is visible by adding extra space
-        const table = scrollContainer.querySelector('table');
-        if (table) {
-          const tbody = table.querySelector('tbody');
-          if (tbody) {
-            console.log('Found tbody with', tbody.children.length, 'rows');
-            
-            // Add extra padding to the last row
-            const lastRow = tbody.lastElementChild;
-            if (lastRow) {
-              lastRow.style.borderBottom = '2px solid #1f2937';
-              lastRow.style.paddingBottom = '30px';
-              lastRow.style.marginBottom = '20px';
-            }
-            
-            // Add an extra empty row for better scrolling
-            const extraRow = document.createElement('tr');
-            extraRow.innerHTML = '<td colspan="' + table.querySelectorAll('th').length + '" style="height: 50px; border: none; background: transparent;"></td>';
-            tbody.appendChild(extraRow);
-            
-            console.log('Added extra row, total rows now:', tbody.children.length);
-          }
+      const tableBody = scrollContainer ? scrollContainer.querySelector('tbody') : null;
+      
+      if (!rowsDataEl || !tableBody) {
+        console.warn('Rows data or table body missing. Infinite scroll disabled.');
+        return;
+      }
+      
+      try {
+        allRowsData = JSON.parse(rowsDataEl.textContent || '[]');
+      } catch (e) {
+        console.error('Failed to parse rows data JSON:', e);
+        allRowsData = [];
+      }
+      
+      renderedRowCount = tableBody.querySelectorAll('tr').length;
+      
+      function appendNextRows() {
+        if (!allRowsData.length || renderedRowCount >= allRowsData.length) {
+          return;
         }
         
-        // Force scroll to bottom multiple times to ensure it works
-        const forceScrollToBottom = () => {
-          const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
-          console.log('Scroll info - Height:', scrollContainer.scrollHeight, 'Client:', scrollContainer.clientHeight, 'Max scroll:', maxScroll);
-          scrollContainer.scrollTop = maxScroll;
-        };
+        const endIndex = Math.min(renderedRowCount + ROW_CHUNK_SIZE, allRowsData.length);
+        const fragment = document.createDocumentFragment();
         
-        // Try multiple times with different delays
-        setTimeout(forceScrollToBottom, 50);
-        setTimeout(forceScrollToBottom, 200);
-        setTimeout(forceScrollToBottom, 500);
+        for (let i = renderedRowCount; i < endIndex; i++) {
+          const rowData = allRowsData[i];
+          const row = document.createElement('tr');
+          
+          availableColumns.forEach(col => {
+            const cell = document.createElement('td');
+            cell.textContent = rowData && rowData[col] !== undefined ? rowData[col] : '';
+            row.appendChild(cell);
+          });
+          
+          fragment.appendChild(row);
+        }
         
-        // Add a scroll event listener to ensure we can reach the bottom
+        tableBody.appendChild(fragment);
+        renderedRowCount = endIndex;
+      }
+      
+      rebuildOriginalDataCache();
+      
+      if (scrollContainer) {
         scrollContainer.addEventListener('scroll', function() {
-          const scrollTop = scrollContainer.scrollTop;
-          const clientHeight = scrollContainer.clientHeight;
-          const scrollHeight = scrollContainer.scrollHeight;
-          const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10;
-          
-          console.log('Scroll event - Top:', scrollTop, 'Client:', clientHeight, 'Height:', scrollHeight, 'At bottom:', isAtBottom);
-          
-          if (isAtBottom) {
-            // Ensure we're truly at the bottom
-            scrollContainer.scrollTop = scrollHeight;
+          const threshold = 200;
+          if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - threshold) {
+            appendNextRows();
           }
         });
-        
-        // Add a resize observer to handle dynamic content changes
-        if (window.ResizeObserver) {
-          const resizeObserver = new ResizeObserver(() => {
-            setTimeout(forceScrollToBottom, 100);
-          });
-          resizeObserver.observe(scrollContainer);
-        }
-      } else {
-        console.error('Scroll container not found');
       }
     });
 
