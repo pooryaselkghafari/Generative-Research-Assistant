@@ -498,7 +498,15 @@ def normalize_columns(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         orig_ext = os.path.splitext(path)[1][1:]  # Get extension without dot
-        _write_dataframe(path, orig_ext)
+        # Check if file is encrypted and handle accordingly
+        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+        
+        if is_encrypted_file(path):
+            # File is encrypted - use encrypted save function
+            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=orig_ext.lower())
+        else:
+            # File is not encrypted - save directly
+            _write_dataframe(path, orig_ext)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -669,7 +677,15 @@ def apply_column_coding(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         orig_ext = os.path.splitext(path)[1][1:]
-        _write_dataframe(path, orig_ext)
+        # Check if file is encrypted and handle accordingly
+        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+        
+        if is_encrypted_file(path):
+            # File is encrypted - use encrypted save function
+            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=orig_ext.lower())
+        else:
+            # File is not encrypted - save directly
+            _write_dataframe(path, orig_ext)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -744,7 +760,15 @@ def merge_columns(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         orig_ext = os.path.splitext(path)[1][1:]
-        _write_dataframe(path, orig_ext)
+        # Check if file is encrypted and handle accordingly
+        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+        
+        if is_encrypted_file(path):
+            # File is encrypted - use encrypted save function
+            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=orig_ext.lower())
+        else:
+            # File is not encrypted - save directly
+            _write_dataframe(path, orig_ext)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -867,7 +891,15 @@ def apply_column_coding(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         orig_ext = os.path.splitext(path)[1][1:]
-        _write_dataframe(path, orig_ext)
+        # Check if file is encrypted and handle accordingly
+        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+        
+        if is_encrypted_file(path):
+            # File is encrypted - use encrypted save function
+            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=orig_ext.lower())
+        else:
+            # File is not encrypted - save directly
+            _write_dataframe(path, orig_ext)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -930,7 +962,15 @@ def drop_columns(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         orig_ext = os.path.splitext(path)[1][1:]
-        _write_dataframe(path, orig_ext)
+        # Check if file is encrypted and handle accordingly
+        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+        
+        if is_encrypted_file(path):
+            # File is encrypted - use encrypted save function
+            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=orig_ext.lower())
+        else:
+            # File is not encrypted - save directly
+            _write_dataframe(path, orig_ext)
         
         return HttpResponse(json.dumps({
             "success": True,
