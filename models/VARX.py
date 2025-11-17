@@ -437,13 +437,25 @@ class VARXModule:
         except (ValueError, TypeError):
             max_lags_to_test = 10
         
-        if var_order is None or var_order == 0 or var_order == 'auto':
-            use_auto_lag_selection = True
-        else:
+        # Check if a manual lag order was provided
+        # If var_order is a valid integer (not None, 0, or 'auto'), use it as manual selection
+        manual_lag_provided = False
+        if var_order is not None and var_order != 0 and var_order != 'auto':
             try:
                 var_order = int(var_order)
+                if var_order > 0:  # Valid positive integer
+                    use_auto_lag_selection = False
+                    manual_lag_provided = True
+                    print(f"DEBUG: Manual lag order provided: {var_order}")
             except (ValueError, TypeError):
-                var_order = 2
+                # Invalid value, fall back to auto-selection
+                var_order = None
+                use_auto_lag_selection = True
+        
+        if not manual_lag_provided:
+            # No valid manual lag provided, use auto-selection
+            use_auto_lag_selection = True
+            var_order = None  # Will be determined by auto-selection
         
         # Prepare data - drop NaN values
         # Use df_work which has interaction terms created
@@ -691,18 +703,32 @@ class VARXModule:
                         row['hqic_optimal'] = True
             
             # Choose best lag by AIC (most common criterion) only if auto-selection was requested
-            if use_auto_lag_selection and lag_selection_results and lag_selection_results.get('aic'):
+            # IMPORTANT: If manual_lag_provided is True, we MUST use that lag and NOT override it
+            if manual_lag_provided:
+                # User manually selected a lag - use it exactly as provided
+                # var_order is already set to the manual value, just ensure it's an integer
+                try:
+                    var_order = int(var_order)
+                except (ValueError, TypeError):
+                    var_order = 1  # Fallback if conversion fails
+                print(f"DEBUG: Using manually specified lag order: {var_order} (NOT auto-selected)")
+                use_auto_lag_selection = False  # Ensure this is False when manual lag is used
+            elif use_auto_lag_selection and lag_selection_results and lag_selection_results.get('aic'):
                 var_order = lag_selection_results['aic']
-                print(f"DEBUG: Optimal lag order selected: {var_order} (by AIC)")
+                print(f"DEBUG: Optimal lag order selected: {var_order} (by AIC - auto-selected)")
             elif use_auto_lag_selection:
                 # Auto-selection failed or no results - use default lag of 1
                 var_order = 1
                 print(f"DEBUG: Auto-selection failed, using default lag order: {var_order}")
             else:
-                # Keep the manually specified lag
-                print(f"DEBUG: Using manually specified lag order: {var_order}")
+                # Fallback: should not happen, but ensure var_order is set
+                try:
+                    var_order = int(var_order) if var_order is not None else 1
+                except (ValueError, TypeError):
+                    var_order = 1
+                print(f"DEBUG: Using lag order: {var_order} (fallback)")
             
-            # Ensure var_order is an integer (not string or None)
+            # Final check: Ensure var_order is an integer (not string or None)
             try:
                 var_order = int(var_order)
             except (ValueError, TypeError):

@@ -189,8 +189,20 @@ class AnalysisExecutionService:
         except (ValueError, TypeError):
             max_lags = 10
         
-        if var_order_input and var_order_input != 'auto' and var_order_input.isdigit():
-            var_order = int(var_order_input)
+        # Handle var_order input - preserve manual selection
+        if var_order_input and var_order_input != 'auto':
+            try:
+                # Try to convert to integer
+                var_order = int(var_order_input)
+                if var_order > 0:
+                    # Valid positive integer - use as manual selection
+                    print(f"DEBUG: Manual VAR lag order provided: {var_order}")
+                else:
+                    # Invalid (0 or negative) - use auto
+                    var_order = 'auto'
+            except (ValueError, TypeError):
+                # Not a valid integer - use auto
+                var_order = 'auto'
         else:
             var_order = 'auto'
         
