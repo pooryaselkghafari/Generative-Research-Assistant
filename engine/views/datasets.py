@@ -350,13 +350,9 @@ def _save_filtered_dataset(df_filtered, file_path, user_id=None):
     import pandas as pd
     import os
     
-    def _detect_format(path):
-        base, ext = os.path.splitext(path)
-        if ext == '.encrypted':
-            base, ext = os.path.splitext(base)
-        return (ext or '').lower().lstrip('.')
+    from engine.dataprep.views import _infer_dataset_format
     
-    file_format = _detect_format(file_path) or 'csv'
+    file_format = _infer_dataset_format(file_path)
     
     if is_encrypted_file(file_path):
         if user_id is None:
