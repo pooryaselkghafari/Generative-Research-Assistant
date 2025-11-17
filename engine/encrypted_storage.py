@@ -47,8 +47,33 @@ def store_encrypted_file(uploaded_file, user_id=None, destination_path=None):
             for chunk in uploaded_file.chunks():
                 tmp_file.write(chunk)
         
+        # Get original file size before encryption
+        original_size = os.path.getsize(tmp_path) if os.path.exists(tmp_path) else 0
+        
         # Encrypt the file
         enc.encrypt_file(tmp_path, encrypted_path, user_id)
+        
+        # Verify encrypted file was created and has reasonable size
+        if not os.path.exists(encrypted_path):
+            raise ValueError(f"Encryption failed: encrypted file was not created at {encrypted_path}")
+        
+        encrypted_size = os.path.getsize(encrypted_path)
+        
+        # Encrypted file should be at least: salt (16) + nonce (12) + auth tag (16) = 44 bytes minimum
+        min_encrypted_size = 44
+        if encrypted_size < min_encrypted_size:
+            raise ValueError(
+                f"Encryption failed: encrypted file is too small ({encrypted_size} bytes). "
+                f"Minimum expected: {min_encrypted_size} bytes. File may be corrupted."
+            )
+        
+        # For files larger than 1KB, encrypted size should be roughly original + overhead
+        # (salt + nonce + auth tags add overhead, so encrypted should be >= original)
+        if original_size > 1024 and encrypted_size < original_size:
+            raise ValueError(
+                f"Encryption failed: encrypted file ({encrypted_size} bytes) is smaller than "
+                f"original ({original_size} bytes). This should not happen."
+            )
         
         return encrypted_path
     finally:
