@@ -49,9 +49,20 @@ def store_encrypted_file(uploaded_file, user_id=None, destination_path=None):
         
         # Get original file size before encryption
         original_size = os.path.getsize(tmp_path) if os.path.exists(tmp_path) else 0
+        if original_size == 0:
+            raise ValueError("Uploaded file is empty")
         
         # Encrypt the file
-        enc.encrypt_file(tmp_path, encrypted_path, user_id)
+        try:
+            enc.encrypt_file(tmp_path, encrypted_path, user_id)
+        except Exception as encrypt_error:
+            # If encryption fails, clean up and re-raise
+            if os.path.exists(encrypted_path):
+                try:
+                    os.unlink(encrypted_path)
+                except:
+                    pass
+            raise ValueError(f"Encryption process failed: {encrypt_error}") from encrypt_error
         
         # Verify encrypted file was created and has reasonable size
         if not os.path.exists(encrypted_path):
@@ -66,6 +77,19 @@ def store_encrypted_file(uploaded_file, user_id=None, destination_path=None):
                 f"Encryption failed: encrypted file is too small ({encrypted_size} bytes). "
                 f"Minimum expected: {min_encrypted_size} bytes. File may be corrupted."
             )
+        
+        # Verify the file is actually encrypted (not plaintext)
+        # Encrypted files should start with random bytes (salt), not readable text
+        with open(encrypted_path, 'rb') as check_file:
+            first_bytes = check_file.read(32)
+            # Check if first bytes look like plaintext (all printable ASCII)
+            if all(32 <= b < 127 for b in first_bytes[:16]):
+                # This looks like plaintext - encryption may have failed
+                first_text = first_bytes[:50].decode('utf-8', errors='ignore')
+                raise ValueError(
+                    f"Encryption validation failed: file appears to contain plaintext data "
+                    f"(starts with: {first_text[:30]}...). Encryption may have failed silently."
+                )
         
         # For files larger than 1KB, encrypted size should be roughly original + overhead
         # (salt + nonce + auth tags add overhead, so encrypted should be >= original)
