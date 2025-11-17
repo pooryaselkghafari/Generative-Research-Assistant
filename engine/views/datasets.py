@@ -282,7 +282,7 @@ def preview_drop_rows(request, dataset_id):
     try:
         # Security: Only allow access to user's own datasets
         dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
         
         data = json.loads(request.body)
         conditions = data.get('conditions', [])
@@ -315,7 +315,7 @@ def apply_drop_rows(request, dataset_id):
     try:
         # Security: Only allow access to user's own datasets
         dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
         
         data = json.loads(request.body)
         conditions = data.get('conditions', [])

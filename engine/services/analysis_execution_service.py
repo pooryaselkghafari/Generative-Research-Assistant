@@ -40,7 +40,7 @@ class AnalysisExecutionService:
         
         # Get dataset
         dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
         
         # Import BMA module
         from models.BMA import BMAModule
@@ -98,7 +98,7 @@ class AnalysisExecutionService:
         
         # Get dataset
         dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
         
         # Import ANOVA module
         from models.ANOVA import ANOVAModule
@@ -175,7 +175,7 @@ class AnalysisExecutionService:
         
         # Get dataset
         dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
         
         # Import VARX module
         from models.VARX import VARXModule

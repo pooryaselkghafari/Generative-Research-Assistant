@@ -49,7 +49,7 @@ def run_analysis(request):
     dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
 
     try:
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
         
         # Check if dataset is very large and warn user
         if len(df) > 100000:  # More than 100k rows
@@ -152,7 +152,7 @@ def calculate_summary_stats(request, session_id):
             return JsonResponse({'error': 'No variables selected'}, status=400)
         
         # Load dataset
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
         
         # Calculate summary statistics for selected variables
         summary_stats = {}
@@ -443,7 +443,7 @@ def add_model_errors_to_dataset(request, session_id):
         dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
         
         # Load the dataset
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
         
         # Get fitted models for all equations
         try:

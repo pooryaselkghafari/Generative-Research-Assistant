@@ -33,7 +33,8 @@ class VisualizationService:
         """
         import numpy as np
         
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        user_id = dataset.user.id if dataset.user else None
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=user_id)
         
         # Get column information
         numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -77,7 +78,8 @@ class VisualizationService:
         Returns:
             Tuple of (x_vars, y_vars) lists
         """
-        df, schema_types, schema_orders = _read_dataset_file(session.dataset.file_path)
+        user_id = session.dataset.user.id if session.dataset.user else None
+        df, schema_types, schema_orders = _read_dataset_file(session.dataset.file_path, user_id=user_id)
         
         # Get continuous variables from the equation (default behavior)
         continuous_vars = _get_continuous_variables_from_formula(df, session.formula)
@@ -132,7 +134,8 @@ class VisualizationService:
         Returns:
             Heatmap JSON string or None on error
         """
-        df, schema_types, schema_orders = _read_dataset_file(session.dataset.file_path)
+        user_id = session.dataset.user.id if session.dataset.user else None
+        df, schema_types, schema_orders = _read_dataset_file(session.dataset.file_path, user_id=user_id)
         return _build_correlation_heatmap_json(df, x_vars, y_vars, options)
     
     @staticmethod

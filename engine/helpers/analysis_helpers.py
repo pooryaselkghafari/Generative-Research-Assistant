@@ -370,7 +370,8 @@ def _prepare_template_context(sess, dataset, results, cols, model_table_matrix, 
     
     # Get dataset columns for help text
     try:
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        user_id = dataset.user.id if dataset.user else None
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=user_id)
         dataset_columns = list(df.columns)
         print(f"DEBUG: Dataset columns after update: {dataset_columns}")
         print(f"DEBUG: Summary stats keys: {list(results.get('summary_stats', {}).keys())}")

@@ -39,7 +39,8 @@ class DatasetMergeService:
                 datasets.append(dataset)
                 
                 # Read dataset file
-                df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+                user_id = dataset.user.id if dataset.user else None
+                df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=user_id)
                 dataframes.append(df)
                 
             except Exception as e:

@@ -117,57 +117,94 @@ def _looks_ordered(values):
     
     return False
 
-def _read_dataset_file(file_path):
-    """Helper function to read dataset files (CSV or Excel) with schema loading"""
-    file_extension = file_path.lower().split('.')[-1]
+def _read_dataset_file(file_path, user_id=None):
+    """
+    Helper function to read dataset files (CSV or Excel) with schema loading.
+    Handles encrypted files automatically if user_id is provided.
     
-    # Read the file
-    if file_extension in ['xlsx', 'xlsm']:
-        df = pd.read_excel(file_path, engine='openpyxl')
-    elif file_extension == 'xls':
-        # Try openpyxl first, then xlrd for legacy .xls files
-        try:
-            df = pd.read_excel(file_path, engine='openpyxl')
-        except Exception:
-            df = pd.read_excel(file_path, engine='xlrd')
-    elif file_extension == 'csv':
-        df = pd.read_csv(file_path)
-    else:
-        # Try CSV first, then Excel as fallback
-        try:
-            df = pd.read_csv(file_path)
-        except:
-            # Try Excel with openpyxl engine
-            try:
-                df = pd.read_excel(file_path, engine='openpyxl')
-            except Exception:
-                df = pd.read_excel(file_path, engine='xlrd')
-    
-    # Auto-detect and assign column types
-    detected_types = _auto_detect_column_types(df)
-    
-    # Load schema if it exists
-    schema_types = {}
-    schema_orders = {}
+    Args:
+        file_path: Path to the dataset file (may be encrypted with .encrypted extension)
+        user_id: Optional user ID for decrypting encrypted files
+        
+    Returns:
+        tuple: (DataFrame, column_types_dict, schema_orders_dict)
+    """
+    # Check if file is encrypted and handle decryption
+    from engine.encrypted_storage import is_encrypted_file, get_decrypted_path
+    decrypted_path = None
     try:
-        schema_path = os.path.splitext(file_path)[0] + ".schema.json"
-        if os.path.exists(schema_path):
-            with open(schema_path, 'r', encoding='utf-8') as f:
-                schema = json.load(f)
-            schema_types = schema.get('types', {})
-            schema_orders = schema.get('orders', {})
-    except Exception:
-        pass
-    
-    # Apply saved types if schema exists
-    if schema_types:
-        df = _apply_types(df, schema_types, schema_orders)
-    
-    # Merge detected types with schema types (schema takes precedence)
-    final_types = detected_types.copy()
-    final_types.update(schema_types)
-    
-    return df, final_types, schema_orders
+        path_str = str(file_path)
+        if is_encrypted_file(path_str):
+            # Get temporary decrypted file path
+            if user_id is None:
+                raise ValueError("user_id is required for decrypting encrypted files. The file appears to be encrypted but no user_id was provided.")
+            try:
+                decrypted_path = get_decrypted_path(path_str, user_id=user_id)
+                working_path = decrypted_path
+            except Exception as decrypt_error:
+                raise RuntimeError(f"Failed to decrypt file {path_str}: {decrypt_error}") from decrypt_error
+        else:
+            working_path = path_str
+        
+        # Determine file extension from working path (decrypted file has original extension)
+        file_extension = working_path.lower().split('.')[-1]
+        
+        # Read the file
+        if file_extension in ['xlsx', 'xlsm']:
+            df = pd.read_excel(working_path, engine='openpyxl')
+        elif file_extension == 'xls':
+            # Try openpyxl first, then xlrd for legacy .xls files
+            try:
+                df = pd.read_excel(working_path, engine='openpyxl')
+            except Exception:
+                df = pd.read_excel(working_path, engine='xlrd')
+        elif file_extension == 'csv':
+            df = pd.read_csv(working_path)
+        else:
+            # Try CSV first, then Excel as fallback
+            try:
+                df = pd.read_csv(working_path)
+            except:
+                # Try Excel with openpyxl engine
+                try:
+                    df = pd.read_excel(working_path, engine='openpyxl')
+                except Exception:
+                    df = pd.read_excel(working_path, engine='xlrd')
+        
+        # Auto-detect and assign column types
+        detected_types = _auto_detect_column_types(df)
+        
+        # Load schema if it exists
+        # Use original path (not decrypted path) for schema file location
+        schema_types = {}
+        schema_orders = {}
+        try:
+            schema_path = os.path.splitext(path_str)[0] + ".schema.json"
+            if os.path.exists(schema_path):
+                with open(schema_path, 'r', encoding='utf-8') as f:
+                    schema = json.load(f)
+                schema_types = schema.get('types', {})
+                schema_orders = schema.get('orders', {})
+        except Exception:
+            pass
+        
+        # Apply saved types if schema exists
+        if schema_types:
+            df = _apply_types(df, schema_types, schema_orders)
+        
+        # Merge detected types with schema types (schema takes precedence)
+        final_types = detected_types.copy()
+        final_types.update(schema_types)
+        
+        result = (df, final_types, schema_orders)
+        return result
+    finally:
+        # Clean up temporary decrypted file if it was created
+        if decrypted_path and os.path.exists(decrypted_path):
+            try:
+                os.unlink(decrypted_path)
+            except Exception:
+                pass
 
 
 def _apply_types(df: pd.DataFrame, new_types: dict, orders: dict) -> pd.DataFrame:

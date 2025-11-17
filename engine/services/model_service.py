@@ -29,7 +29,8 @@ class ModelService:
             List of equation result dictionaries
         """
         # Load the dataset
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
+        user_id = dataset.user.id if dataset.user else None
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=user_id)
         
         # Check if this is a multi-equation regression
         is_multi_equation = ModelService._check_multi_equation(session)

@@ -137,7 +137,8 @@ class IRFService:
         """
         try:
             # Load dataset and model
-            df, column_types, schema_orders = _read_dataset_file(session.dataset.file_path)
+            user_id = session.dataset.user.id if session.dataset.user else None
+            df, column_types, schema_orders = _read_dataset_file(session.dataset.file_path, user_id=user_id)
             model_results, endog_data, dependent_vars = IRFService._load_varx_model_results(session, df)
             
             if model_results is None or endog_data is None:
@@ -531,7 +532,8 @@ class IRFService:
         """
         try:
             # Load dataset and model
-            df, column_types, schema_orders = _read_dataset_file(session.dataset.file_path)
+            user_id = session.dataset.user.id if session.dataset.user else None
+            df, column_types, schema_orders = _read_dataset_file(session.dataset.file_path, user_id=user_id)
             model_results, endog_data, dependent_vars = IRFService._load_varx_model_results(session, df)
             
             if model_results is None or endog_data is None:
