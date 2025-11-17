@@ -1326,11 +1326,28 @@ Examples
     container.removeChild(mirrorDiv);
     
     // Position the dropdown
+    const dropdownWidth = 220;
     dropdown.style.position = 'absolute';
-    dropdown.style.left = (textareaLeftInContainer + paddingLeft + borderLeft + leftOffset) + 'px';
-    dropdown.style.top = (textareaTopInContainer + paddingTop + borderTop + topOffset - scrollTop) + 'px';
-    dropdown.style.width = '200px'; // Fixed width for better appearance
-    dropdown.style.maxWidth = (equationBox.offsetWidth - leftOffset) + 'px';
+    dropdown.style.width = dropdownWidth + 'px'; // Fixed width for better appearance
+    dropdown.style.maxWidth = dropdownWidth + 'px';
+
+    const estimatedItemHeight = 36; // approx height per item
+    const visibleItems = Math.min(matches.length, 6);
+    const estimatedDropdownHeight = visibleItems * estimatedItemHeight + 16; // padding
+
+    const containerWidth = equationBox.offsetWidth;
+    const containerHeight = equationBox.offsetHeight;
+
+    let relativeLeft = paddingLeft + borderLeft + leftOffset;
+    const maxRelativeLeft = containerWidth - dropdownWidth - 12;
+    relativeLeft = Math.max(8, Math.min(relativeLeft, maxRelativeLeft));
+
+    let relativeTop = paddingTop + borderTop + topOffset - scrollTop;
+    const maxRelativeTop = containerHeight - estimatedDropdownHeight - 12;
+    relativeTop = Math.max(8, Math.min(relativeTop, maxRelativeTop));
+
+    dropdown.style.left = (textareaLeftInContainer + relativeLeft) + 'px';
+    dropdown.style.top = (textareaTopInContainer + relativeTop) + 'px';
     dropdown.style.zIndex = '10000'; // Ensure it's on top
     dropdown.style.backgroundColor = 'white'; // Ensure visibility
     dropdown.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'; // Ensure visibility
