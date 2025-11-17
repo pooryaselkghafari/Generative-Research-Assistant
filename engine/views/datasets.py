@@ -61,6 +61,7 @@ def get_dataset_variables(request, dataset_id):
             }, status=404)
         
         # Pass original path - loader will handle encryption automatically
+        # The loader function handles decryption and cleanup internally
         variables, column_types = get_dataset_columns_only(path, user_id=request.user.id)
         return JsonResponse({
             'success': True,
@@ -68,23 +69,44 @@ def get_dataset_variables(request, dataset_id):
             'column_types': column_types,
             'dataset_name': dataset.name
         })
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         return JsonResponse({
             'success': False,
             'error': f'Dataset file not found: {dataset.name}'
         }, status=404)
-    except Exception as e:
+    except ValueError as e:
+        # Handle encryption-related errors (e.g., wrong key, wrong user_id)
+        error_msg = str(e)
+        if 'decrypt' in error_msg.lower() or 'encryption' in error_msg.lower():
+            return JsonResponse({
+                'success': False,
+                'error': f'Failed to decrypt dataset: {error_msg}. Please check encryption settings or re-upload the file.'
+            }, status=500)
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': error_msg
+        }, status=400)
+    except RuntimeError as e:
+        # Handle runtime errors (often encryption-related)
+        error_msg = str(e)
+        if 'decrypt' in error_msg.lower() or 'encryption' in error_msg.lower():
+            return JsonResponse({
+                'success': False,
+                'error': f'Failed to decrypt dataset: {error_msg}. Please check encryption settings or re-upload the file.'
+            }, status=500)
+        return JsonResponse({
+            'success': False,
+            'error': error_msg
         }, status=500)
-    finally:
-        # Clean up temporary decrypted file if it was created
-        if decrypted_path and os.path.exists(decrypted_path):
-            try:
-                os.unlink(decrypted_path)
-            except:
-                pass
+    except Exception as e:
+        # Log the full error for debugging
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"ERROR in get_dataset_variables: {error_details}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Failed to read dataset: {str(e)}'
+        }, status=500)
 
 
 
