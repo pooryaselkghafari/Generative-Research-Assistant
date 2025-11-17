@@ -182,6 +182,72 @@ def is_encrypted_file(file_path):
     return file_path.endswith('.encrypted')
 
 
+def save_encrypted_dataframe(df, encrypted_path, user_id=None, file_format='csv'):
+    """
+    Save a DataFrame to an encrypted file, preserving encryption if the file is already encrypted.
+    
+    Args:
+        df: pandas DataFrame to save
+        encrypted_path: Path to encrypted file (with .encrypted extension)
+        user_id: User ID for encryption
+        file_format: Format to save ('csv', 'xlsx', 'xls', 'tsv', 'json')
+        
+    Returns:
+        str: Path to the encrypted file
+    """
+    import pandas as pd
+    import tempfile
+    
+    # Create temporary file for unencrypted data
+    original_ext = os.path.splitext(encrypted_path.replace('.encrypted', ''))[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as tmp_file:
+        tmp_path = tmp_file.name
+    
+    try:
+        # Save DataFrame to temporary file in the requested format
+        if file_format in ('csv', ''):
+            df.to_csv(tmp_path, index=False)
+        elif file_format in ('xlsx', 'xls'):
+            df.to_excel(tmp_path, index=False, engine='openpyxl')
+        elif file_format == 'tsv':
+            df.to_csv(tmp_path, index=False, sep='\t')
+        elif file_format == 'json':
+            df.to_json(tmp_path, orient='records')
+        else:
+            df.to_csv(tmp_path, index=False)
+        
+        # Encrypt the temporary file to the final encrypted path
+        enc = get_encryption()
+        enc.encrypt_file(tmp_path, encrypted_path, user_id)
+        
+        # Verify encryption succeeded
+        if not os.path.exists(encrypted_path):
+            raise ValueError(f"Failed to create encrypted file at {encrypted_path}")
+        
+        encrypted_size = os.path.getsize(encrypted_path)
+        if encrypted_size < 44:  # Minimum size for encrypted file
+            raise ValueError(f"Encrypted file is too small ({encrypted_size} bytes)")
+        
+        # Verify it's actually encrypted (not plaintext)
+        with open(encrypted_path, 'rb') as check_file:
+            first_bytes = check_file.read(32)
+            if all(32 <= b < 127 for b in first_bytes[:16]):
+                first_text = first_bytes[:50].decode('utf-8', errors='ignore')
+                raise ValueError(
+                    f"Encryption validation failed: file appears to contain plaintext data "
+                    f"(starts with: {first_text[:30]}...). Encryption may have failed."
+                )
+        
+        return encrypted_path
+    finally:
+        # Clean up temporary unencrypted file
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
 def get_decrypted_path(encrypted_path, user_id=None):
     """
     Get a temporary decrypted file path for processing.

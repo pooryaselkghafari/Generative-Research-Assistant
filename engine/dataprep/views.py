@@ -337,8 +337,17 @@ def apply_cleaning(request, dataset_id: int):
     if save_mode == "overwrite" and path:
         # Overwrite original file using its extension
         try:
+            from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+            
             orig_ext = os.path.splitext(path)[1].lstrip(".")
-            _write_dataframe(path, orig_ext)
+            file_format = orig_ext.lower() if orig_ext else 'csv'
+            
+            if is_encrypted_file(path):
+                # File is encrypted - use encrypted save function
+                save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
+            else:
+                # File is not encrypted - save directly
+                _write_dataframe(path, orig_ext)
             # save schema sidecar next to original file
             schema = {"types": types_map, "orders": orders_map}
             schema_path = os.path.splitext(path)[0] + ".schema.json"
@@ -1037,17 +1046,27 @@ def convert_date_format_api(request, dataset_id):
         converted_sample = df[column_name].head(10).tolist()
         
         # Save the updated dataset
-        orig_ext = os.path.splitext(path)[1][1:]
-        if orig_ext in ("csv", ""):
-            df.to_csv(path, index=False)
-        elif orig_ext in ("xlsx", "xls"):
-            df.to_excel(path, index=False)
-        elif orig_ext == "tsv":
-            df.to_csv(path, index=False, sep="\t")
-        elif orig_ext == "json":
-            df.to_json(path, orient="records")
+        # Check if file is encrypted and handle accordingly
+        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+        
+        orig_ext = os.path.splitext(path)[1][1:] if os.path.splitext(path)[1] else ''
+        file_format = orig_ext.lower() if orig_ext else 'csv'
+        
+        if is_encrypted_file(path):
+            # File is encrypted - use encrypted save function
+            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
         else:
-            df.to_csv(path, index=False)
+            # File is not encrypted - save directly
+            if file_format in ("csv", ""):
+                df.to_csv(path, index=False)
+            elif file_format in ("xlsx", "xls"):
+                df.to_excel(path, index=False, engine='openpyxl')
+            elif file_format == "tsv":
+                df.to_csv(path, index=False, sep="\t")
+            elif file_format == "json":
+                df.to_json(path, orient="records")
+            else:
+                df.to_csv(path, index=False)
         
         # Update schema to mark this column as date (standardized)
         # This prevents the modal from showing again
@@ -1168,17 +1187,27 @@ def fix_stationary(request, dataset_id):
                 df[new_column_name] = np.log(df[variable_name])
         
         # Save updated dataset
-        orig_ext = os.path.splitext(path)[1][1:]
-        if orig_ext in ("csv", ""):
-            df.to_csv(path, index=False)
-        elif orig_ext in ("xlsx", "xls"):
-            df.to_excel(path, index=False)
-        elif orig_ext == "tsv":
-            df.to_csv(path, index=False, sep="\t")
-        elif orig_ext == "json":
-            df.to_json(path, orient="records")
+        # Check if file is encrypted and handle accordingly
+        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+        
+        orig_ext = os.path.splitext(path)[1][1:] if os.path.splitext(path)[1] else ''
+        file_format = orig_ext.lower() if orig_ext else 'csv'
+        
+        if is_encrypted_file(path):
+            # File is encrypted - use encrypted save function
+            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
         else:
-            df.to_csv(path, index=False)
+            # File is not encrypted - save directly
+            if file_format in ("csv", ""):
+                df.to_csv(path, index=False)
+            elif file_format in ("xlsx", "xls"):
+                df.to_excel(path, index=False, engine='openpyxl')
+            elif file_format == "tsv":
+                df.to_csv(path, index=False, sep="\t")
+            elif file_format == "json":
+                df.to_json(path, orient="records")
+            else:
+                df.to_csv(path, index=False)
         
         # Re-run ADF test on the new column
         adf_result = adf_check(df[new_column_name], new_column_name)
