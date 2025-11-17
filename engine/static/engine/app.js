@@ -1233,47 +1233,9 @@ Examples
       return;
     }
     
-    // Calculate position based on cursor position
+    // Calculate position based on cursor position - improved for multi-line support
     const equationBox = document.getElementById('equationBox');
     const textBeforeCursor = equationBox.value.substring(0, cursorPosition);
-    
-    // Create a temporary element to measure text width
-    const tempDiv = document.createElement('div');
-    tempDiv.style.position = 'absolute';
-    tempDiv.style.visibility = 'hidden';
-    tempDiv.style.whiteSpace = 'pre-wrap';
-    tempDiv.style.font = window.getComputedStyle(equationBox).font;
-    tempDiv.style.padding = window.getComputedStyle(equationBox).padding;
-    tempDiv.style.border = window.getComputedStyle(equationBox).border;
-    tempDiv.style.width = equationBox.offsetWidth + 'px';
-    tempDiv.textContent = textBeforeCursor;
-    
-    document.body.appendChild(tempDiv);
-    
-    // Get the position of the cursor
-    const textHeight = tempDiv.offsetHeight;
-    const textWidth = tempDiv.offsetWidth;
-    
-    // Find the last newline before cursor
-    const lastNewline = textBeforeCursor.lastIndexOf('\n');
-    const lineStart = lastNewline + 1;
-    const currentLine = textBeforeCursor.substring(lineStart);
-    
-    // Create another temp element for just the current line
-    const lineDiv = document.createElement('div');
-    lineDiv.style.position = 'absolute';
-    lineDiv.style.visibility = 'hidden';
-    lineDiv.style.whiteSpace = 'pre';
-    lineDiv.style.font = window.getComputedStyle(equationBox).font;
-    lineDiv.textContent = currentLine;
-    document.body.appendChild(lineDiv);
-    
-    const lineWidth = lineDiv.offsetWidth;
-    const lineHeight = lineDiv.offsetHeight;
-    
-    // Clean up temp elements
-    document.body.removeChild(tempDiv);
-    document.body.removeChild(lineDiv);
     
     // Find the container with position: relative (the parent that contains the dropdown)
     let container = equationBox.parentElement;
@@ -1286,50 +1248,87 @@ Examples
       container = equationBox.parentElement;
     }
     
-    const textareaRect = equationBox.getBoundingClientRect();
-    const containerRect = container ? container.getBoundingClientRect() : textareaRect;
-    
-    console.log('DEBUG: textareaRect:', textareaRect);
-    console.log('DEBUG: containerRect:', containerRect);
-    console.log('DEBUG: container element:', container);
-    console.log('DEBUG: lineWidth:', lineWidth);
-    console.log('DEBUG: lineHeight:', lineHeight);
-    console.log('DEBUG: lastNewline:', lastNewline);
-    console.log('DEBUG: textHeight:', textHeight);
-    
-    // Count the number of lines before the cursor
-    const lineCount = (textBeforeCursor.match(/\n/g) || []).length;
-    console.log('DEBUG: lineCount (number of newlines before cursor):', lineCount);
-    
-    // Position the dropdown
-    const leftOffset = lineWidth + 10; // 10px offset from the text
-    
-    // Calculate top offset: account for textarea padding + line number * line height
+    // Create a mirror div that exactly matches the textarea's styling
+    const mirrorDiv = document.createElement('div');
     const textareaStyle = window.getComputedStyle(equationBox);
-    const paddingTop = parseInt(textareaStyle.paddingTop) || 0;
-    const borderTop = parseInt(textareaStyle.borderTopWidth) || 0;
+    mirrorDiv.style.position = 'absolute';
+    mirrorDiv.style.visibility = 'hidden';
+    mirrorDiv.style.whiteSpace = 'pre-wrap';
+    mirrorDiv.style.wordWrap = 'break-word';
+    mirrorDiv.style.font = textareaStyle.font;
+    mirrorDiv.style.fontSize = textareaStyle.fontSize;
+    mirrorDiv.style.fontFamily = textareaStyle.fontFamily;
+    mirrorDiv.style.fontWeight = textareaStyle.fontWeight;
+    mirrorDiv.style.lineHeight = textareaStyle.lineHeight;
+    mirrorDiv.style.padding = textareaStyle.padding;
+    mirrorDiv.style.border = textareaStyle.border;
+    mirrorDiv.style.borderLeftWidth = textareaStyle.borderLeftWidth;
+    mirrorDiv.style.borderRightWidth = textareaStyle.borderRightWidth;
+    mirrorDiv.style.width = equationBox.offsetWidth + 'px';
+    mirrorDiv.style.boxSizing = textareaStyle.boxSizing;
+    
+    // Split text at cursor and insert a span marker at cursor position
+    const textAfterCursor = equationBox.value.substring(cursorPosition);
+    const textParts = textBeforeCursor.split('\n');
+    const lastLineIndex = textParts.length - 1;
+    const currentLineText = textParts[lastLineIndex];
+    
+    // Create the mirror content with a cursor marker
+    let mirrorContent = '';
+    for (let i = 0; i < textParts.length; i++) {
+      if (i === lastLineIndex) {
+        // Insert cursor marker in the current line
+        mirrorContent += currentLineText + '<span id="cursor-marker" style="border-left: 2px solid transparent;">|</span>';
+      } else {
+        mirrorContent += textParts[i] + '\n';
+      }
+    }
+    
+    mirrorDiv.innerHTML = mirrorContent;
+    container.appendChild(mirrorDiv);
+    
+    // Find the cursor marker and get its position
+    const cursorMarker = mirrorDiv.querySelector('#cursor-marker');
+    if (!cursorMarker) {
+      container.removeChild(mirrorDiv);
+      return; // Fallback if marker not found
+    }
+    
+    const markerRect = cursorMarker.getBoundingClientRect();
+    const mirrorRect = mirrorDiv.getBoundingClientRect();
+    const textareaRect = equationBox.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    
+    // Calculate position relative to container
+    // The marker's position relative to mirror div
+    const markerTopInMirror = markerRect.top - mirrorRect.top;
+    const markerLeftInMirror = markerRect.left - mirrorRect.left;
+    
+    // Account for textarea's scroll position
     const scrollTop = equationBox.scrollTop || 0;
+    const scrollLeft = equationBox.scrollLeft || 0;
     
-    // Calculate the visual line position within the textarea
-    // This is the position from the top of the textarea (including padding)
-    const visualTopInTextarea = paddingTop + borderTop + (lineCount * lineHeight) - scrollTop + lineHeight;
-    
-    console.log('DEBUG: paddingTop:', paddingTop);
-    console.log('DEBUG: borderTop:', borderTop);
-    console.log('DEBUG: scrollTop:', scrollTop);
-    console.log('DEBUG: visualTopInTextarea:', visualTopInTextarea);
-    
-    // Position relative to the container
-    // Calculate the textarea's position relative to the container
+    // Calculate textarea's position relative to container
     const textareaTopInContainer = textareaRect.top - containerRect.top;
     const textareaLeftInContainer = textareaRect.left - containerRect.left;
     
-    console.log('DEBUG: textareaTopInContainer:', textareaTopInContainer);
-    console.log('DEBUG: textareaLeftInContainer:', textareaLeftInContainer);
+    // Get textarea padding and border
+    const paddingTop = parseInt(textareaStyle.paddingTop) || 0;
+    const paddingLeft = parseInt(textareaStyle.paddingLeft) || 0;
+    const borderTop = parseInt(textareaStyle.borderTopWidth) || 0;
+    const borderLeft = parseInt(textareaStyle.borderLeftWidth) || 0;
     
+    // Calculate final position: textarea position + padding + marker position - scroll
+    const leftOffset = markerLeftInMirror + 10; // 10px offset from cursor
+    const topOffset = markerTopInMirror + 2; // Slight offset below cursor
+    
+    // Clean up mirror div
+    container.removeChild(mirrorDiv);
+    
+    // Position the dropdown
     dropdown.style.position = 'absolute';
-    dropdown.style.left = (textareaLeftInContainer + leftOffset) + 'px';
-    dropdown.style.top = (textareaTopInContainer + visualTopInTextarea) + 'px';
+    dropdown.style.left = (textareaLeftInContainer + paddingLeft + borderLeft + leftOffset) + 'px';
+    dropdown.style.top = (textareaTopInContainer + paddingTop + borderTop + topOffset - scrollTop) + 'px';
     dropdown.style.width = '200px'; // Fixed width for better appearance
     dropdown.style.maxWidth = (equationBox.offsetWidth - leftOffset) + 'px';
     dropdown.style.zIndex = '10000'; // Ensure it's on top
