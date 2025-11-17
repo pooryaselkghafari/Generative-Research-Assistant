@@ -119,11 +119,31 @@ def run_bma_analysis_bas(df, response_var, predictor_vars, categorical_vars=None
         os.makedirs(media_path, exist_ok=True)
         
         r_code = f'''
-        # Install and load BAS package
-        if (!requireNamespace("BAS", quietly = TRUE)) {{
-          install.packages("BAS", repos="https://cloud.r-project.org")
-        }}
-        library(BAS)
+        # Check if R can install packages, then install and load BAS package
+        tryCatch({{
+          if (!requireNamespace("BAS", quietly = TRUE)) {{
+            # Try to install BAS package
+            install_result <- tryCatch({{
+              install.packages("BAS", repos="https://cloud.r-project.org", quiet = TRUE)
+            }}, error = function(e) {{
+              stop(paste("Failed to install BAS package:", e$message, 
+                         "\\nPlease ensure R is installed and you have write permissions to the R library directory.",
+                         "\\nYou can install BAS manually in R with: install.packages(\\"BAS\\")"))
+            }})
+            
+            # Check if installation was successful
+            if (!requireNamespace("BAS", quietly = TRUE)) {{
+              stop("BAS package installation completed but package is still not available.")
+            }}
+          }}
+          library(BAS)
+        }}, error = function(e) {{
+          stop(paste("BMA Analysis Error:", e$message,
+                     "\\n\\nTroubleshooting:",
+                     "\\n1. Ensure R is installed: R --version",
+                     "\\n2. Install BAS package manually: Rscript -e 'install.packages(\\"BAS\\", repos=\\"https://cloud.r-project.org\\")'",
+                     "\\n3. Check R library permissions: Rscript -e '.libPaths()'"))
+        }})
         
         # Define plotting function matching the R template
         plot_bma_results <- function(file_path, model_name, bma_model, label_map = NULL) {{
