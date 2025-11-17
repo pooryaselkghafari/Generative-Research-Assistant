@@ -219,7 +219,7 @@ class AnalysisExecutionService:
         print(f"DEBUG: VARX options prepared: {options}")
         
         # Run VARX analysis
-        result = varx_module.run(df, formula, options)
+        result = varx_module.run(df, formula, options=options)
         print(f"DEBUG: VARX module run completed. has_results={result.get('has_results')}, error={result.get('error')}")
         
         if not result.get('has_results', False):
