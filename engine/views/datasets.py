@@ -12,6 +12,7 @@ from engine.services.dataset_validation_service import DatasetValidationService
 from engine.services.row_filtering_service import RowFilteringService
 from engine.services.dataset_merge_service import DatasetMergeService
 from data_prep.file_handling import _read_dataset_file
+from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
 
 # Create media directories lazily (not at import time)
 # This prevents permission errors during management commands
@@ -330,7 +331,7 @@ def apply_drop_rows(request, dataset_id):
             return JsonResponse({'error': error}, status=400)
         
         # Save the filtered dataset back to the file
-        _save_filtered_dataset(df_filtered, dataset.file_path)
+        _save_filtered_dataset(df_filtered, dataset.file_path, user_id=request.user.id)
         
         return JsonResponse({
             'success': True,
@@ -342,13 +343,34 @@ def apply_drop_rows(request, dataset_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-def _save_filtered_dataset(df_filtered, file_path):
-    """Save filtered dataframe to file."""
+def _save_filtered_dataset(df_filtered, file_path, user_id=None):
+    """
+    Save filtered dataframe to file, preserving encryption.
+    """
     import pandas as pd
-    file_extension = file_path.lower().split('.')[-1]
-    if file_extension in ['xlsx', 'xls']:
+    import os
+    
+    def _detect_format(path):
+        base, ext = os.path.splitext(path)
+        if ext == '.encrypted':
+            base, ext = os.path.splitext(base)
+        return (ext or '').lower().lstrip('.')
+    
+    file_format = _detect_format(file_path) or 'csv'
+    
+    if is_encrypted_file(file_path):
+        if user_id is None:
+            raise ValueError("user_id is required to save encrypted datasets")
+        save_encrypted_dataframe(df_filtered, file_path, user_id=user_id, file_format=file_format)
+        return
+    
+    if file_format in ['xlsx', 'xls']:
         df_filtered.to_excel(file_path, index=False)
-    else:  # CSV
+    elif file_format == 'tsv':
+        df_filtered.to_csv(file_path, index=False, sep='\t')
+    elif file_format == 'json':
+        df_filtered.to_json(file_path, orient='records')
+    else:  # default csv
         df_filtered.to_csv(file_path, index=False)
 
 
