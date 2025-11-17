@@ -279,11 +279,25 @@ def run_varx_analysis(request):
         formula = request.POST.get('formula', '')
         var_order_input = request.POST.get('var_order', None)
         max_lags_input = request.POST.get('max_lags', 10)
+
+        # Debug logging to trace VAR lag issues
+        debug_payload = {
+            'action': action,
+            'session_id': session_id,
+            'dataset_id': dataset_id,
+            'var_order_input': var_order_input,
+            'max_lags_input': max_lags_input,
+            'formula_length': len(formula) if formula else 0,
+        }
+        print("DEBUG: run_varx_analysis request payload:", debug_payload)
+        print("DEBUG: run_varx_analysis POST keys:", list(request.POST.keys()))
         
         # Execute VARX analysis using service
-        return AnalysisExecutionService.execute_varx_analysis(
+        response = AnalysisExecutionService.execute_varx_analysis(
             request, action, session_id, dataset_id, formula, var_order_input, max_lags_input
         )
+        print("DEBUG: run_varx_analysis completed")
+        return response
         
     except Exception as e:
         import traceback

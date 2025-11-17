@@ -428,8 +428,10 @@ class VARXModule:
         # Get VAR order from options
         # If var_order is not specified or is 0, use automatic lag selection
         var_order = options.get('var_order', None) if options else None
+        print(f"DEBUG: VARX.run received var_order option: {var_order}")
         use_auto_lag_selection = False
         max_lags_to_test = options.get('max_lags', 10) if options else 10  # Default to 10, user can change
+        print(f"DEBUG: VARX.run initial max_lags_to_test: {max_lags_to_test}")
         
         # Always get max_lags from options (for lag selection table)
         try:
@@ -456,6 +458,7 @@ class VARXModule:
             # No valid manual lag provided, use auto-selection
             use_auto_lag_selection = True
             var_order = None  # Will be determined by auto-selection
+            print("DEBUG: No manual lag provided. Auto-selection enabled.")
         
         # Prepare data - drop NaN values
         # Use df_work which has interaction terms created
@@ -733,6 +736,7 @@ class VARXModule:
                 var_order = int(var_order)
             except (ValueError, TypeError):
                 var_order = 1  # Default to lag 1 if conversion fails
+            print(f"DEBUG: Final var_order used for model fitting: {var_order} (auto={use_auto_lag_selection}, manual={manual_lag_provided})")
             
             if lag_selection_results:
                 print(f"DEBUG: Lag selection results - AIC: {lag_selection_results.get('aic')}, BIC: {lag_selection_results.get('bic')}, HQIC: {lag_selection_results.get('hqic')}")

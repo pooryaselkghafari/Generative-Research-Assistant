@@ -190,29 +190,37 @@ class AnalysisExecutionService:
             max_lags = 10
         
         # Handle var_order input - preserve manual selection
-        if var_order_input and var_order_input != 'auto':
-            try:
-                # Try to convert to integer
-                var_order = int(var_order_input)
-                if var_order > 0:
-                    # Valid positive integer - use as manual selection
-                    print(f"DEBUG: Manual VAR lag order provided: {var_order}")
-                else:
-                    # Invalid (0 or negative) - use auto
-                    var_order = 'auto'
-            except (ValueError, TypeError):
-                # Not a valid integer - use auto
-                var_order = 'auto'
-        else:
-            var_order = 'auto'
+        var_order = 'auto'
+        manual_value_raw = None
+        if var_order_input is not None:
+            manual_value_raw = str(var_order_input).strip()
+            print(f"DEBUG: Raw var_order_input received: '{manual_value_raw}' (type={type(var_order_input)})")
+            if manual_value_raw.lower() != 'auto' and manual_value_raw != '':
+                try:
+                    # Allow inputs like "3", "3.0", or "  4 "
+                    manual_value = float(manual_value_raw)
+                    if manual_value > 0:
+                        manual_int = int(round(manual_value))
+                        if manual_int <= 0:
+                            raise ValueError("Lag order must be positive")
+                        var_order = manual_int
+                        print(f"DEBUG: Manual VAR lag order accepted: {var_order} (raw input: {manual_value_raw})")
+                    else:
+                        print(f"DEBUG: Invalid VAR lag order (<=0): {manual_value_raw}. Falling back to auto.")
+                except (ValueError, TypeError):
+                    print(f"DEBUG: Could not parse VAR lag order input '{manual_value_raw}', using auto-selection.")
+            else:
+                print(f"DEBUG: VAR lag order set to auto (input='{manual_value_raw}')")
         
         options = {
             'var_order': var_order,
             'max_lags': max_lags
         }
+        print(f"DEBUG: VARX options prepared: {options}")
         
         # Run VARX analysis
         result = varx_module.run(df, formula, options)
+        print(f"DEBUG: VARX module run completed. has_results={result.get('has_results')}, error={result.get('error')}")
         
         if not result.get('has_results', False):
             return render(request, 'engine/index.html', {
