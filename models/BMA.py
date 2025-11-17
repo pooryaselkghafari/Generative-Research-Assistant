@@ -69,6 +69,23 @@ def run_bma_analysis_bas(df, response_var, predictor_vars, categorical_vars=None
     dict : Dictionary containing BMA results and summary statistics
     """
     
+    # Check if rpy2 and R are available
+    try:
+        import rpy2.robjects as ro
+        # Try to execute a simple R command to verify R is working
+        ro.r('print("R is available")')
+    except Exception as e:
+        error_msg = (
+            f"R is not available or rpy2 is not properly configured. "
+            f"Error: {str(e)}\n\n"
+            f"To fix this:\n"
+            f"1. Install R: sudo apt install r-base r-base-dev (Ubuntu/Debian)\n"
+            f"2. Install rpy2: pip install rpy2\n"
+            f"3. Install BAS package in R: Rscript -e 'install.packages(\"BAS\", repos=\"https://cloud.r-project.org\")'\n"
+            f"4. Restart the application"
+        )
+        raise RuntimeError(error_msg) from e
+    
     try:
         # Handle column names with special characters for proper processing
         if original_formula:
