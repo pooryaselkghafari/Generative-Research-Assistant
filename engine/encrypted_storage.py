@@ -31,14 +31,16 @@ def store_encrypted_file(uploaded_file, user_id=None, destination_path=None):
     original_ext = os.path.splitext(original_name)[1] if original_name else ''
     
     # Create temporary file for original upload (preserve extension for better debugging)
+    # IMPORTANT: Always use a temporary file, never write directly to destination_path
+    # This prevents accidentally saving unencrypted files with .encrypted extension
+    with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as tmp_file:
+        tmp_path = tmp_file.name
+    
     if destination_path:
-        # Use provided destination path
-        tmp_path = destination_path
+        # Use provided destination path for final encrypted file
         encrypted_path = destination_path + '.encrypted'
     else:
-        # Use temporary file with original extension
-        with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as tmp_file:
-            tmp_path = tmp_file.name
+        # Use temporary location for encrypted file
         encrypted_path = tmp_path + '.encrypted'
     
     try:
