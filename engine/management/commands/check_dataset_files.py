@@ -63,6 +63,19 @@ class Command(BaseCommand):
                 # Check if encrypted
                 if is_encrypted_file(full_path):
                     self.stdout.write(self.style.WARNING("🔒 File is ENCRYPTED"))
+                    
+                    # Try to test decryption if user is available
+                    if dataset.user:
+                        try:
+                            from engine.encrypted_storage import get_decrypted_path
+                            import tempfile
+                            test_decrypted = get_decrypted_path(full_path, user_id=dataset.user.id)
+                            if os.path.exists(test_decrypted):
+                                test_size = os.path.getsize(test_decrypted)
+                                self.stdout.write(self.style.SUCCESS(f"✅ Decryption test PASSED (decrypted size: {test_size:,} bytes)"))
+                                os.unlink(test_decrypted)  # Clean up
+                        except Exception as e:
+                            self.stdout.write(self.style.ERROR(f"❌ Decryption test FAILED: {e}"))
                 else:
                     self.stdout.write("📄 File is NOT encrypted")
             else:
