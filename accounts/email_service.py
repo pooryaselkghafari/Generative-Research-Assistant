@@ -19,10 +19,10 @@ def send_welcome_email(user):
         user: User instance
     """
     try:
-        subject = 'Welcome to StatBox!'
+        subject = 'Welcome to Generative Research Assistant!'
         html_message = render_to_string('accounts/emails/welcome.html', {
             'user': user,
-            'site_name': 'StatBox',
+            'site_name': 'Generative Research Assistant',
             'login_url': settings.LOGIN_URL if hasattr(settings, 'LOGIN_URL') else '/accounts/login/',
         })
         plain_message = strip_tags(html_message)
@@ -75,11 +75,11 @@ def send_verification_email(user, request):
             reverse('verify_email', kwargs={'uidb64': uid, 'token': token})
         )
         
-        subject = 'Verify your StatBox email address'
+        subject = 'Verify your Generative Research Assistant email address'
         html_message = render_to_string('accounts/emails/verify_email.html', {
             'user': user,
             'verification_url': verification_url,
-            'site_name': 'StatBox',
+            'site_name': 'Generative Research Assistant',
         })
         plain_message = strip_tags(html_message)
         from_email = settings.DEFAULT_FROM_EMAIL
@@ -131,11 +131,11 @@ def send_password_reset_email(user, request):
             reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
         )
         
-        subject = 'Reset your StatBox password'
+        subject = 'Reset your Generative Research Assistant password'
         html_message = render_to_string('accounts/emails/password_reset.html', {
             'user': user,
             'reset_url': reset_url,
-            'site_name': 'StatBox',
+            'site_name': 'Generative Research Assistant',
         })
         plain_message = strip_tags(html_message)
         from_email = settings.DEFAULT_FROM_EMAIL
