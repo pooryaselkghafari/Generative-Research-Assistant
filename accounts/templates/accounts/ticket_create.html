@@ -1,0 +1,182 @@
+{% extends "engine/base.html" %}
+{% load static %}
+
+{% block title %}Report a Bug - Support{% endblock %}
+
+{% block content %}
+<div class="ticket-create-container">
+  <div class="ticket-header">
+    <h1>Report a Bug</h1>
+    <a href="{% url 'ticket_list' %}" class="btn btn-secondary">Back to Tickets</a>
+  </div>
+  
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+  
+  <form method="post" class="ticket-form">
+    {% csrf_token %}
+    
+    <div class="form-group">
+      <label for="title">Title *</label>
+      <input 
+        type="text" 
+        id="title" 
+        name="title" 
+        required 
+        maxlength="200"
+        placeholder="Brief description of the issue"
+        value="{{ title|default:'' }}"
+      >
+      <small>Provide a clear, concise title for your bug report</small>
+    </div>
+    
+    <div class="form-group">
+      <label for="priority">Priority *</label>
+      <select id="priority" name="priority" required>
+        {% for priority_code, priority_name in priority_choices %}
+          <option value="{{ priority_code }}" {% if priority == priority_code %}selected{% endif %}>
+            {{ priority_name }}
+          </option>
+        {% endfor %}
+      </select>
+      <small>How urgent is this issue?</small>
+    </div>
+    
+    <div class="form-group">
+      <label for="description">Description *</label>
+      <textarea 
+        id="description" 
+        name="description" 
+        required 
+        rows="10"
+        placeholder="Please provide detailed information about the bug:
+- What were you trying to do?
+- What happened instead?
+- Steps to reproduce the issue
+- Expected behavior
+- Any error messages you saw"
+      >{{ description|default:'' }}</textarea>
+      <small>Include as much detail as possible to help us reproduce and fix the issue</small>
+    </div>
+    
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Submit Ticket</button>
+      <a href="{% url 'ticket_list' %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<style>
+.ticket-create-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.ticket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.ticket-header h1 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.ticket-form {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+  margin-bottom: 25px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 200px;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.alert {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.alert-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.alert-success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+@media (max-width: 768px) {
+  .ticket-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+}
+</style>
+{% endblock %}
+

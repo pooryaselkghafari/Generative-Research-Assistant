@@ -1,0 +1,200 @@
+{% extends "engine/base.html" %}
+{% load static %}
+
+{% block title %}Ticket #{{ ticket.id }} - Support{% endblock %}
+
+{% block content %}
+<div class="ticket-detail-container">
+  <div class="ticket-header">
+    <h1>Ticket #{{ ticket.id }}</h1>
+    <a href="{% url 'ticket_list' %}" class="btn btn-secondary">Back to Tickets</a>
+  </div>
+  
+  <div class="ticket-detail-card">
+    <div class="ticket-meta">
+      <div class="meta-item">
+        <span class="meta-label">Status:</span>
+        <span class="status-badge status-{{ ticket.status }}">
+          {{ ticket.get_status_display }}
+        </span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Priority:</span>
+        <span class="priority-badge priority-{{ ticket.priority }}">
+          {{ ticket.get_priority_display }}
+        </span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Created:</span>
+        <span>{{ ticket.created_at|date:"F d, Y g:i A" }}</span>
+      </div>
+      {% if ticket.resolved_at %}
+      <div class="meta-item">
+        <span class="meta-label">Resolved:</span>
+        <span>{{ ticket.resolved_at|date:"F d, Y g:i A" }}</span>
+      </div>
+      {% endif %}
+    </div>
+    
+    <div class="ticket-content">
+      <h2>{{ ticket.title }}</h2>
+      <div class="ticket-description">
+        <h3>Description</h3>
+        <p>{{ ticket.description|linebreaks }}</p>
+      </div>
+      
+      {% if ticket.admin_response %}
+      <div class="admin-response">
+        <h3>Admin Response</h3>
+        <p>{{ ticket.admin_response|linebreaks }}</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+.ticket-detail-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.ticket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.ticket-header h1 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.ticket-detail-card {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ticket-meta {
+  display: flex;
+  gap: 30px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f3f4f6;
+  margin-bottom: 30px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meta-label {
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.ticket-content h2 {
+  margin: 0 0 20px 0;
+  color: #1f2937;
+  font-size: 24px;
+}
+
+.ticket-description,
+.admin-response {
+  margin-top: 30px;
+}
+
+.ticket-description h3,
+.admin-response h3 {
+  margin: 0 0 12px 0;
+  color: #374151;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.ticket-description p,
+.admin-response p {
+  color: #4b5563;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.admin-response {
+  background: #f0f9ff;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #3b82f6;
+}
+
+.status-badge, .priority-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-open {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-in_progress {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-resolved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-closed {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.priority-low {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.priority-medium {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.priority-high {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.priority-urgent {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+@media (max-width: 768px) {
+  .ticket-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+  
+  .ticket-meta {
+    flex-direction: column;
+    gap: 15px;
+  }
+}
+</style>
+{% endblock %}
+

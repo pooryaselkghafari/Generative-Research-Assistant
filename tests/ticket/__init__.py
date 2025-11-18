@@ -1,0 +1,4 @@
+"""
+Ticket system tests.
+"""
+

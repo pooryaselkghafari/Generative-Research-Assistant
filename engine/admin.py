@@ -9,7 +9,7 @@ from django.utils.safestring import mark_safe
 from .models import (
     Dataset, AnalysisSession, UserProfile, SubscriptionPlan, Payment, Page,
     SubscriptionTierSettings, PrivacyPolicy, TermsOfService,
-    AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult
+    AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket
 )
 
 
@@ -580,6 +580,48 @@ class LogEntryAdmin(admin.ModelAdmin):
 
 
 admin.site.register(LogEntry, LogEntryAdmin)
+
+
+class TicketAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing tickets.
+    """
+    list_display = ('id', 'title', 'user', 'status', 'priority', 'assigned_to', 'created_at', 'resolved_at')
+    list_filter = ('status', 'priority', 'created_at', 'assigned_to')
+    search_fields = ('title', 'description', 'user__username', 'user__email')
+    readonly_fields = ('created_at', 'updated_at', 'resolved_at')
+    raw_id_fields = ('user', 'assigned_to')
+    
+    fieldsets = (
+        ('Ticket Information', {
+            'fields': ('user', 'title', 'description', 'status', 'priority')
+        }),
+        ('Assignment', {
+            'fields': ('assigned_to',)
+        }),
+        ('Admin Response', {
+            'fields': ('admin_notes', 'admin_response'),
+            'description': 'admin_notes is internal only, admin_response is visible to user'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at', 'resolved_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        qs = super().get_queryset(request)
+        return qs.select_related('user', 'assigned_to')
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Make resolved_at readonly"""
+        readonly = list(self.readonly_fields)
+        if obj and obj.resolved_at:
+            readonly.append('resolved_at')
+        return readonly
+
+admin.site.register(Ticket, TicketAdmin)
 
 
 # AIFineTuningTemplate model exists but is not exposed in admin

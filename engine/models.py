@@ -510,6 +510,65 @@ class AIFineTuningCommand(models.Model):
         return f"{self.get_command_type_display()} - {self.status} ({date_str})"
 
 
+class Ticket(models.Model):
+    """
+    Bug report ticket system for users to report issues.
+    Admins can view and manage tickets.
+    """
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('resolved', 'Resolved'),
+        ('closed', 'Closed'),
+    ]
+    
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tickets')
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+    admin_notes = models.TextField(blank=True, help_text="Internal notes for admins")
+    admin_response = models.TextField(blank=True, help_text="Response visible to user")
+    assigned_to = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='assigned_tickets',
+        limit_choices_to={'is_staff': True}
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['priority', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"#{self.id} - {self.title} ({self.user.username})"
+    
+    def save(self, *args, **kwargs):
+        """Auto-set resolved_at when status changes to resolved/closed"""
+        if self.status in ('resolved', 'closed') and not self.resolved_at:
+            from django.utils import timezone
+            self.resolved_at = timezone.now()
+        elif self.status not in ('resolved', 'closed'):
+            self.resolved_at = None
+        super().save(*args, **kwargs)
+
+
 class AIFineTuningTemplate(models.Model):
     """
     JSON templates for AI fine-tuning commands.

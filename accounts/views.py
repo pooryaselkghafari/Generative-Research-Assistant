@@ -226,9 +226,12 @@ def logout_view(request):
 @login_required
 def profile_view(request):
     profile = request.user.profile
+    from engine.models import Ticket
     context = {
         'profile': profile,
         'subscription_plans': SubscriptionPlan.objects.filter(is_active=True),
+        'open_tickets_count': Ticket.objects.filter(user=request.user, status='open').count(),
+        'total_tickets_count': Ticket.objects.filter(user=request.user).count(),
     }
     return render(request, 'accounts/profile.html', context)
 

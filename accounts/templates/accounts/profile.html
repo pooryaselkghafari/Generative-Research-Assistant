@@ -99,6 +99,33 @@
     </div>
   </div>
   
+  <div class="profile-card">
+    <h2>Support & Bug Reports</h2>
+    <div class="ticket-section">
+      <p class="ticket-description">
+        Found a bug or have a question? Create a support ticket and we'll help you out.
+      </p>
+      <div class="ticket-stats">
+        <div class="ticket-stat-item">
+          <span class="stat-label">Open Tickets:</span>
+          <span class="stat-value">{{ open_tickets_count }}</span>
+        </div>
+        <div class="ticket-stat-item">
+          <span class="stat-label">Total Tickets:</span>
+          <span class="stat-value">{{ total_tickets_count }}</span>
+        </div>
+      </div>
+      <div class="ticket-actions">
+        <a href="{% url 'ticket_create' %}" class="btn btn-primary">
+          Report a Bug
+        </a>
+        <a href="{% url 'ticket_list' %}" class="btn btn-secondary">
+          View My Tickets
+        </a>
+      </div>
+    </div>
+  </div>
+  
   <div class="profile-actions">
     <a href="{% url 'subscription' %}" class="btn btn-primary">
       Manage Subscription
@@ -262,12 +289,63 @@
   justify-content: center;
 }
 
+.ticket-section {
+  margin-top: 20px;
+}
+
+.ticket-description {
+  color: #6b7280;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.ticket-stats {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.ticket-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.ticket-actions {
+  display: flex;
+  gap: 10px;
+}
+
 @media (max-width: 768px) {
   .profile-grid {
     grid-template-columns: 1fr;
   }
   
   .profile-actions {
+    flex-direction: column;
+  }
+  
+  .ticket-stats {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .ticket-actions {
     flex-direction: column;
   }
 }
