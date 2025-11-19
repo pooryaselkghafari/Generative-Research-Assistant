@@ -15,13 +15,23 @@ import json
 logger = logging.getLogger(__name__)
 
 
-def get_active_provider() -> Optional[AIProvider]:
+def get_active_provider(provider_id: Optional[int] = None) -> Optional[AIProvider]:
     """
-    Get the currently active AI provider.
+    Get the active AI provider, optionally by ID.
     
+    Args:
+        provider_id: Optional provider ID to retrieve specific provider
+        
     Returns:
         AIProvider instance or None if no provider is configured
     """
+    if provider_id:
+        try:
+            provider = AIProvider.objects.get(pk=provider_id, is_active=True)
+            return provider
+        except AIProvider.DoesNotExist:
+            # Fall back to default if specified provider not found
+            return AIProvider.get_active_provider()
     return AIProvider.get_active_provider()
 
 
@@ -29,9 +39,17 @@ class AIService:
     """Service for interacting with AI providers."""
     
     @staticmethod
-    def _get_provider() -> Optional[AIProvider]:
-        """Get active provider or raise error."""
-        provider = get_active_provider()
+    def _get_provider(provider_id: Optional[int] = None) -> Optional[AIProvider]:
+        """
+        Get active provider or raise error.
+        
+        Args:
+            provider_id: Optional provider ID to use specific provider
+            
+        Returns:
+            AIProvider instance
+        """
+        provider = get_active_provider(provider_id)
         if not provider:
             raise ValueError("No active AI provider configured. Please configure a provider in the admin panel.")
         if not provider.is_active:
@@ -75,19 +93,20 @@ class AIService:
         return prepared_files
     
     @staticmethod
-    def fine_tune(files: List[AIFineTuningFile], command_data: Dict[str, Any]) -> Dict[str, Any]:
+    def fine_tune(files: List[AIFineTuningFile], command_data: Dict[str, Any], provider_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Fine-tune the AI model with provided files.
         
         Args:
             files: List of AIFineTuningFile objects
             command_data: Fine-tuning parameters from command
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success' and 'message'
         """
         try:
-            provider = AIService._get_provider()
+            provider = AIService._get_provider(provider_id)
             
             if not files:
                 return {
@@ -338,18 +357,19 @@ class AIService:
             }
     
     @staticmethod
-    def update_system_prompt(prompt: str) -> Dict[str, Any]:
+    def update_system_prompt(prompt: str, provider_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Update the system prompt.
         
         Args:
             prompt: New system prompt text
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success' and 'message'
         """
         try:
-            provider = AIService._get_provider()
+            provider = AIService._get_provider(provider_id)
             
             # Store system prompt in provider or separate model
             # For now, we'll just validate and return success
@@ -367,19 +387,20 @@ class AIService:
             return {'success': False, 'message': f'Error: {str(e)}'}
     
     @staticmethod
-    def add_context(files: List[AIFineTuningFile], command_data: Dict[str, Any]) -> Dict[str, Any]:
+    def add_context(files: List[AIFineTuningFile], command_data: Dict[str, Any], provider_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Add context data from files.
         
         Args:
             files: List of AIFineTuningFile objects
             command_data: Additional command parameters
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success' and 'message'
         """
         try:
-            provider = AIService._get_provider()
+            provider = AIService._get_provider(provider_id)
             
             if not files:
                 return {'success': False, 'message': 'No files provided'}
@@ -400,18 +421,19 @@ class AIService:
             return {'success': False, 'message': f'Error: {str(e)}'}
     
     @staticmethod
-    def test_model(test_message: str = "Hello, how are you?") -> Dict[str, Any]:
+    def test_model(test_message: str = "Hello, how are you?", provider_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Test the model with a message.
         
         Args:
             test_message: Message to test with
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success', 'message', and optionally 'response'
         """
         try:
-            provider = AIService._get_provider()
+            provider = AIService._get_provider(provider_id)
             
             if provider.provider_type == 'openai':
                 return AIService._test_openai(provider, test_message)
@@ -593,15 +615,18 @@ class AIService:
             return {'success': False, 'message': f'Custom API error: {str(e)}'}
     
     @staticmethod
-    def reset_model() -> Dict[str, Any]:
+    def reset_model(provider_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Reset model to default state.
         
+        Args:
+            provider_id: Optional provider ID to use specific provider
+            
         Returns:
             dict with 'success' and 'message'
         """
         try:
-            provider = AIService._get_provider()
+            provider = AIService._get_provider(provider_id)
             
             # Clear fine-tuned model ID
             provider.fine_tuned_model_id = ''

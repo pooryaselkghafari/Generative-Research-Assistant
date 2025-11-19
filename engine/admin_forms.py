@@ -8,7 +8,7 @@ JSON validation.
 import json
 from typing import Dict, Any, List, Tuple, Optional
 from django import forms
-from engine.models import AIFineTuningCommand, AIFineTuningTemplate
+from engine.models import AIFineTuningCommand, AIFineTuningTemplate, AIProvider
 
 
 class AIFineTuningCommandAdminForm(forms.ModelForm):
@@ -22,13 +22,19 @@ class AIFineTuningCommandAdminForm(forms.ModelForm):
     template_select = forms.ChoiceField(
         required=False,
         label='Load Template',
-        help_text=(
-            'Select a template to pre-fill the command data, or leave empty to start fresh. '
-            'Templates are automatically generated based on command type.'
-        ),
         choices=[],
         widget=forms.Select(attrs={
             'class': 'template-select',
+        })
+    )
+    
+    provider = forms.ModelChoiceField(
+        queryset=AIProvider.objects.filter(is_active=True),
+        required=False,
+        label='AI Provider',
+        help_text='Select which AI provider to use for this command. Leave empty to use the default provider.',
+        widget=forms.Select(attrs={
+            'class': 'provider-select',
         })
     )
     
@@ -36,6 +42,11 @@ class AIFineTuningCommandAdminForm(forms.ModelForm):
         """Form metadata configuration."""
         model = AIFineTuningCommand
         fields = '__all__'
+        widgets = {
+            'provider': forms.Select(attrs={
+                'class': 'provider-select',
+            }),
+        }
         widgets = {
             'command_data': forms.Textarea(attrs={
                 'rows': 18,
@@ -52,7 +63,7 @@ class AIFineTuningCommandAdminForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         """
-        Initialize form with template choices.
+        Initialize form with template choices and provider options.
         
         Args:
             *args: Positional arguments
@@ -63,6 +74,13 @@ class AIFineTuningCommandAdminForm(forms.ModelForm):
         command_type = self._get_command_type()
         template_choices = self._build_template_choices(command_type)
         self.fields['template_select'].choices = template_choices
+        
+        # Update provider queryset to show active providers
+        try:
+            self.fields['provider'].queryset = AIProvider.objects.filter(is_active=True).order_by('-is_default', 'name')
+        except Exception:
+            # If AIProvider table doesn't exist yet, use empty queryset
+            self.fields['provider'].queryset = AIProvider.objects.none()
         
         self._format_existing_command_data()
     

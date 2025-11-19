@@ -484,6 +484,15 @@ class AIFineTuningCommand(models.Model):
         related_name='commands',
         help_text="Files associated with this command"
     )
+    provider = models.ForeignKey(
+        'AIProvider',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='commands',
+        help_text="AI provider to use for this command (uses default if not specified)",
+        db_index=True
+    )
     created_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,

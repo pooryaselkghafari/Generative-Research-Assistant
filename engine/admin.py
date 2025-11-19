@@ -12,6 +12,7 @@ from .models import (
     AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket,
     AIProvider
 )
+from . import admin_forms
 
 
 class UserProfileInline(admin.StackedInline):
@@ -430,22 +431,19 @@ class AIFineTuningCommandAdmin(admin.ModelAdmin):
     Provides template selection and JSON editing capabilities for
     fine-tuning command configuration.
     """
-    list_display = ('command_type', 'status', 'created_by', 'created_at', 'get_files_count')
-    list_filter = ('command_type', 'status', 'created_at')
+    list_display = ('command_type', 'status', 'provider', 'created_by', 'created_at', 'get_files_count')
+    list_filter = ('command_type', 'status', 'provider', 'created_at')
     search_fields = ('description', 'result')
     readonly_fields = ('created_at', 'updated_at', 'completed_at', 'status')
     filter_horizontal = ('files',)
+    raw_id_fields = ('provider',)
     
     fieldsets = (
         ('Command Information', {
-            'fields': ('command_type', 'description')
+            'fields': ('command_type', 'description', 'provider')
         }),
         ('Command Data', {
             'fields': ('template_select', 'command_data'),
-            'description': (
-                '📋 Select a template to automatically pre-fill the command data with sensible defaults, '
-                'or edit the JSON directly. Templates are automatically generated based on your selected command type.'
-            ),
             'classes': ('wide',)
         }),
         ('Files', {
@@ -454,7 +452,6 @@ class AIFineTuningCommandAdmin(admin.ModelAdmin):
         }),
         ('Status & Metadata', {
             'fields': ('status', 'created_by', 'created_at', 'updated_at', 'completed_at', 'result'),
-            'description': 'Status is automatically managed by the system during command processing.',
             'classes': ('collapse',)
         }),
     )

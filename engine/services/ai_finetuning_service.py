@@ -81,12 +81,14 @@ class AIFineTuningService:
             }
         
         files = command.files.all()
-        return handler(files, command.command_data)
+        provider_id = command.provider.id if command.provider else None
+        return handler(files, command.command_data, provider_id)
     
     @staticmethod
     def _process_fine_tune(
         files: List[AIFineTuningFile],
-        command_data: Dict[str, Any]
+        command_data: Dict[str, Any],
+        provider_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Process fine-tuning with files.
@@ -94,6 +96,7 @@ class AIFineTuningService:
         Args:
             files: List of AIFineTuningFile objects
             command_data: Additional command parameters
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success' and 'message'
@@ -106,13 +109,14 @@ class AIFineTuningService:
         
         # Integrate with AI provider
         from engine.integrations.ai_provider import AIService
-        result = AIService.fine_tune(files, command_data)
+        result = AIService.fine_tune(files, command_data, provider_id)
         return result
     
     @staticmethod
     def _process_update_prompt(
         files: List[AIFineTuningFile],
-        command_data: Dict[str, Any]
+        command_data: Dict[str, Any],
+        provider_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Update system prompt.
@@ -120,6 +124,7 @@ class AIFineTuningService:
         Args:
             files: Not used for this command type
             command_data: Must contain 'prompt' key
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success' and 'message'
@@ -130,13 +135,14 @@ class AIFineTuningService:
         
         # Integrate with AI provider to update system prompt
         from engine.integrations.ai_provider import AIService
-        result = AIService.update_system_prompt(prompt)
+        result = AIService.update_system_prompt(prompt, provider_id)
         return result
     
     @staticmethod
     def _process_add_context(
         files: List[AIFineTuningFile],
-        command_data: Dict[str, Any]
+        command_data: Dict[str, Any],
+        provider_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Add context data from files.
@@ -144,6 +150,7 @@ class AIFineTuningService:
         Args:
             files: List of AIFineTuningFile objects
             command_data: Additional command parameters
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success' and 'message'
@@ -153,13 +160,14 @@ class AIFineTuningService:
         
         # Integrate with AI provider to add context
         from engine.integrations.ai_provider import AIService
-        result = AIService.add_context(files, command_data)
+        result = AIService.add_context(files, command_data, provider_id)
         return result
     
     @staticmethod
     def _process_test_model(
         files: List[AIFineTuningFile],
-        command_data: Dict[str, Any]
+        command_data: Dict[str, Any],
+        provider_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Test the current model.
@@ -167,6 +175,7 @@ class AIFineTuningService:
         Args:
             files: Not used for this command type
             command_data: May contain 'test_message' key
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success' and 'message'
@@ -175,7 +184,7 @@ class AIFineTuningService:
         
         # Integrate with AI provider to test model
         from engine.integrations.ai_provider import AIService
-        result = AIService.test_model(test_message)
+        result = AIService.test_model(test_message, provider_id)
         if result.get('success'):
             response_text = result.get('response', 'No response')
             return {'success': True, 'message': f'Test response: {response_text}'}
@@ -184,7 +193,8 @@ class AIFineTuningService:
     @staticmethod
     def _process_reset_model(
         files: List[AIFineTuningFile],
-        command_data: Dict[str, Any]
+        command_data: Dict[str, Any],
+        provider_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Reset model to default state.
@@ -192,13 +202,14 @@ class AIFineTuningService:
         Args:
             files: Not used for this command type
             command_data: Not used for this command type
+            provider_id: Optional provider ID to use specific provider
             
         Returns:
             dict with 'success' and 'message'
         """
         # Integrate with AI provider to reset model
         from engine.integrations.ai_provider import AIService
-        result = AIService.reset_model()
+        result = AIService.reset_model(provider_id)
         return result
     
     @staticmethod
