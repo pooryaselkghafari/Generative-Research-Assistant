@@ -58,7 +58,11 @@
       <div class="sb-modal__backdrop" onclick="window.sbCloseModal()"></div>
       <div class="sb-modal__dialog" role="dialog" aria-modal="true" aria-label="Popup">
         <button class="sb-modal__close" type="button" onclick="window.sbCloseModal()" aria-label="Close">✕</button>
-        <iframe id="sbModalFrame" class="sb-modal__frame" src="about:blank"></iframe>
+        <div id="sbModalLoader" class="sb-modal__loader">
+          <div class="sb-loader__spinner"></div>
+          <div class="sb-loader__text">Loading dataset editor...</div>
+        </div>
+        <iframe id="sbModalFrame" class="sb-modal__frame" src="about:blank" style="display: none;"></iframe>
       </div>
     </div>
 
@@ -93,7 +97,11 @@
           }
           
           // Show loading state
-          frame.style.display = 'block';
+          const loader = document.getElementById('sbModalLoader');
+          if (loader) {
+            loader.style.display = 'flex';
+          }
+          frame.style.display = 'none'; // Hide iframe until loaded
           modal.style.display = 'block';
           document.body.style.overflow = 'hidden';
           
@@ -106,6 +114,13 @@
                 // Check if iframe loaded successfully
                 if (frame.contentWindow && frame.contentWindow.location.href === 'about:blank') {
                   console.warn('Iframe failed to load after timeout:', absoluteUrl);
+                  
+                  // Hide loading animation
+                  const loader = document.getElementById('sbModalLoader');
+                  if (loader) {
+                    loader.style.display = 'none';
+                  }
+                  
                   // Show error message to user
                   frame.style.display = 'none';
                   const errorDiv = document.createElement('div');
@@ -129,10 +144,19 @@
               clearTimeout(loadTimeout);
               loadTimeout = null;
             }
+            
+            // Hide loading animation
+            const loader = document.getElementById('sbModalLoader');
+            if (loader) {
+              loader.style.display = 'none';
+            }
+            
             // Remove any error messages that might have been shown
             const errorDivs = frame.parentElement.querySelectorAll('div[style*="padding: 40px"]');
             errorDivs.forEach(div => div.remove());
-            frame.style.display = 'block'; // Ensure frame is visible
+            
+            // Show iframe
+            frame.style.display = 'block';
             
             try {
               // Try to access iframe content (will fail if cross-origin, which is OK)
@@ -147,10 +171,18 @@
           
           frame.onerror = function() {
             console.error('Iframe failed to load:', absoluteUrl);
+            hasLoaded = true; // Mark as loaded to prevent timeout error
             if (loadTimeout) {
               clearTimeout(loadTimeout);
               loadTimeout = null;
             }
+            
+            // Hide loading animation
+            const loader = document.getElementById('sbModalLoader');
+            if (loader) {
+              loader.style.display = 'none';
+            }
+            
             // Show error message
             frame.style.display = 'none';
             const errorDiv = document.createElement('div');
@@ -172,12 +204,18 @@
             loadTimeout = null;
           }
           
+          // Hide loading animation
+          const loader = document.getElementById('sbModalLoader');
+          if (loader) {
+            loader.style.display = 'none';
+          }
+          
           // Remove any error messages that might have been added
           const errorDivs = frame.parentElement.querySelectorAll('div[style*="padding: 40px"]');
           errorDivs.forEach(div => div.remove());
           
           modal.style.display = 'none';
-          frame.style.display = 'block'; // Reset display in case it was hidden for error
+          frame.style.display = 'none'; // Hide iframe
           frame.src = 'about:blank';
           frame.onload = null;
           frame.onerror = null;
