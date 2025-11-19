@@ -226,15 +226,24 @@ def logout_view(request):
 @login_required
 def profile_view(request):
     # Get or create user profile (handle case where profile doesn't exist)
-    try:
-        profile = request.user.profile
-    except UserProfile.DoesNotExist:
-        # Profile doesn't exist - create it
-        profile = UserProfile.objects.create(
-            user=request.user,
-            subscription_type='free',
-            ai_tier='none'
-        )
+    # This is critical for Google OAuth users who might not have profiles
+    profile, created = UserProfile.objects.get_or_create(
+        user=request.user,
+        defaults={
+            'subscription_type': 'free',
+            'ai_tier': 'none'
+        }
+    )
+    
+    # If profile was just created, try to set AI tier from tier settings
+    if created:
+        try:
+            from engine.models import SubscriptionTierSettings
+            tier_settings = SubscriptionTierSettings.objects.get(tier='free')
+            profile.ai_tier = tier_settings.ai_tier
+            profile.save()
+        except SubscriptionTierSettings.DoesNotExist:
+            pass
     
     from engine.models import Ticket
     context = {
@@ -248,15 +257,24 @@ def profile_view(request):
 @login_required
 def subscription_view(request):
     # Get or create user profile (handle case where profile doesn't exist)
-    try:
-        profile = request.user.profile
-    except UserProfile.DoesNotExist:
-        # Profile doesn't exist - create it
-        profile = UserProfile.objects.create(
-            user=request.user,
-            subscription_type='free',
-            ai_tier='none'
-        )
+    # This is critical for Google OAuth users who might not have profiles
+    profile, created = UserProfile.objects.get_or_create(
+        user=request.user,
+        defaults={
+            'subscription_type': 'free',
+            'ai_tier': 'none'
+        }
+    )
+    
+    # If profile was just created, try to set AI tier from tier settings
+    if created:
+        try:
+            from engine.models import SubscriptionTierSettings
+            tier_settings = SubscriptionTierSettings.objects.get(tier='free')
+            profile.ai_tier = tier_settings.ai_tier
+            profile.save()
+        except SubscriptionTierSettings.DoesNotExist:
+            pass
     plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly')
     
     # Update user's AI tier based on subscription type
@@ -284,15 +302,13 @@ def create_checkout_session(request, plan_id):
     try:
         plan = SubscriptionPlan.objects.get(id=plan_id, is_active=True)
         # Get or create user profile (handle case where profile doesn't exist)
-        try:
-            profile = request.user.profile
-        except UserProfile.DoesNotExist:
-            # Profile doesn't exist - create it
-            profile = UserProfile.objects.create(
-                user=request.user,
-                subscription_type='free',
-                ai_tier='none'
-            )
+        profile, created = UserProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'subscription_type': 'free',
+                'ai_tier': 'none'
+            }
+        )
         
         # Create or get Stripe customer
         if not profile.stripe_customer_id:
@@ -330,15 +346,13 @@ def subscription_success(request):
 def cancel_subscription(request):
     try:
         # Get or create user profile (handle case where profile doesn't exist)
-        try:
-            profile = request.user.profile
-        except UserProfile.DoesNotExist:
-            # Profile doesn't exist - create it
-            profile = UserProfile.objects.create(
-                user=request.user,
-                subscription_type='free',
-                ai_tier='none'
-            )
+        profile, created = UserProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'subscription_type': 'free',
+                'ai_tier': 'none'
+            }
+        )
         if profile.stripe_subscription_id:
             stripe.Subscription.modify(
                 profile.stripe_subscription_id,
