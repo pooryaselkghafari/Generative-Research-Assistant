@@ -24,6 +24,13 @@ def landing_view(request):
         # Load subscription plans for context
         plans = list(SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly'))
         
+        # Debug: Log plans count
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Landing page: Found {len(plans)} active subscription plans")
+        for plan in plans:
+            logger.info(f"  - {plan.name}: ${plan.price_monthly}/month")
+        
         # ALWAYS process content through template engine to ensure dynamic updates
         # This ensures subscription plans update when changed in admin
         processed_content = landing_page.content
@@ -31,9 +38,13 @@ def landing_view(request):
             # Use Django's template engine to properly render template tags
             django_engine = engines['django']
             
+            # Ensure static and url template tags are loaded
+            template_content = landing_page.content
+            if '{% load static %}' not in template_content:
+                template_content = '{% load static %}\n' + template_content
+            
             # Wrap content in a template that loads subscription_tags if not already loaded
             # This ensures the template tag library is available
-            template_content = landing_page.content
             if '{% load subscription_tags %}' not in template_content and 'subscription_plans' in template_content:
                 # Add the load tag if subscription_plans is used but load tag is missing
                 template_content = '{% load subscription_tags %}\n' + template_content
@@ -41,14 +52,17 @@ def landing_view(request):
             template = django_engine.from_string(template_content)
             context = {
                 'request': request,
-                'plans': plans,
+                'plans': plans,  # Pass plans to template context for dynamic rendering
             }
             processed_content = template.render(context, request)
+            logger.info(f"Successfully processed landing page template with {len(plans)} plans")
         except Exception as e:
             # If template rendering fails, use original content
             import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Failed to process template tags in landing page content: {e}\n{error_details}")
             print(f"Warning: Failed to process template tags in page content: {e}")
-            print(traceback.format_exc())
+            print(error_details)
             processed_content = landing_page.content
         
         # Create a modified page object with processed content

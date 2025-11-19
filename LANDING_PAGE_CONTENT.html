@@ -1,0 +1,559 @@
+{% load static %}
+<style>
+    body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: linear-gradient(135deg, #0f6b72 0%, #0a4f56 100%);
+        min-height: 100vh;
+    }
+    
+    .landing-container {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .landing-header {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        padding: 12px 0;
+        position: fixed;
+        width: 100%;
+        top: 0;
+        z-index: 1000;
+    }
+    
+    .landing-nav {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .landing-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: white;
+        font-size: 18px;
+        font-weight: 700;
+        text-decoration: none;
+    }
+    
+    .landing-logo img {
+        max-height: 24px;
+        height: auto;
+        width: auto;
+        display: block;
+    }
+    
+    .landing-logo .logo-fallback {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        background: white;
+        border-radius: 4px;
+        text-align: center;
+        line-height: 24px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #0f6b72;
+    }
+    
+    .landing-nav-actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+    
+    .landing-btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        display: inline-block;
+    }
+    
+    .landing-btn-ghost {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .landing-btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: translateY(-2px);
+    }
+    
+    .landing-btn-primary {
+        background: white;
+        color: #0f6b72;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    .landing-btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    .landing-hero {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 100px 20px 60px;
+        text-align: center;
+    }
+    
+    .landing-hero-content {
+        max-width: 800px;
+        color: white;
+    }
+    
+    .landing-hero h1 {
+        font-size: 3rem;
+        font-weight: 800;
+        margin: 0 0 20px 0;
+        line-height: 1.1;
+        background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .landing-hero p {
+        font-size: 1.25rem;
+        font-weight: 400;
+        margin: 0 0 32px 0;
+        opacity: 0.9;
+        line-height: 1.6;
+    }
+    
+    .landing-cta {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .landing-cta .landing-btn {
+        font-size: 16px;
+        padding: 14px 28px;
+    }
+    
+    .landing-features {
+        background: white;
+        padding: 80px 20px;
+    }
+    
+    .landing-features-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    .landing-features h2 {
+        text-align: center;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0 0 50px 0;
+        color: #1f2937;
+    }
+    
+    .landing-features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+    }
+    
+    .landing-feature {
+        text-align: center;
+        padding: 30px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .landing-feature:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+    
+    .landing-feature-icon {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 20px;
+        background: linear-gradient(135deg, #0f6b72 0%, #0a4f56 100%);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 28px;
+    }
+    
+    .landing-feature h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0 0 12px 0;
+        color: #1f2937;
+    }
+    
+    .landing-feature p {
+        font-size: 1rem;
+        color: #6b7280;
+        line-height: 1.6;
+        margin: 0;
+    }
+    
+    .landing-pricing {
+        background: #f8fafc;
+        padding: 80px 20px;
+    }
+    
+    .landing-pricing-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    .landing-pricing h2 {
+        text-align: center;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0 0 50px 0;
+        color: #1f2937;
+    }
+    
+    .landing-pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 30px;
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    @media (max-width: 699px) {
+        .landing-pricing-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+    
+    .landing-plan {
+        background: white;
+        border-radius: 16px;
+        padding: 40px 30px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        position: relative;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .landing-plan:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+    
+    .landing-plan.featured {
+        border: 2px solid #0f6b72;
+        transform: scale(1.05);
+    }
+    
+    .landing-plan-badge {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #0f6b72;
+        color: white;
+        padding: 6px 20px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+    }
+    
+    .landing-plan h3 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        color: #1f2937;
+    }
+    
+    .landing-plan-price {
+        font-size: 3rem;
+        font-weight: 700;
+        color: #0f6b72;
+        margin: 0 0 8px 0;
+    }
+    
+    .landing-plan-period {
+        font-size: 1rem;
+        color: #6b7280;
+        margin: 0 0 24px 0;
+    }
+    
+    .landing-plan-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 32px 0;
+        flex: 1;
+    }
+    
+    .landing-plan-features li {
+        padding: 8px 0;
+        color: #6b7280;
+        text-align: left;
+    }
+    
+    .landing-plan-features li:before {
+        content: "✓";
+        color: #10b981;
+        font-weight: bold;
+        margin-right: 8px;
+    }
+    
+    .landing-footer {
+        background: #1f2937;
+        color: white;
+        padding: 50px 20px 30px;
+        text-align: center;
+    }
+    
+    .landing-footer-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    .landing-footer h3 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0 0 20px 0;
+    }
+    
+    .landing-footer p {
+        font-size: 1rem;
+        opacity: 0.8;
+        margin: 0 0 28px 0;
+    }
+    
+    .landing-footer-cta {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    @media (max-width: 768px) {
+        .landing-hero {
+            padding: 80px 20px 40px;
+        }
+        
+        .landing-hero h1 {
+            font-size: 2rem;
+        }
+        
+        .landing-hero p {
+            font-size: 1.1rem;
+        }
+        
+        .landing-cta {
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .landing-features h2,
+        .landing-pricing h2 {
+            font-size: 1.75rem;
+        }
+        
+        .landing-plan.featured {
+            transform: none;
+        }
+        
+        .landing-pricing-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .landing-logo {
+            font-size: 16px;
+        }
+    }
+</style>
+
+<div class="landing-container">
+    <!-- Header -->
+    <header class="landing-header">
+        <nav class="landing-nav">
+            <a href="{% url 'index' %}" class="landing-logo">
+                <img src="{% static 'engine/logo.png' %}" alt="Generative Research Assistant" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
+                <span class="logo-fallback" style="display: none;">GRA</span>
+                Generative Research Assistant
+            </a>
+            <div class="landing-nav-actions">
+                <a href="{% url 'login' %}" class="landing-btn landing-btn-ghost">Login</a>
+                <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="landing-hero">
+        <div class="landing-hero-content">
+            <h1>Advanced Statistical Analysis Made Simple</h1>
+            <p>Powerful regression analysis, Bayesian modeling, and data visualization tools for researchers, analysts, and data scientists.</p>
+            <div class="landing-cta">
+                <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Free Trial</a>
+                <a href="#features" class="landing-btn landing-btn-ghost">Learn More</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="landing-features">
+        <div class="landing-features-container">
+            <h2>Why Choose Generative Research Assistant?</h2>
+            <div class="landing-features-grid">
+                <div class="landing-feature">
+                    <div class="landing-feature-icon">📊</div>
+                    <h3>Advanced Analytics</h3>
+                    <p>Perform complex regression analysis, Bayesian modeling, and Bayesian Model Averaging with just a few clicks.</p>
+                </div>
+                <div class="landing-feature">
+                    <div class="landing-feature-icon">🎯</div>
+                    <h3>User-Friendly Interface</h3>
+                    <p>Intuitive design that makes statistical analysis accessible to users of all skill levels.</p>
+                </div>
+                <div class="landing-feature">
+                    <div class="landing-feature-icon">⚡</div>
+                    <h3>Lightning Fast</h3>
+                    <p>Optimized algorithms and modern infrastructure ensure your analyses run quickly and efficiently.</p>
+                </div>
+                <div class="landing-feature">
+                    <div class="landing-feature-icon">🔒</div>
+                    <h3>Secure & Private</h3>
+                    <p>Your data is protected with enterprise-grade security and privacy controls.</p>
+                </div>
+                <div class="landing-feature">
+                    <div class="landing-feature-icon">📈</div>
+                    <h3>Beautiful Visualizations</h3>
+                    <p>Create stunning interactive charts and graphs to communicate your findings effectively.</p>
+                </div>
+                <div class="landing-feature">
+                    <div class="landing-feature-icon">🔄</div>
+                    <h3>Collaborative</h3>
+                    <p>Share your analyses and collaborate with team members in real-time.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section - DYNAMIC: Reads from SubscriptionPlan objects in database -->
+    <section class="landing-pricing">
+        <div class="landing-pricing-container">
+            <h2>Simple, Transparent Pricing</h2>
+            <div class="landing-pricing-grid">
+                {% if plans %}
+                    {% for plan in plans %}
+                    {% with tier_settings=plan.get_tier_settings %}
+                    <div class="landing-plan {% if forloop.counter == 2 and plans|length >= 2 %}featured{% endif %}">
+                        {% if forloop.counter == 2 and plans|length >= 2 %}
+                        <div class="landing-plan-badge">Most Popular</div>
+                        {% endif %}
+                        <h3>{{ plan.name }}</h3>
+                        <div class="landing-plan-price">${{ plan.price_monthly|floatformat:0 }}</div>
+                        <div class="landing-plan-period">per month</div>
+                        <ul class="landing-plan-features">
+                            {% if tier_settings %}
+                            <li>{% if tier_settings.max_datasets == -1 %}Unlimited{% else %}{{ tier_settings.max_datasets }}{% endif %} datasets</li>
+                            <li>{% if tier_settings.max_sessions == -1 %}Unlimited{% else %}{{ tier_settings.max_sessions }}{% endif %} analysis sessions</li>
+                            <li>{% if tier_settings.max_file_size_mb == -1 %}Unlimited{% else %}{{ tier_settings.max_file_size_mb }}{% endif %} MB max file size</li>
+                            {% endif %}
+                            {% if plan.features %}
+                            {% for feature in plan.features %}
+                            <li>{{ feature }}</li>
+                            {% endfor %}
+                            {% endif %}
+                            {% if plan.ai_features %}
+                            {% for ai_feature in plan.ai_features %}
+                            <li>🤖 {{ ai_feature }}</li>
+                            {% endfor %}
+                            {% endif %}
+                        </ul>
+                        {% if plan.price_monthly == 0 %}
+                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
+                        {% elif plan.name|lower == 'enterprise' or plan.name|lower == 'high tier' %}
+                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Contact Sales</a>
+                        {% else %}
+                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Free Trial</a>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+                    {% endfor %}
+                {% else %}
+                    <!-- Fallback: Only shows if NO plans exist in database -->
+                    <div class="landing-plan">
+                        <h3>Free</h3>
+                        <div class="landing-plan-price">$0</div>
+                        <div class="landing-plan-period">per month</div>
+                        <ul class="landing-plan-features">
+                            <li>5 datasets</li>
+                            <li>10 analysis sessions</li>
+                            <li>Basic regression</li>
+                            <li>Community support</li>
+                        </ul>
+                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="landing-footer">
+        <div class="landing-footer-container">
+            <h3>Ready to Transform Your Data Analysis?</h3>
+            <p>Join thousands of researchers and analysts who trust Generative Research Assistant for their statistical analysis needs.</p>
+            <div class="landing-footer-cta">
+                <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Your Free Trial</a>
+                <a href="{% url 'login' %}" class="landing-btn landing-btn-ghost">Sign In</a>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<script>
+    // Smooth scrolling for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
+
+    // Add scroll effect to header
+    window.addEventListener('scroll', function() {
+        const header = document.querySelector('.landing-header');
+        if (window.scrollY > 100) {
+            header.style.background = 'rgba(255, 255, 255, 0.95)';
+            header.style.backdropFilter = 'blur(20px)';
+        } else {
+            header.style.background = 'rgba(255, 255, 255, 0.1)';
+            header.style.backdropFilter = 'blur(10px)';
+        }
+    });
+</script>
+
