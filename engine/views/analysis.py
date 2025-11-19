@@ -484,8 +484,17 @@ def add_model_errors_to_dataset(request, session_id):
         # Add residual columns to dataframe
         df = DatasetService.align_and_add_residuals(df, residual_columns, column_names)
         
-        # Save the updated dataset
-        DatasetService.save_dataframe(df, dataset.file_path)
+        # Save the updated dataset (handling encryption if needed)
+        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
+        from engine.dataprep.views import _infer_dataset_format
+        
+        if is_encrypted_file(dataset.file_path):
+            # File is encrypted - use encrypted save function
+            file_format = _infer_dataset_format(dataset.file_path)
+            save_encrypted_dataframe(df, dataset.file_path, user_id=request.user.id, file_format=file_format)
+        else:
+            # File is not encrypted - use regular save
+            DatasetService.save_dataframe(df, dataset.file_path)
         
         return JsonResponse({
             'success': True,
