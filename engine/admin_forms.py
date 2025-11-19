@@ -43,11 +43,6 @@ class AIFineTuningCommandAdminForm(forms.ModelForm):
         model = AIFineTuningCommand
         fields = '__all__'
         widgets = {
-            'provider': forms.Select(attrs={
-                'class': 'provider-select',
-            }),
-        }
-        widgets = {
             'command_data': forms.Textarea(attrs={
                 'rows': 18,
                 'cols': 80,
@@ -58,6 +53,9 @@ class AIFineTuningCommandAdminForm(forms.ModelForm):
                 'rows': 3,
                 'cols': 80,
                 'style': 'width: 100%;'
+            }),
+            'provider': forms.Select(attrs={
+                'class': 'provider-select',
             }),
         }
     
