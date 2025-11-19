@@ -457,8 +457,8 @@
             const loginLinks = document.querySelectorAll('a[href*="login"]');
             loginLinks.forEach(link => {
                 const href = link.getAttribute('href');
-                // Only intercept if it's a login URL (not external links)
-                if (href && (href.includes('/accounts/login') || href.includes('/login'))) {
+                // Only intercept if it's a login URL (not external links, not Google OAuth)
+                if (href && (href.includes('/accounts/login') || href.includes('/login')) && !href.includes('/accounts/google/')) {
                     link.addEventListener('click', function(e) {
                         e.preventDefault();
                         e.stopPropagation();
