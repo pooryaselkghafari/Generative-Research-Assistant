@@ -51,7 +51,8 @@ class UserProfile(models.Model):
     
     def get_limits(self):
         """Get limits from tier settings or use defaults"""
-        from .models import SubscriptionTierSettings
+        # Import here to avoid circular import issues
+        # SubscriptionTierSettings is defined later in this same file
         try:
             tier_settings = SubscriptionTierSettings.objects.get(tier=self.subscription_type)
             return {

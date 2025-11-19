@@ -225,34 +225,87 @@ def logout_view(request):
 
 @login_required
 def profile_view(request):
-    # Get or create user profile (handle case where profile doesn't exist)
-    # This is critical for Google OAuth users who might not have profiles
-    profile, created = UserProfile.objects.get_or_create(
-        user=request.user,
-        defaults={
-            'subscription_type': 'free',
-            'ai_tier': 'none'
-        }
-    )
+    """
+    Display user profile page.
     
-    # If profile was just created, try to set AI tier from tier settings
-    if created:
+    Handles cases where UserProfile doesn't exist (e.g., Google OAuth users)
+    by creating a default profile with safe fallbacks.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get or create user profile (handle case where profile doesn't exist)
+        # This is critical for Google OAuth users who might not have profiles
+        created = False
         try:
-            from engine.models import SubscriptionTierSettings
-            tier_settings = SubscriptionTierSettings.objects.get(tier='free')
-            profile.ai_tier = tier_settings.ai_tier
-            profile.save()
-        except SubscriptionTierSettings.DoesNotExist:
-            pass
+            profile, created = UserProfile.objects.get_or_create(
+                user=request.user,
+                defaults={
+                    'subscription_type': 'free',
+                    'ai_tier': 'none'
+                }
+            )
+            if created:
+                logger.info(f"Created new UserProfile for user {request.user.username}")
+        except Exception as e:
+            logger.error(f"Error creating/getting UserProfile for user {request.user.username}: {e}", exc_info=True)
+            # Try to get existing profile as fallback
+            try:
+                profile = UserProfile.objects.get(user=request.user)
+                created = False
+            except UserProfile.DoesNotExist:
+                # Last resort: create a minimal profile without get_or_create
+                profile = UserProfile.objects.create(
+                    user=request.user,
+                    subscription_type='free',
+                    ai_tier='none'
+                )
+                created = True
+                logger.warning(f"Created UserProfile using fallback method for user {request.user.username}")
+        
+        # If profile was just created, try to set AI tier from tier settings
+        if created:
+            try:
+                from engine.models import SubscriptionTierSettings
+                tier_settings = SubscriptionTierSettings.objects.get(tier='free')
+                profile.ai_tier = tier_settings.ai_tier
+                profile.save()
+            except SubscriptionTierSettings.DoesNotExist:
+                logger.warning("SubscriptionTierSettings for 'free' tier not found, using default 'none'")
+            except Exception as e:
+                logger.warning(f"Error setting AI tier from tier settings: {e}")
+        
+        # Build context with safe fallbacks
+        try:
+            from engine.models import Ticket
+            open_tickets_count = Ticket.objects.filter(user=request.user, status='open').count()
+            total_tickets_count = Ticket.objects.filter(user=request.user).count()
+        except Exception as e:
+            logger.warning(f"Error fetching ticket counts: {e}")
+            open_tickets_count = 0
+            total_tickets_count = 0
+        
+        try:
+            subscription_plans = SubscriptionPlan.objects.filter(is_active=True)
+        except Exception as e:
+            logger.warning(f"Error fetching subscription plans: {e}")
+            subscription_plans = []
+        
+        context = {
+            'profile': profile,
+            'subscription_plans': subscription_plans,
+            'open_tickets_count': open_tickets_count,
+            'total_tickets_count': total_tickets_count,
+        }
+        
+        return render(request, 'accounts/profile.html', context)
     
-    from engine.models import Ticket
-    context = {
-        'profile': profile,
-        'subscription_plans': SubscriptionPlan.objects.filter(is_active=True),
-        'open_tickets_count': Ticket.objects.filter(user=request.user, status='open').count(),
-        'total_tickets_count': Ticket.objects.filter(user=request.user).count(),
-    }
-    return render(request, 'accounts/profile.html', context)
+    except Exception as e:
+        logger.error(f"Critical error in profile_view for user {request.user.username}: {e}", exc_info=True)
+        # Return a minimal error page instead of 500
+        messages.error(request, f"An error occurred while loading your profile. Please try again or contact support.")
+        return redirect('index')
 
 @login_required
 def subscription_view(request):
