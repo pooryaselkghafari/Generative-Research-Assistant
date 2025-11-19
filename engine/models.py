@@ -569,6 +569,131 @@ class Ticket(models.Model):
         super().save(*args, **kwargs)
 
 
+class AIProvider(models.Model):
+    """
+    AI Provider configuration for fine-tuning operations.
+    
+    Stores API keys, provider settings, and authentication details
+    for connecting to AI service providers (OpenAI, Anthropic, etc.).
+    """
+    PROVIDER_CHOICES = [
+        ('openai', 'OpenAI'),
+        ('anthropic', 'Anthropic Claude'),
+        ('custom', 'Custom API'),
+    ]
+    
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Name for this provider configuration (e.g., 'Production OpenAI', 'Development Claude')"
+    )
+    provider_type = models.CharField(
+        max_length=50,
+        choices=PROVIDER_CHOICES,
+        default='openai',
+        help_text="Type of AI provider"
+    )
+    api_key = EncryptedCharField(
+        max_length=500,
+        help_text="API key for authentication (encrypted)"
+    )
+    api_base_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Base URL for API (optional, uses provider default if not set)"
+    )
+    base_model = models.CharField(
+        max_length=100,
+        default='gpt-3.5-turbo',
+        help_text="Base model identifier (e.g., 'gpt-3.5-turbo', 'claude-3-opus')"
+    )
+    fine_tuned_model_id = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="ID of the fine-tuned model (if available)"
+    )
+    organization_id = EncryptedCharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Organization ID (for OpenAI, encrypted)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this provider is currently active"
+    )
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Whether this is the default provider"
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='ai_providers',
+        help_text="User who created this configuration"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_tested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time this provider was successfully tested"
+    )
+    test_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('untested', 'Untested'),
+            ('success', 'Success'),
+            ('failed', 'Failed'),
+        ],
+        default='untested',
+        help_text="Status of last connection test"
+    )
+    test_message = models.TextField(
+        blank=True,
+        help_text="Message from last connection test"
+    )
+    
+    class Meta:
+        ordering = ['-is_default', '-is_active', 'name']
+        verbose_name = "AI Provider"
+        verbose_name_plural = "AI Providers"
+        indexes = [
+            models.Index(fields=['provider_type', 'is_active']),
+            models.Index(fields=['is_default', 'is_active']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['is_default'],
+                condition=models.Q(is_default=True),
+                name='unique_default_provider'
+            )
+        ]
+    
+    def __str__(self):
+        status = "✓" if self.is_active else "✗"
+        default = " [DEFAULT]" if self.is_default else ""
+        return f"{status} {self.name} ({self.get_provider_type_display()}){default}"
+    
+    def save(self, *args, **kwargs):
+        """Ensure only one default provider exists."""
+        if self.is_default:
+            # Unset other default providers
+            AIProvider.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_active_provider(cls):
+        """Get the active default provider or first active provider."""
+        try:
+            return cls.objects.filter(is_active=True, is_default=True).first() or \
+                   cls.objects.filter(is_active=True).first()
+        except cls.DoesNotExist:
+            return None
+
+
 class AIFineTuningTemplate(models.Model):
     """
     JSON templates for AI fine-tuning commands.

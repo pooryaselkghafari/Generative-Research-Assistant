@@ -9,7 +9,8 @@ from django.utils.safestring import mark_safe
 from .models import (
     Dataset, AnalysisSession, UserProfile, SubscriptionPlan, Payment, Page,
     SubscriptionTierSettings, PrivacyPolicy, TermsOfService,
-    AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket
+    AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket,
+    AIProvider
 )
 
 
@@ -622,6 +623,160 @@ class TicketAdmin(admin.ModelAdmin):
         return readonly
 
 admin.site.register(Ticket, TicketAdmin)
+
+
+class AIProviderAdmin(admin.ModelAdmin):
+    """
+    Admin interface for AI Provider configuration.
+    
+    Provides a user-friendly form for configuring AI provider settings,
+    API keys, and testing connections.
+    """
+    list_display = ('name', 'provider_type', 'is_active', 'is_default', 'test_status', 'last_tested_at', 'created_by')
+    list_filter = ('provider_type', 'is_active', 'is_default', 'test_status', 'created_at')
+    search_fields = ('name', 'base_model', 'fine_tuned_model_id')
+    readonly_fields = ('created_at', 'updated_at', 'last_tested_at', 'test_status', 'test_message', 'created_by')
+    raw_id_fields = ('created_by',)
+    
+    fieldsets = (
+        ('Provider Information', {
+            'fields': ('name', 'provider_type', 'is_active', 'is_default'),
+            'description': 'Configure the AI provider settings. Only one provider can be set as default.'
+        }),
+        ('API Configuration', {
+            'fields': ('api_key', 'api_base_url', 'organization_id'),
+            'description': '⚠️ API keys are encrypted for security. Enter your API key from your AI provider dashboard.'
+        }),
+        ('Model Configuration', {
+            'fields': ('base_model', 'fine_tuned_model_id'),
+            'description': 'Base model identifier and fine-tuned model ID (if available).'
+        }),
+        ('Connection Test', {
+            'fields': ('test_status', 'test_message', 'last_tested_at'),
+            'description': 'Test the connection to verify API credentials are correct. Use the "Test Connection" action below.',
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['test_connection', 'set_as_default', 'activate_providers', 'deactivate_providers']
+    
+    def save_model(self, request, obj, form, change):
+        """Set created_by if new."""
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def test_connection(self, request, queryset):
+        """
+        Test connection to selected AI providers.
+        
+        Args:
+            request: Django request object
+            queryset: Selected AIProvider objects
+        """
+        from engine.integrations.ai_provider import AIService
+        
+        tested = 0
+        successful = 0
+        failed = 0
+        
+        for provider in queryset:
+            tested += 1
+            try:
+                # Temporarily set as active for testing
+                original_active = provider.is_active
+                provider.is_active = True
+                provider.save()
+                
+                # Test connection
+                result = AIService.test_model("Test connection")
+                
+                if result.get('success'):
+                    successful += 1
+                    self.message_user(
+                        request,
+                        f'✓ {provider.name}: Connection test successful',
+                        level='SUCCESS'
+                    )
+                else:
+                    failed += 1
+                    self.message_user(
+                        request,
+                        f'✗ {provider.name}: {result.get("message", "Connection test failed")}',
+                        level='ERROR'
+                    )
+                
+                # Restore original active status
+                provider.is_active = original_active
+                provider.save()
+                
+            except Exception as e:
+                failed += 1
+                self.message_user(
+                    request,
+                    f'✗ {provider.name}: Error - {str(e)}',
+                    level='ERROR'
+                )
+        
+        self.message_user(
+            request,
+            f'Tested {tested} provider(s): {successful} successful, {failed} failed',
+            level='INFO' if failed == 0 else 'WARNING'
+        )
+    test_connection.short_description = "Test connection to selected providers"
+    
+    def set_as_default(self, request, queryset):
+        """Set selected provider as default."""
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                'Please select exactly one provider to set as default',
+                level='ERROR'
+            )
+            return
+        
+        provider = queryset.first()
+        provider.is_default = True
+        provider.is_active = True
+        provider.save()
+        
+        self.message_user(
+            request,
+            f'✓ {provider.name} set as default provider',
+            level='SUCCESS'
+        )
+    set_as_default.short_description = "Set as default provider"
+    
+    def activate_providers(self, request, queryset):
+        """Activate selected providers."""
+        count = queryset.update(is_active=True)
+        self.message_user(
+            request,
+            f'✓ Activated {count} provider(s)',
+            level='SUCCESS'
+        )
+    activate_providers.short_description = "Activate selected providers"
+    
+    def deactivate_providers(self, request, queryset):
+        """Deactivate selected providers."""
+        count = queryset.update(is_active=False)
+        self.message_user(
+            request,
+            f'✓ Deactivated {count} provider(s)',
+            level='SUCCESS'
+        )
+    deactivate_providers.short_description = "Deactivate selected providers"
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related."""
+        qs = super().get_queryset(request)
+        return qs.select_related('created_by')
+
+admin.site.register(AIProvider, AIProviderAdmin)
 
 
 # AIFineTuningTemplate model exists but is not exposed in admin

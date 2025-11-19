@@ -104,20 +104,10 @@ class AIFineTuningService:
                 'message': 'No files provided for fine-tuning'
             }
         
-        # TODO: Integrate with AI provider (OpenAI, Anthropic, etc.)
-        # Example:
-        # from engine.integrations.ai_provider import AIService
-        # result = AIService.fine_tune(files, command_data)
-        # return result
-        
-        file_names = [f.name for f in files]
-        return {
-            'success': True,
-            'message': (
-                f'Fine-tuning initiated with {len(files)} file(s): '
-                f'{", ".join(file_names)}'
-            )
-        }
+        # Integrate with AI provider
+        from engine.integrations.ai_provider import AIService
+        result = AIService.fine_tune(files, command_data)
+        return result
     
     @staticmethod
     def _process_update_prompt(
@@ -138,12 +128,10 @@ class AIFineTuningService:
         if not prompt:
             return {'success': False, 'message': 'No prompt provided'}
         
-        # TODO: Integrate with AI provider to update system prompt
-        # Example:
-        # from engine.integrations.ai_provider import AIService
-        # AIService.update_system_prompt(prompt)
-        
-        return {'success': True, 'message': 'System prompt updated successfully'}
+        # Integrate with AI provider to update system prompt
+        from engine.integrations.ai_provider import AIService
+        result = AIService.update_system_prompt(prompt)
+        return result
     
     @staticmethod
     def _process_add_context(
@@ -163,15 +151,10 @@ class AIFineTuningService:
         if not files:
             return {'success': False, 'message': 'No files provided'}
         
-        # TODO: Integrate with AI provider to add context
-        # Example:
-        # from engine.integrations.ai_provider import AIService
-        # AIService.add_context(files, command_data)
-        
-        return {
-            'success': True,
-            'message': f'Context added from {files.count()} file(s)'
-        }
+        # Integrate with AI provider to add context
+        from engine.integrations.ai_provider import AIService
+        result = AIService.add_context(files, command_data)
+        return result
     
     @staticmethod
     def _process_test_model(
@@ -190,16 +173,13 @@ class AIFineTuningService:
         """
         test_message = command_data.get('test_message', 'Hello, how are you?')
         
-        # TODO: Integrate with AI provider to test model
-        # Example:
-        # from engine.integrations.ai_provider import AIService
-        # response = AIService.test_model(test_message)
-        # return {'success': True, 'message': f'Test response: {response}'}
-        
-        return {
-            'success': True,
-            'message': f'Model test completed. Test message: "{test_message}"'
-        }
+        # Integrate with AI provider to test model
+        from engine.integrations.ai_provider import AIService
+        result = AIService.test_model(test_message)
+        if result.get('success'):
+            response_text = result.get('response', 'No response')
+            return {'success': True, 'message': f'Test response: {response_text}'}
+        return result
     
     @staticmethod
     def _process_reset_model(
@@ -216,12 +196,10 @@ class AIFineTuningService:
         Returns:
             dict with 'success' and 'message'
         """
-        # TODO: Integrate with AI provider to reset model
-        # Example:
-        # from engine.integrations.ai_provider import AIService
-        # AIService.reset_model()
-        
-        return {'success': True, 'message': 'Model reset to default state'}
+        # Integrate with AI provider to reset model
+        from engine.integrations.ai_provider import AIService
+        result = AIService.reset_model()
+        return result
     
     @staticmethod
     def get_active_files() -> List[AIFineTuningFile]:
