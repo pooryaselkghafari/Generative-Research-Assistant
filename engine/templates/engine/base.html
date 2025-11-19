@@ -98,31 +98,42 @@
           document.body.style.overflow = 'hidden';
           
           // Set timeout to detect if iframe fails to load
+          // Increased timeout to 15 seconds to handle larger datasets (especially after adding errors)
+          let hasLoaded = false;
           loadTimeout = setTimeout(function() {
-            try {
-              // Check if iframe loaded successfully
-              if (frame.contentWindow && frame.contentWindow.location.href === 'about:blank') {
-                console.warn('Iframe failed to load:', absoluteUrl);
-                // Show error message to user
-                frame.style.display = 'none';
-                const errorDiv = document.createElement('div');
-                errorDiv.style.cssText = 'padding: 40px; text-align: center; color: #dc2626;';
-                errorDiv.innerHTML = '<div style="font-size: 48px; margin-bottom: 16px;">⚠️</div><div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Failed to load dataset editor</div><div style="font-size: 14px; color: #6b7280;">The dataset editor could not be loaded. Please try again or contact support if the problem persists.</div>';
-                frame.parentElement.appendChild(errorDiv);
+            if (!hasLoaded) {
+              try {
+                // Check if iframe loaded successfully
+                if (frame.contentWindow && frame.contentWindow.location.href === 'about:blank') {
+                  console.warn('Iframe failed to load after timeout:', absoluteUrl);
+                  // Show error message to user
+                  frame.style.display = 'none';
+                  const errorDiv = document.createElement('div');
+                  errorDiv.style.cssText = 'padding: 40px; text-align: center; color: #dc2626;';
+                  errorDiv.innerHTML = '<div style="font-size: 48px; margin-bottom: 16px;">⚠️</div><div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Failed to load dataset editor</div><div style="font-size: 14px; color: #6b7280;">The dataset editor is taking longer than expected to load. This may happen with large datasets. Please try again or open the dataset from the dashboard.</div>';
+                  frame.parentElement.appendChild(errorDiv);
+                }
+              } catch (e) {
+                // Cross-origin error is expected, means iframe loaded
+                console.log('Iframe loaded (cross-origin check passed)');
+                hasLoaded = true;
               }
-            } catch (e) {
-              // Cross-origin error is expected, means iframe loaded
-              console.log('Iframe loaded (cross-origin check passed)');
             }
             loadTimeout = null;
-          }, 5000);
+          }, 15000); // Increased from 5 to 15 seconds
           
           // Handle iframe load
           frame.onload = function() {
+            hasLoaded = true;
             if (loadTimeout) {
               clearTimeout(loadTimeout);
               loadTimeout = null;
             }
+            // Remove any error messages that might have been shown
+            const errorDivs = frame.parentElement.querySelectorAll('div[style*="padding: 40px"]');
+            errorDivs.forEach(div => div.remove());
+            frame.style.display = 'block'; // Ensure frame is visible
+            
             try {
               // Try to access iframe content (will fail if cross-origin, which is OK)
               if (frame.contentWindow) {
