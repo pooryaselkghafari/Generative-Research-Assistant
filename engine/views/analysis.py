@@ -429,7 +429,13 @@ def ai_chat(request):
 
 
 def add_model_errors_to_dataset(request, session_id):
-    """Add model residuals/errors to the dataset as new columns"""
+    """
+    Add model residuals/errors to the dataset as new columns.
+    
+    IMPORTANT: This function does NOT modify the analysis session in any way.
+    It only adds new columns to the dataset file. The session's formula, 
+    dependent variables, and all other analysis parameters remain unchanged.
+    """
     # Require authentication
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication required'}, status=401)
@@ -444,7 +450,7 @@ def add_model_errors_to_dataset(request, session_id):
         from engine.services.residual_service import ResidualCalculationService
         from engine.services.dataset_service import DatasetService
         
-        # Get session and dataset
+        # Get session and dataset (read-only - we will NOT modify the session)
         # Security: Only allow access to user's own sessions
         session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
         data = json.loads(request.body)
@@ -455,6 +461,9 @@ def add_model_errors_to_dataset(request, session_id):
         
         # Security: Only allow access to user's own datasets
         dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+        
+        # Store original session formula to ensure it's never modified
+        original_formula = session.formula
         
         # Load the dataset
         df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
@@ -470,7 +479,7 @@ def add_model_errors_to_dataset(request, session_id):
             print(traceback.format_exc())
             return JsonResponse({'error': f'Failed to get fitted models: {str(e)}'}, status=500)
         
-        # Get session name for column naming
+        # Get session name for column naming (read-only - only used for naming new columns)
         session_name = session.name.replace(' ', '_').replace('/', '_').replace('\\', '_')
         session_name = re.sub(r'[^\w\-_]', '_', session_name)
         
@@ -485,6 +494,7 @@ def add_model_errors_to_dataset(request, session_id):
         df = DatasetService.align_and_add_residuals(df, residual_columns, column_names)
         
         # Save the updated dataset (handling encryption if needed)
+        # NOTE: We only save the dataset file, NOT the session
         from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
         from engine.dataprep.views import _infer_dataset_format
         
@@ -496,11 +506,27 @@ def add_model_errors_to_dataset(request, session_id):
             # File is not encrypted - use regular save
             DatasetService.save_dataframe(df, dataset.file_path)
         
+        # CRITICAL: Verify session was not modified (safety check)
+        # Refresh from database to ensure we have the latest state
+        session.refresh_from_db()
+        if session.formula != original_formula:
+            # This should never happen, but log it if it does
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"WARNING: Session formula was modified during add_model_errors_to_dataset. "
+                f"Original: {original_formula[:100]}, Current: {session.formula[:100]}"
+            )
+            # Restore original formula
+            session.formula = original_formula
+            session.save(update_fields=['formula'])
+        
+        # Return success - session remains unchanged
         return JsonResponse({
             'success': True,
             'columns_added': len(column_names),
             'column_names': column_names,
-            'message': f'Successfully added {len(column_names)} residual column(s) to dataset'
+            'message': f'Successfully added {len(column_names)} residual column(s) to dataset. Analysis session unchanged.'
         })
         
     except json.JSONDecodeError:
