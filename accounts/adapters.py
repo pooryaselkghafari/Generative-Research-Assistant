@@ -63,24 +63,46 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     def save_user(self, request, sociallogin, form=None):
         """Save user after social login."""
         user = super().save_user(request, sociallogin, form)
-        # Create user profile for social accounts with free tier defaults
-        profile, created = UserProfile.objects.get_or_create(
-            user=user,
-            defaults={
-                'subscription_type': 'free',
-                'ai_tier': 'none'
-            }
-        )
         
-        # Update AI tier from tier settings if available (only for new profiles)
-        if created:
-            from engine.models import SubscriptionTierSettings
+        # Create user profile for social accounts with free tier defaults
+        # This is critical for Google OAuth users
+        try:
+            profile, created = UserProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    'subscription_type': 'free',
+                    'ai_tier': 'none'
+                }
+            )
+            
+            # Update AI tier from tier settings if available (only for new profiles)
+            if created:
+                from engine.models import SubscriptionTierSettings
+                try:
+                    tier_settings = SubscriptionTierSettings.objects.get(tier='free')
+                    profile.ai_tier = tier_settings.ai_tier
+                    profile.save()
+                except SubscriptionTierSettings.DoesNotExist:
+                    pass
+            
+            if created:
+                logger.info(f"Created UserProfile for Google OAuth user: {user.username}")
+            else:
+                logger.info(f"UserProfile already exists for user: {user.username}")
+                
+        except Exception as e:
+            # Log error but don't break login - profile can be created later
+            logger.error(f"Failed to create UserProfile for Google OAuth user {user.username}: {e}", exc_info=True)
+            # Try to create a basic profile as fallback
             try:
-                tier_settings = SubscriptionTierSettings.objects.get(tier='free')
-                profile.ai_tier = tier_settings.ai_tier
-                profile.save()
-            except SubscriptionTierSettings.DoesNotExist:
-                pass
+                UserProfile.objects.create(
+                    user=user,
+                    subscription_type='free',
+                    ai_tier='none'
+                )
+                logger.info(f"Created fallback UserProfile for user: {user.username}")
+            except Exception as e2:
+                logger.error(f"Failed to create fallback UserProfile for user {user.username}: {e2}", exc_info=True)
         
         return user
     
