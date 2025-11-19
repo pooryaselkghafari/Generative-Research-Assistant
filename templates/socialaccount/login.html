@@ -60,7 +60,7 @@
 
 <style>
 body {
-  background: #050914;
+  background: #ffffff;
 }
 
 .google-login-hero {
@@ -74,19 +74,7 @@ body {
 }
 
 .hero-bg {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 15% 20%, rgba(66,133,244,0.35), transparent 45%),
-              radial-gradient(circle at 85% 15%, rgba(52,168,83,0.25), transparent 40%),
-              radial-gradient(circle at 50% 80%, rgba(251,188,5,0.2), transparent 35%),
-              #050914;
-  animation: pulse 12s ease-in-out infinite;
-  z-index: 0;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.03); }
+  display: none;
 }
 
 .google-login-card {
@@ -94,26 +82,16 @@ body {
   z-index: 1;
   width: 100%;
   max-width: 640px;
-  background: rgba(9, 14, 27, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 32px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
   padding: 48px;
-  color: #f8fafc;
-  box-shadow: 0 20px 80px rgba(5, 9, 20, 0.7);
-  backdrop-filter: blur(18px);
+  color: #1f2937;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 10px 15px rgba(0, 0, 0, 0.1);
 }
 
-.google-login-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(66,133,244,0.8), rgba(52,168,83,0.6));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
+.google-login-header {
+  text-align: center;
 }
 
 .google-login-header h1 {
@@ -121,13 +99,15 @@ body {
   margin: 24px 0 12px;
   font-weight: 600;
   letter-spacing: -0.04em;
+  color: #1f2937;
 }
 
 .google-login-header p {
-  margin: 0;
-  color: rgba(248, 250, 252, 0.8);
+  margin: 0 auto;
+  color: #6b7280;
   font-size: 18px;
   line-height: 1.6;
+  max-width: 500px;
 }
 
 .pill-label {
@@ -136,8 +116,9 @@ body {
   gap: 8px;
   padding: 6px 16px;
   border-radius: 999px;
-  background: rgba(248, 250, 252, 0.08);
-  border: 1px solid rgba(248, 250, 252, 0.12);
+  background: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -158,14 +139,19 @@ body {
   margin-top: 24px;
 }
 
+.badge-row {
+  justify-content: center;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
   border-radius: 999px;
-  background: rgba(248, 250, 252, 0.05);
-  color: rgba(248, 250, 252, 0.75);
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  color: #374151;
   font-size: 14px;
 }
 
@@ -176,6 +162,7 @@ body {
 
 .google-login-form {
   margin-top: 32px;
+  text-align: center;
 }
 
 .google-login-btn {
@@ -228,13 +215,14 @@ body {
 .google-login-footer {
   margin-top: 32px;
   text-align: center;
-  color: rgba(248, 250, 252, 0.7);
+  color: #6b7280;
   font-size: 14px;
 }
 
 .google-login-footer a {
-  color: #93c5fd;
+  color: #3b82f6;
   text-decoration: none;
+  font-weight: 500;
 }
 
 .google-login-footer a:hover {
