@@ -493,18 +493,43 @@ def add_model_errors_to_dataset(request, session_id):
         # Add residual columns to dataframe
         df = DatasetService.align_and_add_residuals(df, residual_columns, column_names)
         
+        # Ensure all new columns are properly formatted (convert to numeric, handle NaN)
+        import pandas as pd
+        import numpy as np
+        for col_name in column_names:
+            if col_name in df.columns:
+                # Ensure the column is numeric (float) and handle any type issues
+                try:
+                    df[col_name] = pd.to_numeric(df[col_name], errors='coerce')
+                except Exception as e:
+                    print(f"DEBUG: Warning - could not convert {col_name} to numeric: {e}")
+                    # If conversion fails, try to keep as is or convert to string
+                    pass
+        
+        # Clean up any duplicate columns that might have been created
+        df = df.loc[:, ~df.columns.duplicated()].copy()
+        
         # Save the updated dataset (handling encryption if needed)
         # NOTE: We only save the dataset file, NOT the session
         from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
         from engine.dataprep.views import _infer_dataset_format
         
-        if is_encrypted_file(dataset.file_path):
-            # File is encrypted - use encrypted save function
-            file_format = _infer_dataset_format(dataset.file_path)
-            save_encrypted_dataframe(df, dataset.file_path, user_id=request.user.id, file_format=file_format)
-        else:
-            # File is not encrypted - use regular save
-            DatasetService.save_dataframe(df, dataset.file_path)
+        try:
+            if is_encrypted_file(dataset.file_path):
+                # File is encrypted - use encrypted save function
+                file_format = _infer_dataset_format(dataset.file_path)
+                save_encrypted_dataframe(df, dataset.file_path, user_id=request.user.id, file_format=file_format)
+            else:
+                # File is not encrypted - use regular save
+                DatasetService.save_dataframe(df, dataset.file_path)
+        except Exception as save_error:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"DEBUG: Error saving dataset after adding residuals: {save_error}")
+            print(f"DEBUG: Traceback: {error_details}")
+            return JsonResponse({
+                'error': f'Failed to save dataset after adding errors: {str(save_error)}'
+            }, status=500)
         
         # CRITICAL: Verify session was not modified (safety check)
         # Refresh from database to ensure we have the latest state
