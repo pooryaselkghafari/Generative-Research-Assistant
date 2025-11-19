@@ -689,8 +689,8 @@ class AIProviderAdmin(admin.ModelAdmin):
                 provider.is_active = True
                 provider.save()
                 
-                # Test connection
-                result = AIService.test_model("Test connection")
+                # Test connection - pass provider_id to use this specific provider
+                result = AIService.test_model("Test connection", provider_id=provider.id)
                 
                 if result.get('success'):
                     successful += 1
@@ -770,10 +770,46 @@ class AIProviderAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         """Optimize queryset with select_related."""
-        qs = super().get_queryset(request)
-        return qs.select_related('created_by')
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            qs = super().get_queryset(request)
+            return qs.select_related('created_by')
+        except Exception as e:
+            # Fallback if select_related fails (e.g., table doesn't exist, missing field)
+            logger.error(f"Error in AIProviderAdmin.get_queryset: {e}", exc_info=True)
+            try:
+                # Try without select_related
+                return super().get_queryset(request)
+            except Exception as e2:
+                # Last resort: return empty queryset to prevent 500 error
+                logger.error(f"Critical error in AIProviderAdmin.get_queryset: {e2}", exc_info=True)
+                return AIProvider.objects.none()
+    
+    def get_list_display(self, request):
+        """Safely get list_display with error handling."""
+        try:
+            return self.list_display
+        except Exception:
+            # Fallback to basic fields if there's an error
+            return ('name', 'provider_type', 'is_active')
 
-admin.site.register(AIProvider, AIProviderAdmin)
+# Register AIProvider with error handling
+try:
+    admin.site.register(AIProvider, AIProviderAdmin)
+except Exception as e:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.error(f"Error registering AIProvider in admin: {e}", exc_info=True)
+    # Try to register with minimal config as fallback
+    try:
+        class MinimalAIProviderAdmin(admin.ModelAdmin):
+            list_display = ('name', 'provider_type', 'is_active')
+        admin.site.register(AIProvider, MinimalAIProviderAdmin)
+        logger.warning("Registered AIProvider with minimal admin configuration")
+    except Exception as e2:
+        logger.error(f"Failed to register AIProvider even with minimal config: {e2}")
 
 
 # AIFineTuningTemplate model exists but is not exposed in admin

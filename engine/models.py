@@ -683,9 +683,16 @@ class AIProvider(models.Model):
         ]
     
     def __str__(self):
-        status = "✓" if self.is_active else "✗"
-        default = " [DEFAULT]" if self.is_default else ""
-        return f"{status} {self.name} ({self.get_provider_type_display()}){default}"
+        """String representation with safe encoding."""
+        try:
+            status = "✓" if self.is_active else "✗"
+            default = " [DEFAULT]" if self.is_default else ""
+            provider_type = self.get_provider_type_display() if hasattr(self, 'provider_type') else 'Unknown'
+            name = self.name if hasattr(self, 'name') else 'Unnamed'
+            return f"{status} {name} ({provider_type}){default}"
+        except Exception:
+            # Fallback if there's any error (e.g., encoding, missing fields)
+            return f"AIProvider #{self.pk if hasattr(self, 'pk') else '?'}"
     
     def save(self, *args, **kwargs):
         """Ensure only one default provider exists."""
