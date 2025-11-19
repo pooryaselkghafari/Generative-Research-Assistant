@@ -225,7 +225,17 @@ def logout_view(request):
 
 @login_required
 def profile_view(request):
-    profile = request.user.profile
+    # Get or create user profile (handle case where profile doesn't exist)
+    try:
+        profile = request.user.profile
+    except UserProfile.DoesNotExist:
+        # Profile doesn't exist - create it
+        profile = UserProfile.objects.create(
+            user=request.user,
+            subscription_type='free',
+            ai_tier='none'
+        )
+    
     from engine.models import Ticket
     context = {
         'profile': profile,
@@ -237,7 +247,16 @@ def profile_view(request):
 
 @login_required
 def subscription_view(request):
-    profile = request.user.profile
+    # Get or create user profile (handle case where profile doesn't exist)
+    try:
+        profile = request.user.profile
+    except UserProfile.DoesNotExist:
+        # Profile doesn't exist - create it
+        profile = UserProfile.objects.create(
+            user=request.user,
+            subscription_type='free',
+            ai_tier='none'
+        )
     plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly')
     
     # Update user's AI tier based on subscription type
@@ -264,7 +283,16 @@ def create_checkout_session(request, plan_id):
     
     try:
         plan = SubscriptionPlan.objects.get(id=plan_id, is_active=True)
-        profile = request.user.profile
+        # Get or create user profile (handle case where profile doesn't exist)
+        try:
+            profile = request.user.profile
+        except UserProfile.DoesNotExist:
+            # Profile doesn't exist - create it
+            profile = UserProfile.objects.create(
+                user=request.user,
+                subscription_type='free',
+                ai_tier='none'
+            )
         
         # Create or get Stripe customer
         if not profile.stripe_customer_id:
@@ -301,7 +329,16 @@ def subscription_success(request):
 @login_required
 def cancel_subscription(request):
     try:
-        profile = request.user.profile
+        # Get or create user profile (handle case where profile doesn't exist)
+        try:
+            profile = request.user.profile
+        except UserProfile.DoesNotExist:
+            # Profile doesn't exist - create it
+            profile = UserProfile.objects.create(
+                user=request.user,
+                subscription_type='free',
+                ai_tier='none'
+            )
         if profile.stripe_subscription_id:
             stripe.Subscription.modify(
                 profile.stripe_subscription_id,
