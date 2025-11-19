@@ -32,7 +32,7 @@ class AIFineTuningCommandAdminForm(forms.ModelForm):
         queryset=AIProvider.objects.filter(is_active=True),
         required=False,
         label='AI Provider',
-        help_text='Select which AI provider to use for this command. Leave empty to use the default provider.',
+        help_text='',  # No help text to avoid lightbulb icon
         widget=forms.Select(attrs={
             'class': 'provider-select',
         })
@@ -72,6 +72,11 @@ class AIFineTuningCommandAdminForm(forms.ModelForm):
         command_type = self._get_command_type()
         template_choices = self._build_template_choices(command_type)
         self.fields['template_select'].choices = template_choices
+        
+        # Remove help_text from all fields to hide lightbulb icons
+        for field_name in self.fields:
+            if hasattr(self.fields[field_name], 'help_text'):
+                self.fields[field_name].help_text = ''
         
         # Update provider queryset to show active providers
         try:
