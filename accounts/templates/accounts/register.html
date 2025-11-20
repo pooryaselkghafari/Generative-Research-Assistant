@@ -88,9 +88,39 @@
         {% if form.password1.errors %}
           <div class="error-message">{{ form.password1.errors.0 }}</div>
         {% endif %}
-        {% if form.password1.help_text %}
-          <div class="help-text">{{ form.password1.help_text }}</div>
-        {% endif %}
+        <div class="password-requirements" id="passwordRequirements">
+          <div class="requirements-title">Password must contain:</div>
+          <ul class="requirements-list">
+            <li id="req-length" class="requirement-item">
+              <span class="req-icon">○</span>
+              <span>At least 12 characters</span>
+            </li>
+            <li id="req-uppercase" class="requirement-item">
+              <span class="req-icon">○</span>
+              <span>One uppercase letter (A-Z)</span>
+            </li>
+            <li id="req-lowercase" class="requirement-item">
+              <span class="req-icon">○</span>
+              <span>One lowercase letter (a-z)</span>
+            </li>
+            <li id="req-number" class="requirement-item">
+              <span class="req-icon">○</span>
+              <span>One number (0-9)</span>
+            </li>
+            <li id="req-special" class="requirement-item">
+              <span class="req-icon">○</span>
+              <span>One special character (!@#$%^&*()_+-=[]{}|;:,.<>/?)</span>
+            </li>
+            <li id="req-not-common" class="requirement-item">
+              <span class="req-icon">○</span>
+              <span>Not a common password</span>
+            </li>
+            <li id="req-not-similar" class="requirement-item">
+              <span class="req-icon">○</span>
+              <span>Not too similar to username or email</span>
+            </li>
+          </ul>
+        </div>
       </div>
       
       <div class="form-group">
@@ -207,6 +237,82 @@
   color: #6b7280;
   font-size: 12px;
   margin-top: 6px;
+}
+
+/* Password Requirements Styles */
+.password-requirements {
+  margin-top: 12px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.requirements-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.requirements-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.requirement-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  transition: color 0.2s;
+}
+
+.requirement-item:last-child {
+  margin-bottom: 0;
+}
+
+.requirement-item.valid {
+  color: #059669;
+}
+
+.requirement-item.valid .req-icon {
+  color: #10b981;
+}
+
+.requirement-item.invalid {
+  color: #dc2626;
+}
+
+.requirement-item.invalid .req-icon {
+  color: #ef4444;
+}
+
+.req-icon {
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.2s;
+  display: inline-block;
+  width: 20px;
+  text-align: center;
+}
+
+.requirement-item.valid .req-icon::before {
+  content: "✓";
+  color: #10b981;
+}
+
+.requirement-item.invalid .req-icon::before {
+  content: "✗";
+  color: #ef4444;
+}
+
+.requirement-item:not(.valid):not(.invalid) .req-icon::before {
+  content: "○";
+  color: #9ca3af;
 }
 
 .auth-btn {
@@ -511,6 +617,79 @@ document.addEventListener('DOMContentLoaded', function() {
   const agreeCheckbox = document.getElementById('agreeCheckbox');
   const agreeButton = document.getElementById('agreeButton');
   const declineButton = document.getElementById('declineButton');
+  
+  // Password validation
+  const passwordInput = document.getElementById('id_password1');
+  const usernameInput = document.getElementById('id_username');
+  const emailInput = document.getElementById('id_email');
+  
+  function validatePassword(password) {
+    const username = usernameInput ? usernameInput.value.toLowerCase() : '';
+    const email = emailInput ? emailInput.value.toLowerCase().split('@')[0] : '';
+    const passwordLower = password.toLowerCase();
+    
+    const checks = {
+      length: password.length >= 12,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /\d/.test(password),
+      special: /[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]/.test(password),
+      notCommon: password.length >= 12 && !['password', '12345678', 'qwerty', 'abc123'].some(common => passwordLower.includes(common)),
+      notSimilar: !username || passwordLower.indexOf(username) === -1,
+    };
+    
+    // Check similarity to email username part
+    if (email && email.length >= 3) {
+      checks.notSimilar = checks.notSimilar && passwordLower.indexOf(email) === -1;
+    }
+    
+    return checks;
+  }
+  
+  function updatePasswordRequirements() {
+    if (!passwordInput) return;
+    
+    const password = passwordInput.value;
+    const checks = validatePassword(password);
+    
+    // Update each requirement indicator
+    const requirements = {
+      'req-length': checks.length,
+      'req-uppercase': checks.uppercase,
+      'req-lowercase': checks.lowercase,
+      'req-number': checks.number,
+      'req-special': checks.special,
+      'req-not-common': checks.notCommon,
+      'req-not-similar': checks.notSimilar,
+    };
+    
+    Object.keys(requirements).forEach(reqId => {
+      const element = document.getElementById(reqId);
+      if (element) {
+        if (password.length === 0) {
+          element.classList.remove('valid', 'invalid');
+        } else if (requirements[reqId]) {
+          element.classList.add('valid');
+          element.classList.remove('invalid');
+        } else {
+          element.classList.add('invalid');
+          element.classList.remove('valid');
+        }
+      }
+    });
+  }
+  
+  if (passwordInput) {
+    passwordInput.addEventListener('input', updatePasswordRequirements);
+    passwordInput.addEventListener('blur', updatePasswordRequirements);
+    // Also check when username or email changes
+    if (usernameInput) {
+      usernameInput.addEventListener('input', updatePasswordRequirements);
+    }
+    if (emailInput) {
+      emailInput.addEventListener('input', updatePasswordRequirements);
+    }
+  }
 
   const hasAgreed = sessionStorage.getItem('userAgreementAccepted');
 
