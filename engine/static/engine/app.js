@@ -1657,13 +1657,24 @@ Examples:
           }
         } else {
           hideUploadProgress();
-          alert('Upload failed. Please try again.');
+          try {
+            const response = JSON.parse(xhr.responseText);
+            if (response.error) {
+              const fileSizeMatch = response.error.match(/(\d+\.\d+)\s*MB/);
+              const fileSizeMB = fileSizeMatch ? fileSizeMatch[1] : null;
+              showFileSizeErrorPopup(response.error, fileSizeMB);
+            } else {
+              showFileSizeErrorPopup('Upload failed. Please try again.');
+            }
+          } catch (e) {
+            showFileSizeErrorPopup('Upload failed. Please try again.');
+          }
         }
       });
 
       xhr.addEventListener('error', () => {
         hideUploadProgress();
-        alert('Upload failed. Please try again.');
+        showFileSizeErrorPopup('Upload failed. Please try again.');
       });
 
       xhr.open('POST', '/datasets/upload/');
@@ -2694,6 +2705,63 @@ Examples:
     }, 5000);
   }
   
+  // File Size Error Popup (specialized for file size errors)
+  function showFileSizeErrorPopup(message, fileSizeMB = null) {
+    const popup = document.createElement('div');
+    popup.className = 'modern-error-popup file-size-error-popup';
+    popup.innerHTML = `
+      <div class="error-backdrop" onclick="this.parentElement.remove()"></div>
+      <div class="error-content">
+        <div class="error-icon" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </div>
+        <h3 style="margin: 16px 0 8px 0; color: #1f2937; font-size: 20px; font-weight: 700;">File Too Large</h3>
+        <p style="margin: 0 0 24px 0; color: #6b7280; font-size: 15px; line-height: 1.6; max-width: 400px;">${message}</p>
+        ${fileSizeMB ? `<div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 8px; color: #991b1b; font-size: 14px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span><strong>File size:</strong> ${fileSizeMB} MB (Maximum: 10 MB)</span>
+          </div>
+        </div>` : ''}
+        <button onclick="this.closest('.modern-error-popup').remove()" 
+                style="background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
+          Got it
+        </button>
+      </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Auto-remove after 8 seconds
+    setTimeout(() => {
+      if (popup.parentElement) {
+        popup.remove();
+      }
+    }, 8000);
+    
+    // Add click handler for button
+    popup.querySelector('button').addEventListener('click', () => {
+      popup.remove();
+    });
+    
+    // Add enter key handler
+    const handleKeyPress = (e) => {
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        popup.remove();
+        document.removeEventListener('keydown', handleKeyPress);
+      }
+    };
+    document.addEventListener('keydown', handleKeyPress);
+  }
+
   // Modern Error Popup
   function showModernErrorPopup(errorMessage) {
     const popup = document.createElement('div');
