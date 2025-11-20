@@ -9,21 +9,37 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.urls import reverse
+from django.contrib.sites.models import Site
 
 
-def send_welcome_email(user):
+def send_welcome_email(user, request=None):
     """
     Send a welcome email to a newly registered user.
     
     Args:
         user: User instance
+        request: HttpRequest object for building absolute URLs (optional but recommended)
     """
     try:
+        # Build absolute login URL
+        if request:
+            login_url = request.build_absolute_uri(reverse('login'))
+        else:
+            # Fallback: try to get site domain from settings
+            from django.contrib.sites.models import Site
+            try:
+                site = Site.objects.get_current()
+                protocol = 'https' if not settings.DEBUG else 'http'
+                login_url = f"{protocol}://{site.domain}{reverse('login')}"
+            except Exception:
+                # Last resort: use LOGIN_URL (will be relative, not ideal for emails)
+                login_url = settings.LOGIN_URL if hasattr(settings, 'LOGIN_URL') else '/accounts/login/'
+        
         subject = 'Welcome to Generative Research Assistant!'
         html_message = render_to_string('accounts/emails/welcome.html', {
             'user': user,
             'site_name': 'Generative Research Assistant',
-            'login_url': settings.LOGIN_URL if hasattr(settings, 'LOGIN_URL') else '/accounts/login/',
+            'login_url': login_url,
         })
         plain_message = strip_tags(html_message)
         from_email = settings.DEFAULT_FROM_EMAIL

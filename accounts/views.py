@@ -75,24 +75,10 @@ def register_view(request):
                 # Save user using adapter (this will create the profile)
                 user = adapter.save_user(request, user, form, commit=True)
                 
-                # Check if using console email backend
-                from django.conf import settings
-                using_console_email = 'console' in settings.EMAIL_BACKEND.lower()
-                
-                # Set user as inactive until email is verified (unless using console backend)
-                if using_console_email:
-                    # Auto-activate users when using console backend
-                    user.is_active = True
-                    user.save()
-                    # Log them in automatically
-                    from django.contrib.auth import login
-                    login(request, user)
-                    messages.success(request, f'Welcome, {user.username}! Your account has been created and activated.')
-                    return redirect('index')
-                else:
-                    # Normal flow: require email verification
-                    user.is_active = False
-                    user.save()
+                # Always require email verification (even with console backend for consistency)
+                # Set user as inactive until email is verified
+                user.is_active = False
+                user.save()
                 
                 # Send welcome and verification emails
                 welcome_sent = False
@@ -101,7 +87,7 @@ def register_view(request):
                 try:
                     # Try to send welcome email
                     try:
-                        welcome_sent = send_welcome_email(user)
+                        welcome_sent = send_welcome_email(user, request)
                         if welcome_sent:
                             import logging
                             logger = logging.getLogger(__name__)
@@ -135,19 +121,15 @@ def register_view(request):
                 if verification_sent:
                     messages.success(request, f'Account created successfully! We\'ve sent a verification email to {user.email}. Please check your inbox (and spam folder) and click the verification link to activate your account.')
                     messages.info(request, 'If you don\'t receive the email within a few minutes, please check your spam folder or contact support.')
+                    return redirect('login')
                 elif welcome_sent:
                     # Welcome sent but verification failed - still need verification
-                    messages.warning(request, f'Account created! We sent a welcome email but had trouble sending the verification email. Please contact support to verify your account.')
+                    messages.warning(request, f'Account created! We sent a welcome email but had trouble sending the verification email. Your account is inactive until verified. Please contact support to verify your account.')
+                    return redirect('login')
                 else:
-                    # Both emails failed - auto-activate user so they can still use the app
-                    user.is_active = True
-                    user.save()
-                    from django.contrib.auth import login
-                    login(request, user)
-                    messages.warning(request, f'Account created! We could not send verification emails, but your account has been activated. Welcome, {user.username}!')
-                    return redirect('index')
-                
-                return redirect('login')
+                    # Both emails failed - user must contact support to activate
+                    messages.error(request, f'Account created, but we could not send verification emails. Your account is inactive until verified. Please contact support with your email ({user.email}) to activate your account.')
+                    return redirect('login')
             except Exception as e:
                 # Catch any unexpected errors during registration
                 import logging
