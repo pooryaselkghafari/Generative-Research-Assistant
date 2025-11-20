@@ -1178,10 +1178,9 @@
             equationBox.disabled = false;
             equationBox.placeholder = `Type your equation(s) like a chat message…
 
-Examples
-  y ~ x1 + x2 + x1:x2
-  y1 + y2 ~ x + z
-  y ~ x * m        (shorthand for x + m + x:m)`;
+Examples:
+  Regression (with interaction): y ~ x1 + x2 + x1:x2
+  VARX: y1 + y2 ~ x1 + x2`;
             console.log('Equation box enabled');
           } else {
             console.error('Equation box not found');
@@ -1851,10 +1850,9 @@ Examples
         equationBox.disabled = false;
         equationBox.placeholder = `Type your equation(s) like a chat message…
 
-Examples
-  y ~ x1 + x2 + x1:x2
-  y1 + y2 ~ x + z
-  y ~ x * m        (shorthand for x + m + x:m)`;
+Examples:
+  Regression (with interaction): y ~ x1 + x2 + x1:x2
+  VARX: y1 + y2 ~ x1 + x2`;
       }
       
       // Auto-select dataset if specified in URL
@@ -1867,10 +1865,9 @@ Examples
         equationBox.disabled = false;
         equationBox.placeholder = `Type your equation(s) like a chat message…
 
-Examples
-  y ~ x1 + x2 + x1:x2
-  y1 + y2 ~ x + z
-  y ~ x * m        (shorthand for x + m + x:m)`;
+Examples:
+  Regression (with interaction): y ~ x1 + x2 + x1:x2
+  VARX: y1 + y2 ~ x1 + x2`;
         validateRun();
         
         // Clean up URL by removing the parameter

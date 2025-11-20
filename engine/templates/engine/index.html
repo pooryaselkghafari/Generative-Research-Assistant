@@ -448,10 +448,9 @@
         <textarea name="formula" id="equationBox" rows="4"
           placeholder="Select a dataset first, then type your equation(s)…
 
-Examples
-  y ~ x1 + x2 + x1:x2
-  y1 + y2 ~ x + z
-  y ~ x * m        (shorthand for x + m + x:m)" {% if not current %}disabled{% endif %}>{% if current %}{{current.formula}}{% endif %}</textarea>
+Examples:
+  Regression (with interaction): y ~ x1 + x2 + x1:x2
+  VARX: y1 + y2 ~ x1 + x2" {% if not current %}disabled{% endif %}>{% if current %}{{current.formula}}{% endif %}</textarea>
         <div id="autocompleteDropdown" class="autocomplete-dropdown" style="display: none;"></div>
       </div>
     </div>
