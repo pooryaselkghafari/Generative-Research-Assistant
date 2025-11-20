@@ -1748,6 +1748,8 @@ select.input option, select.input optgroup {
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%);
   z-index: 1;
   overflow: hidden;
+  /* Ensure perfect centering */
+  text-align: center;
 }
 
 .sb-modal__loader::before {
@@ -1787,6 +1789,10 @@ select.input option, select.input optgroup {
   text-align: center;
   padding: 40px;
   animation: sb-loader-fade-in 0.4s ease-out;
+  /* Ensure content is perfectly centered */
+  margin: 0 auto;
+  max-width: 100%;
+  width: 100%;
 }
 
 .sb-loader__icon-wrapper {
