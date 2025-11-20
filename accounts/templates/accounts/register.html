@@ -89,37 +89,40 @@
           <div class="error-message">{{ form.password1.errors.0 }}</div>
         {% endif %}
         <div class="password-requirements" id="passwordRequirements">
-          <div class="requirements-title">Password must contain:</div>
+          <div class="requirements-title">Password Requirements</div>
           <ul class="requirements-list">
             <li id="req-length" class="requirement-item">
-              <span class="req-icon">○</span>
+              <span class="req-icon"></span>
               <span>At least 12 characters</span>
             </li>
             <li id="req-uppercase" class="requirement-item">
-              <span class="req-icon">○</span>
+              <span class="req-icon"></span>
               <span>One uppercase letter (A-Z)</span>
             </li>
             <li id="req-lowercase" class="requirement-item">
-              <span class="req-icon">○</span>
+              <span class="req-icon"></span>
               <span>One lowercase letter (a-z)</span>
             </li>
             <li id="req-number" class="requirement-item">
-              <span class="req-icon">○</span>
+              <span class="req-icon"></span>
               <span>One number (0-9)</span>
             </li>
             <li id="req-special" class="requirement-item">
-              <span class="req-icon">○</span>
+              <span class="req-icon"></span>
               <span>One special character (!@#$%^&*()_+-=[]{}|;:,.<>/?)</span>
             </li>
             <li id="req-not-common" class="requirement-item">
-              <span class="req-icon">○</span>
+              <span class="req-icon"></span>
               <span>Not a common password</span>
             </li>
             <li id="req-not-similar" class="requirement-item">
-              <span class="req-icon">○</span>
+              <span class="req-icon"></span>
               <span>Not too similar to username or email</span>
             </li>
           </ul>
+          <div class="password-strength-indicator">
+            <div class="password-strength-bar" id="passwordStrengthBar"></div>
+          </div>
         </div>
       </div>
       
@@ -239,80 +242,200 @@
   margin-top: 6px;
 }
 
-/* Password Requirements Styles */
+/* Password Requirements Styles - Enhanced Graphics */
 .password-requirements {
-  margin-top: 12px;
-  padding: 16px;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  margin-top: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.password-requirements::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
+  opacity: 0.6;
 }
 
 .requirements-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: -0.02em;
+}
+
+.requirements-title::before {
+  content: '🔒';
+  font-size: 18px;
 }
 
 .requirements-list {
   list-style: none;
   padding: 0;
   margin: 0;
+  display: grid;
+  gap: 10px;
 }
 
 .requirement-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 12px;
+  font-size: 14px;
   color: #6b7280;
-  margin-bottom: 8px;
-  transition: color 0.2s;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1.5px solid #e5e7eb;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-.requirement-item:last-child {
-  margin-bottom: 0;
+.requirement-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+  transition: width 0.3s ease;
+}
+
+.requirement-item:hover {
+  transform: translateX(2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .requirement-item.valid {
   color: #059669;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border-color: #10b981;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
 }
 
-.requirement-item.valid .req-icon {
-  color: #10b981;
+.requirement-item.valid::before {
+  width: 4px;
+  background: linear-gradient(180deg, #10b981, #34d399);
 }
 
 .requirement-item.invalid {
   color: #dc2626;
+  background: linear-gradient(135deg, #fef2f2 0%, #fef1f1 100%);
+  border-color: #f87171;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+  animation: shake 0.3s ease;
 }
 
-.requirement-item.invalid .req-icon {
-  color: #ef4444;
+.requirement-item.invalid::before {
+  width: 4px;
+  background: linear-gradient(180deg, #ef4444, #f87171);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
 }
 
 .req-icon {
-  font-size: 16px;
-  font-weight: bold;
-  transition: all 0.2s;
-  display: inline-block;
-  width: 20px;
-  text-align: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  position: relative;
+  background: #f3f4f6;
+  border: 2px solid #e5e7eb;
+}
+
+.requirement-item.valid .req-icon {
+  background: linear-gradient(135deg, #10b981, #34d399);
+  border-color: #10b981;
+  color: white;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  transform: scale(1.1);
 }
 
 .requirement-item.valid .req-icon::before {
   content: "✓";
-  color: #10b981;
+  color: white;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.requirement-item.invalid .req-icon {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+  border-color: #ef4444;
+  color: white;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  transform: scale(1.1);
 }
 
 .requirement-item.invalid .req-icon::before {
   content: "✗";
-  color: #ef4444;
+  color: white;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.requirement-item:not(.valid):not(.invalid) .req-icon {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #9ca3af;
 }
 
 .requirement-item:not(.valid):not(.invalid) .req-icon::before {
   content: "○";
   color: #9ca3af;
+  font-size: 12px;
+}
+
+.requirement-item span:not(.req-icon) {
+  flex: 1;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.requirement-item.valid span:not(.req-icon) {
+  font-weight: 600;
+}
+
+/* Progress indicator */
+.password-strength-indicator {
+  margin-top: 16px;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.password-strength-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444, #f59e0b, #10b981);
+  border-radius: 2px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 0%;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
 }
 
 .auth-btn {
@@ -663,6 +786,9 @@ document.addEventListener('DOMContentLoaded', function() {
       'req-not-similar': checks.notSimilar,
     };
     
+    let validCount = 0;
+    const totalRequirements = Object.keys(requirements).length;
+    
     Object.keys(requirements).forEach(reqId => {
       const element = document.getElementById(reqId);
       if (element) {
@@ -671,12 +797,32 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (requirements[reqId]) {
           element.classList.add('valid');
           element.classList.remove('invalid');
+          validCount++;
         } else {
           element.classList.add('invalid');
           element.classList.remove('valid');
         }
       }
     });
+    
+    // Update password strength bar
+    const strengthBar = document.getElementById('passwordStrengthBar');
+    if (strengthBar) {
+      const strengthPercentage = (validCount / totalRequirements) * 100;
+      strengthBar.style.width = strengthPercentage + '%';
+      
+      // Update color based on strength
+      if (strengthPercentage < 30) {
+        strengthBar.style.background = 'linear-gradient(90deg, #ef4444, #f87171)';
+      } else if (strengthPercentage < 60) {
+        strengthBar.style.background = 'linear-gradient(90deg, #f59e0b, #fbbf24)';
+      } else if (strengthPercentage < 100) {
+        strengthBar.style.background = 'linear-gradient(90deg, #10b981, #34d399)';
+      } else {
+        strengthBar.style.background = 'linear-gradient(90deg, #10b981, #34d399, #22c55e)';
+        strengthBar.style.boxShadow = '0 0 12px rgba(16, 185, 129, 0.6)';
+      }
+    }
   }
   
   if (passwordInput) {
