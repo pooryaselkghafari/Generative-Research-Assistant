@@ -1829,8 +1829,11 @@ class RegressionModule:
         if error_msg:
             return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": error_msg}], {"N": int(df.shape[0])}, None, "Error"
         
-        # Clean dataframe
-        error_result = RegressionModule._clean_dataframe(df_renamed, df)
+        # Get equation variables (only columns used in the formula)
+        equation_vars = [var for var in (outcomes + predictors) if var in df_renamed.columns]
+        
+        # Clean dataframe, but only check columns used in the equation
+        error_result = RegressionModule._clean_dataframe(df_renamed, df, equation_vars=equation_vars)
         if error_result[0]:  # Check if error tuple returned
             return error_result[:5]  # Return first 5 elements (error result)
         df_renamed = error_result[5]  # Get cleaned dataframe
