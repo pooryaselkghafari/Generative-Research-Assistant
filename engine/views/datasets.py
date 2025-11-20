@@ -185,6 +185,19 @@ def upload_dataset(request):
     user = request.user
     f = request.FILES['dataset']
     
+    # Hard limit: 10 MB maximum file size
+    MAX_FILE_SIZE_MB = 10
+    MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+    
+    if f.size > MAX_FILE_SIZE_BYTES:
+        file_size_mb = f.size / (1024 * 1024)
+        error_msg = f'File size ({file_size_mb:.2f} MB) exceeds the maximum allowed size of {MAX_FILE_SIZE_MB} MB. Please upload a smaller file.'
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'error': error_msg}, status=400)
+        from django.contrib import messages
+        messages.error(request, error_msg)
+        return redirect('index')
+    
     # Check user limits using service
     file_size_mb, _ = DatasetValidationService.validate_file_size(f.size)
     limit_error = DatasetValidationService.check_user_limits(user, file_size_mb, request)

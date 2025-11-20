@@ -1612,7 +1612,18 @@ Examples:
       const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
       
       if (!allowedTypes.includes(fileExtension)) {
-        alert('Please select a CSV, XLSX, or XLS file.');
+        showFileSizeErrorPopup('Please select a CSV, XLSX, or XLS file.');
+        return;
+      }
+
+      // Validate file size (10 MB = 10 * 1024 * 1024 bytes)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB in bytes
+      if (file.size > MAX_FILE_SIZE) {
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        showFileSizeErrorPopup(
+          `File size (${fileSizeMB} MB) exceeds the maximum allowed size of 10 MB. Please upload a smaller file.`,
+          fileSizeMB
+        );
         return;
       }
 
