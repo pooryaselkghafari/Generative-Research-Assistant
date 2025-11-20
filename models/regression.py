@@ -1655,12 +1655,23 @@ class RegressionModule:
         return None, original_categories
     
     @staticmethod
-    def _clean_dataframe(df_renamed, df):
-        """Clean dataframe: remove infinite values and check for all-NaN columns."""
+    def _clean_dataframe(df_renamed, df, equation_vars=None):
+        """
+        Clean dataframe: remove infinite values and check for all-NaN columns.
+        
+        Args:
+            df_renamed: DataFrame to clean
+            df: Original DataFrame (for error messages)
+            equation_vars: Optional list of column names to check. If None, checks all columns.
+                          Should be set to only columns used in the equation.
+        """
         df_renamed = df_renamed.replace([np.inf, -np.inf], np.nan)
         
-        for col in df_renamed.columns:
-            if df_renamed[col].isna().all():
+        # Only check columns that are in the equation (if provided), otherwise check all
+        columns_to_check = equation_vars if equation_vars is not None else df_renamed.columns
+        
+        for col in columns_to_check:
+            if col in df_renamed.columns and df_renamed[col].isna().all():
                 return ["Term", "Estimate"], [{"Term": "Variable Error", "Estimate": f"Column '{col}' contains only missing values after data cleaning. Please check your data."}], {"N": int(df.shape[0])}, None, "Error", None
         
         return None, None, None, None, None, df_renamed
