@@ -150,6 +150,7 @@ def send_password_reset_email(user, request):
         subject = 'Reset your Generative Research Assistant password'
         html_message = render_to_string('accounts/emails/password_reset.html', {
             'user': user,
+            'username': user.username,  # Include username in email
             'reset_url': reset_url,
             'site_name': 'Generative Research Assistant',
         })

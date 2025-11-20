@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.forms import UserCreationForm, PasswordResetForm, SetPasswordForm
+from django import forms
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.models import User
@@ -547,25 +548,41 @@ def verify_email_view(request, uidb64, token):
         return redirect('login')
 
 
+class UsernamePasswordResetForm(forms.Form):
+    """Custom form that asks for username instead of email."""
+    username = forms.CharField(
+        max_length=150,
+        required=True,
+        label='Username',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter your username',
+            'autofocus': True,
+        }),
+        help_text='Enter your username to receive a password reset link and your username reminder.'
+    )
+
+
 def password_reset_request_view(request):
     """
     Handle password reset request form submission.
+    Asks for username and sends both username reminder and password reset link.
     """
     if request.method == 'POST':
-        form = PasswordResetForm(request.POST)
+        form = UsernamePasswordResetForm(request.POST)
         if form.is_valid():
-            email = form.cleaned_data['email']
+            username = form.cleaned_data['username']
             try:
-                user = User.objects.get(email=email)
+                user = User.objects.get(username=username)
                 send_password_reset_email(user, request)
-                messages.success(request, 'Password reset link has been sent to your email address.')
+                messages.success(request, 'If an account exists with that username, a password reset link and username reminder have been sent to your email address.')
                 return redirect('login')
             except User.DoesNotExist:
-                # Don't reveal if email exists or not (security best practice)
-                messages.success(request, 'If an account exists with that email, a password reset link has been sent.')
+                # Don't reveal if username exists or not (security best practice)
+                messages.success(request, 'If an account exists with that username, a password reset link and username reminder have been sent.')
                 return redirect('login')
     else:
-        form = PasswordResetForm()
+        form = UsernamePasswordResetForm()
     
     return render(request, 'accounts/password_reset_request.html', {'form': form})
 
