@@ -493,6 +493,72 @@
           chatbox.style.display = isOpen ? 'none' : 'flex';
         }
       }
+      
+      // Show "Coming Soon" popup for GRA feature
+      function showGRAComingSoonPopup() {
+        const popup = document.createElement('div');
+        popup.className = 'gra-coming-soon-popup';
+        popup.innerHTML = `
+          <div class="gra-popup-backdrop" onclick="this.closest('.gra-coming-soon-popup').remove()"></div>
+          <div class="gra-popup-content">
+            <div class="gra-popup-icon">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <h3 class="gra-popup-title">AI Feature Coming Soon!</h3>
+            <p class="gra-popup-message">
+              The Generative Research Assistant (GRA) AI feature will be added to the app soon. 
+              This will allow you to interact with an AI assistant to help with your statistical analyses, 
+              interpret results, and guide you through the analysis process.
+            </p>
+            <div class="gra-popup-features">
+              <div class="gra-popup-feature">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>Get help interpreting your results</span>
+              </div>
+              <div class="gra-popup-feature">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>Ask questions about your analysis</span>
+              </div>
+              <div class="gra-popup-feature">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>Receive guidance on statistical methods</span>
+              </div>
+            </div>
+            <button class="gra-popup-button" onclick="this.closest('.gra-coming-soon-popup').remove()">
+              Got it
+            </button>
+          </div>
+        `;
+        
+        document.body.appendChild(popup);
+        
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+          if (popup.parentElement) {
+            popup.remove();
+          }
+        }, 10000);
+        
+        // Add keyboard handler
+        const handleKeyPress = (e) => {
+          if (e.key === 'Escape' || e.key === 'Enter') {
+            popup.remove();
+            document.removeEventListener('keydown', handleKeyPress);
+          }
+        };
+        document.addEventListener('keydown', handleKeyPress);
+      }
+      
+      // Make function globally available
+      window.showGRAComingSoonPopup = showGRAComingSoonPopup;
 
       function sendAIMessage() {
         const input = document.getElementById('aiChatboxInput');
