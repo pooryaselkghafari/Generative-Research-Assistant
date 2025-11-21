@@ -260,8 +260,8 @@
     .landing-feature-card {
         background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
         border-radius: 20px;
-        padding: 40px 30px;
-        text-align: center;
+        padding: 35px 30px;
+        text-align: left;
         transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
         border: 1px solid #e5e7eb;
         position: relative;
@@ -285,35 +285,30 @@
     }
     
     .landing-feature-card:hover {
-        transform: translateY(-12px);
+        transform: translateY(-8px);
         box-shadow: 0 20px 40px rgba(15, 107, 114, 0.15);
         border-color: #0f6b72;
-    }
-    
-    .landing-feature-icon {
-        width: 80px;
-        height: 80px;
-        margin: 0 auto 24px;
-        background: linear-gradient(135deg, #0f6b72 0%, #0a4f56 100%);
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 36px;
-        box-shadow: 0 8px 20px rgba(15, 107, 114, 0.3);
-        transition: transform 0.3s ease;
-    }
-    
-    .landing-feature-card:hover .landing-feature-icon {
-        transform: scale(1.1) rotate(5deg);
     }
     
     .landing-feature-card h3 {
         font-size: 1.5rem;
         font-weight: 600;
-        margin: 0 0 12px 0;
-        color: #1f2937;
+        margin: 0 0 16px 0;
+        color: #0f6b72;
+        position: relative;
+        padding-left: 20px;
+    }
+    
+    .landing-feature-card h3::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 4px;
+        height: 24px;
+        background: linear-gradient(135deg, #0f6b72, #0a4f56);
+        border-radius: 2px;
     }
     
     .landing-feature-card p {
@@ -712,32 +707,26 @@
             <p class="landing-section-subtitle fade-in-up">Everything you need for rigorous statistical analysis, all in one platform</p>
             <div class="landing-features-grid">
                 <div class="landing-feature-card fade-in-up">
-                    <div class="landing-feature-icon">📊</div>
                     <h3>Linear Regression</h3>
                     <p>Perform all types of linear regression analysis with advanced statistical modeling capabilities.</p>
                 </div>
                 <div class="landing-feature-card fade-in-up">
-                    <div class="landing-feature-icon">🔬</div>
                     <h3>Bayesian Regression</h3>
                     <p>Advanced Bayesian modeling including Bayesian Model Averaging for robust statistical inference.</p>
                 </div>
                 <div class="landing-feature-card fade-in-up">
-                    <div class="landing-feature-icon">📈</div>
                     <h3>Bayesian Stacked Models</h3>
                     <p>Generate sophisticated Bayesian stacked models to combine multiple models for better predictions.</p>
                 </div>
                 <div class="landing-feature-card fade-in-up">
-                    <div class="landing-feature-icon">🎯</div>
                     <h3>Plot Spotlights</h3>
                     <p>Create beautiful, publication-ready visualizations that highlight key insights in your data.</p>
                 </div>
                 <div class="landing-feature-card fade-in-up">
-                    <div class="landing-feature-icon">📋</div>
                     <h3>ANOVA Analysis</h3>
                     <p>Run simple and complex ANOVA tests to analyze variance across multiple groups and factors.</p>
                 </div>
                 <div class="landing-feature-card fade-in-up">
-                    <div class="landing-feature-icon">⚡</div>
                     <h3>Automated VARX</h3>
                     <p>Fully automated Vector Autoregression with Exogenous variables - the entire process streamlined.</p>
                 </div>
