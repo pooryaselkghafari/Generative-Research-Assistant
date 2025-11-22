@@ -691,8 +691,8 @@
     <!-- Hero Section -->
     <section class="landing-hero">
         <div class="landing-hero-content">
-            <h1>Eliminate Errors in Your Research Analysis</h1>
-            <p>Born from an obsession with automation, GRA transforms your custom R and Python libraries into a clean, error-free analysis platform. Zero hallucinations. Zero mistakes.</p>
+            <h1>Your Generative RA</h1>
+            <p>Conduct your analysis with minimal coding, clean your dataset effortlessly, and visualize your data in seconds.</p>
             <div class="landing-cta">
                 <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Free Trial</a>
                 <a href="#features" class="landing-btn landing-btn-ghost">Explore Features</a>
@@ -742,13 +742,13 @@
             <div class="landing-why-content">
                 <div class="landing-why-text fade-in-up">
                     <p>
-                        <strong>One tiny mistake in your code can invalidate entire research papers.</strong> We've seen it happen too many times in social science research, and it happened to us too.
+                        One tiny mistake in your code can invalidate an entire research paper. We've seen it happen far too often in social science, and it has happened to us too.
                     </p>
                     <p>
-                        That's why we spent years building custom libraries in R and Python to automate a big part of statistical analysis. Now, we've put all these libraries into a clean, intuitive UI - and <strong>Generative Research Assistant was born.</strong>
+                        That's why we built Generative Research Assistant.
                     </p>
                     <p>
-                        <strong>The analysis part is completely algorithmic</strong> - there's zero chance for hallucination and errors. Every calculation is transparent, reproducible, and verifiable.
+                        Its analysis engine is fully algorithmic, eliminating the risk of hallucination or hidden errors. Every calculation is transparent, reproducible, and verifiable.
                     </p>
                 </div>
                 <div class="landing-why-visual fade-in-up">
@@ -800,67 +800,6 @@
                     <p>Your ideas, results, and data are safely stored in your personalized model, eliminating common fears among scientists.</p>
                     <span class="landing-coming-soon-badge">Coming Soon</span>
                 </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Pricing Section -->
-    <section class="landing-pricing">
-        <div class="landing-pricing-container">
-            <h2>Simple, Transparent Pricing</h2>
-            <div class="landing-pricing-grid">
-                {% if plans %}
-                    {% for plan in plans %}
-                    {% with tier_settings=plan.get_tier_settings %}
-                    <div class="landing-plan {% if forloop.counter == 2 and plans|length >= 2 %}featured{% endif %} fade-in-up">
-                        {% if forloop.counter == 2 and plans|length >= 2 %}
-                        <div class="landing-plan-badge">Most Popular</div>
-                        {% endif %}
-                        <h3>{{ plan.name }}</h3>
-                        <div class="landing-plan-price">${{ plan.price_monthly|floatformat:0 }}</div>
-                        <div class="landing-plan-period">per month</div>
-                        <ul class="landing-plan-features">
-                            {% if tier_settings %}
-                            <li>{% if tier_settings.max_datasets == -1 %}Unlimited{% else %}{{ tier_settings.max_datasets }}{% endif %} datasets</li>
-                            <li>{% if tier_settings.max_sessions == -1 %}Unlimited{% else %}{{ tier_settings.max_sessions }}{% endif %} analysis sessions</li>
-                            <li>{% if tier_settings.max_file_size_mb == -1 %}Unlimited{% else %}{{ tier_settings.max_file_size_mb }}{% endif %} MB max file size</li>
-                            {% endif %}
-                            {% if plan.features %}
-                            {% for feature in plan.features %}
-                            <li>{{ feature }}</li>
-                            {% endfor %}
-                            {% endif %}
-                            {% if plan.ai_features %}
-                            {% for ai_feature in plan.ai_features %}
-                            <li>🤖 {{ ai_feature }}</li>
-                            {% endfor %}
-                            {% endif %}
-                        </ul>
-                        {% if plan.price_monthly == 0 %}
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
-                        {% elif plan.name|lower == 'enterprise' or plan.name|lower == 'high tier' %}
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Contact Sales</a>
-                        {% else %}
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Free Trial</a>
-                        {% endif %}
-                    </div>
-                    {% endwith %}
-                    {% endfor %}
-                {% else %}
-                    <!-- Fallback: Only shows if NO plans exist in database -->
-                    <div class="landing-plan fade-in-up">
-                        <h3>Free</h3>
-                        <div class="landing-plan-price">$0</div>
-                        <div class="landing-plan-period">per month</div>
-                        <ul class="landing-plan-features">
-                            <li>5 datasets</li>
-                            <li>10 analysis sessions</li>
-                            <li>Basic regression</li>
-                            <li>Community support</li>
-                        </ul>
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
-                    </div>
-                {% endif %}
             </div>
         </div>
     </section>
