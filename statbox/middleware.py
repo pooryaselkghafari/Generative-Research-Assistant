@@ -38,7 +38,6 @@ class AdminSecurityMiddleware(MiddlewareMixin):
         
         # Get security settings
         admin_allowed_ips = getattr(settings, 'ADMIN_ALLOWED_IPS', [])
-        admin_access_token = getattr(settings, 'ADMIN_ACCESS_TOKEN', None)
         admin_hide_from_unauthorized = getattr(settings, 'ADMIN_HIDE_FROM_UNAUTHORIZED', True)
         
         # Get client IP (handle proxies)
@@ -46,7 +45,7 @@ class AdminSecurityMiddleware(MiddlewareMixin):
         logger.info(f"Client IP detected: {client_ip} (from REMOTE_ADDR: {request.META.get('REMOTE_ADDR', 'N/A')}, X-Forwarded-For: {request.META.get('HTTP_X_FORWARDED_FOR', 'N/A')})")
         logger.info(f"Admin allowed IPs: {admin_allowed_ips}")
         
-        # 1. IP Restriction Check
+        # IP Restriction Check (optional - only if ADMIN_ALLOWED_IPS is set)
         if admin_allowed_ips:
             if client_ip not in admin_allowed_ips:
                 logger.warning(f"Admin access denied: IP {client_ip} not in whitelist {admin_allowed_ips}")
@@ -55,23 +54,6 @@ class AdminSecurityMiddleware(MiddlewareMixin):
                 return HttpResponseForbidden("Access denied")
             else:
                 logger.info(f"IP {client_ip} is in whitelist, proceeding...")
-        
-        # 2. Token-based Pre-authentication Check
-        if admin_access_token:
-            # Check for token in URL parameter, header, or cookie
-            token_in_url = request.GET.get('token') == admin_access_token
-            token_in_header = request.headers.get('X-Admin-Token') == admin_access_token
-            token_in_cookie = request.COOKIES.get('admin_access_token') == admin_access_token
-            
-            logger.info(f"Token check - URL: {token_in_url}, Header: {token_in_header}, Cookie: {token_in_cookie}")
-            
-            if not (token_in_url or token_in_header or token_in_cookie):
-                logger.warning(f"Admin access denied: Missing or invalid token from IP {client_ip}")
-                if admin_hide_from_unauthorized:
-                    raise Http404("Page not found")
-                return HttpResponseForbidden("Access denied")
-            else:
-                logger.info("Token authentication passed")
         
         # All checks passed
         logger.info(f"Admin access granted for IP {client_ip}")

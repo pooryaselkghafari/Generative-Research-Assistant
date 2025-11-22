@@ -62,14 +62,9 @@ ADMIN_ALLOWED_IPS = [
     if ip.strip()
 ]
 
-# Token-based Pre-authentication: Require this token before showing admin login
-# Set ADMIN_ACCESS_TOKEN in .env (generate a strong random token)
-# Access admin with: /whereadmingoeshere/?token=YOUR_TOKEN
-# Or set X-Admin-Token header, or admin_access_token cookie
-ADMIN_ACCESS_TOKEN = os.environ.get('ADMIN_ACCESS_TOKEN', None)
-
 # Hide admin from unauthorized visitors: Return 404 instead of 403
 # This prevents attackers from knowing the admin path exists
+# Only applies if ADMIN_ALLOWED_IPS is set
 ADMIN_HIDE_FROM_UNAUTHORIZED = os.environ.get('ADMIN_HIDE_FROM_UNAUTHORIZED', 'True').lower() == 'true'
 
 # Database
