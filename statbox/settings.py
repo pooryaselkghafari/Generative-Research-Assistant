@@ -49,6 +49,10 @@ ENCRYPT_DATASETS = os.environ.get('ENCRYPT_DATASETS', 'False').lower() == 'true'
 # Enable encryption for sensitive database fields (always enabled if encryption key is set)
 ENCRYPT_DB_FIELDS = bool(os.environ.get('ENCRYPTION_KEY', None)) or bool(ENCRYPTION_KEY != SECRET_KEY)
 
+# Admin URL - Use a non-obvious path for security
+# Set ADMIN_URL in .env to customize (e.g., ADMIN_URL=gra-management)
+ADMIN_URL = os.environ.get('ADMIN_URL', 'gra-management').strip('/')
+
 # Database
 # Use SQLite for local development, PostgreSQL for production
 if DEBUG:

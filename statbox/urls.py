@@ -3,8 +3,10 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+# Use configurable admin URL for security (less predictable than /admin/)
+admin_url = getattr(settings, 'ADMIN_URL', 'gra-management')
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path(f'{admin_url}/', admin.site.urls),
     # Custom account URLs (login, register, etc.) - must come before allauth
     path('accounts/', include('accounts.urls')),
     # Allauth URLs for social auth (Google OAuth) - comes after custom URLs
