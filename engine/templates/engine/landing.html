@@ -6,6 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Generative Research Assistant - Advanced Statistical Analysis Platform</title>
     <link rel="stylesheet" href="{% static 'engine/app.css' %}" />
+    
+    {% comment %}Google Analytics{% endcomment %}
+    {% if site_settings.is_active %}
+        {% if site_settings.google_analytics_code %}
+            {{ site_settings.google_analytics_code|safe }}
+        {% elif site_settings.google_analytics_id %}
+            <!-- Google tag (gtag.js) -->
+            <script async src="https://www.googletagmanager.com/gtag/js?id={{ site_settings.google_analytics_id }}"></script>
+            <script>
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', '{{ site_settings.google_analytics_id }}');
+            </script>
+        {% endif %}
+    {% endif %}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">

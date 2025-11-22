@@ -308,6 +308,47 @@ class TermsOfService(models.Model):
     def __str__(self):
         return f"Terms of Service v{self.version} ({self.effective_date})"
 
+
+class SiteSettings(models.Model):
+    """Global site settings including Google Analytics and other tracking codes"""
+    google_analytics_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Google Analytics tracking ID (e.g., G-8FHJC3M9SD). Leave empty to disable."
+    )
+    google_analytics_code = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Custom Google Analytics code (full script tags). If provided, this will be used instead of google_analytics_id."
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Enable/disable Google Analytics tracking"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Site Settings"
+        verbose_name_plural = "Site Settings"
+    
+    def __str__(self):
+        return "Site Settings"
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one SiteSettings instance exists
+        if not self.pk:
+            # Delete any existing instances
+            SiteSettings.objects.exclude(pk=self.pk).delete()
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_settings(cls):
+        """Get the active site settings (singleton pattern)"""
+        settings, created = cls.objects.get_or_create(pk=1)
+        return settings
+
 class TestResult(models.Model):
     """Store test execution results for tracking."""
     TEST_CATEGORIES = [

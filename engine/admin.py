@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 from .models import (
     Dataset, AnalysisSession, UserProfile, SubscriptionPlan, Payment, Page,
-    SubscriptionTierSettings, PrivacyPolicy, TermsOfService,
+    SubscriptionTierSettings, PrivacyPolicy, TermsOfService, SiteSettings,
     AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket,
     AIProvider
 )
@@ -413,6 +413,26 @@ admin.site.register(Payment, PaymentAdmin)
 admin.site.register(Page, PageAdmin)
 admin.site.register(PrivacyPolicy, PrivacyPolicyAdmin)
 admin.site.register(TermsOfService, TermsOfServiceAdmin)
+
+
+class SiteSettingsAdmin(admin.ModelAdmin):
+    """Admin interface for Site Settings (Google Analytics, etc.)"""
+    fieldsets = (
+        ('Google Analytics', {
+            'fields': ('is_active', 'google_analytics_id', 'google_analytics_code'),
+            'description': 'Enter either a Google Analytics ID (e.g., G-8FHJC3M9SD) or paste the full Google Analytics code. If both are provided, the custom code will be used.'
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        # Only allow one instance
+        return not SiteSettings.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        # Don't allow deletion (we need at least one instance)
+        return False
+
+admin.site.register(SiteSettings, SiteSettingsAdmin)
 
 
 class AIFineTuningFileAdmin(admin.ModelAdmin):
