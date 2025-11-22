@@ -82,17 +82,41 @@ Add the generated token to `ADMIN_ACCESS_TOKEN` in your `.env` file.
 
 Create the password file for Nginx basic auth:
 
+**Option 1: Using htpasswd (Recommended)**
+
 ```bash
 # Install htpasswd if not already installed
-sudo apt-get install apache2-utils  # Debian/Ubuntu
+sudo apt install apache2-utils  # Debian/Ubuntu
 # or
-sudo yum install httpd-tools        # CentOS/RHEL
+sudo yum install httpd-tools     # CentOS/RHEL
 
-# Create password file
+# Create password file (will prompt for password)
 sudo htpasswd -c /etc/nginx/.htpasswd admin
 
-# Or create manually with OpenSSL
+# To add more users later (without -c flag):
+sudo htpasswd /etc/nginx/.htpasswd another-user
+
+# Set proper permissions
+sudo chmod 600 /etc/nginx/.htpasswd
+sudo chown www-data:www-data /etc/nginx/.htpasswd
+```
+
+**Option 2: Using OpenSSL (No installation needed)**
+
+```bash
+# Create password file with OpenSSL (replace 'your-password' with your actual password)
 echo "admin:$(openssl passwd -apr1 'your-password')" | sudo tee /etc/nginx/.htpasswd
+
+# Set proper permissions
+sudo chmod 600 /etc/nginx/.htpasswd
+sudo chown www-data:www-data /etc/nginx/.htpasswd
+```
+
+**Option 3: Using Python (Alternative)**
+
+```bash
+# Generate password hash with Python
+python3 -c "import crypt; print('admin:' + crypt.crypt('your-password', crypt.mksalt(crypt.METHOD_SHA512)))" | sudo tee /etc/nginx/.htpasswd
 
 # Set proper permissions
 sudo chmod 600 /etc/nginx/.htpasswd
