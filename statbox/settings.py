@@ -50,8 +50,27 @@ ENCRYPT_DATASETS = os.environ.get('ENCRYPT_DATASETS', 'False').lower() == 'true'
 ENCRYPT_DB_FIELDS = bool(os.environ.get('ENCRYPTION_KEY', None)) or bool(ENCRYPTION_KEY != SECRET_KEY)
 
 # Admin URL - Use a non-obvious path for security
-# Set ADMIN_URL in .env to customize (e.g., ADMIN_URL=gra-management)
-ADMIN_URL = os.environ.get('ADMIN_URL', 'gra-management').strip('/')
+# Set ADMIN_URL in .env to customize (e.g., ADMIN_URL=whereadmingoeshere)
+ADMIN_URL = os.environ.get('ADMIN_URL', 'whereadmingoeshere').strip('/')
+
+# Admin Security Settings
+# IP Restriction: Only allow these IPs to access admin (comma-separated)
+# Leave empty to disable IP restriction
+ADMIN_ALLOWED_IPS = [
+    ip.strip() 
+    for ip in os.environ.get('ADMIN_ALLOWED_IPS', '').split(',') 
+    if ip.strip()
+]
+
+# Token-based Pre-authentication: Require this token before showing admin login
+# Set ADMIN_ACCESS_TOKEN in .env (generate a strong random token)
+# Access admin with: /whereadmingoeshere/?token=YOUR_TOKEN
+# Or set X-Admin-Token header, or admin_access_token cookie
+ADMIN_ACCESS_TOKEN = os.environ.get('ADMIN_ACCESS_TOKEN', None)
+
+# Hide admin from unauthorized visitors: Return 404 instead of 403
+# This prevents attackers from knowing the admin path exists
+ADMIN_HIDE_FROM_UNAUTHORIZED = os.environ.get('ADMIN_HIDE_FROM_UNAUTHORIZED', 'True').lower() == 'true'
 
 # Database
 # Use SQLite for local development, PostgreSQL for production
@@ -360,6 +379,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Admin security middleware (must be after AuthenticationMiddleware)
+    'statbox.middleware.AdminSecurityMiddleware',
 ]
 
 ROOT_URLCONF = 'statbox.urls'
