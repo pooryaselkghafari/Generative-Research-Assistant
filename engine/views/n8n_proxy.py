@@ -84,10 +84,13 @@ def n8n_proxy(request, path=None):
             body = request.body
         
         logger.info(f"Proxying {request.method} request to n8n: {target_url} (path: {path})")
+        logger.debug(f"Headers: {headers}")
+        logger.debug(f"Body: {body[:200] if body else None}")
         
         # Make request to n8n
         # We've removed Accept-Encoding, so n8n should return uncompressed content
-        response = requests.request(
+        try:
+            response = requests.request(
             method=request.method,
             url=target_url,
             headers=headers,
@@ -95,8 +98,12 @@ def n8n_proxy(request, path=None):
             stream=False,
             timeout=60,
             allow_redirects=False
-        )
-        logger.info(f"Received response from n8n: {response.status_code} for {target_url}")
+            )
+            logger.info(f"Received response from n8n: {response.status_code} for {target_url}")
+        except Exception as request_error:
+            # Log the error before re-raising so outer handler can catch it
+            logger.error(f"Error making request to n8n at {target_url}: {request_error}", exc_info=True)
+            raise
         
         # Check if response is actually compressed
         # Sometimes Content-Encoding header is set but content isn't actually compressed
