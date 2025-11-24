@@ -77,7 +77,8 @@ def n8n_proxy(request, path=''):
         
         # Prepare response headers
         response_headers = {}
-        excluded_headers = ['content-encoding', 'transfer-encoding', 'connection', 'content-length']
+        excluded_headers = ['transfer-encoding', 'connection', 'content-length']
+        # We need to preserve content-encoding for gzip/deflate, but handle it properly
         for key, value in response.headers.items():
             key_lower = key.lower()
             if key_lower not in excluded_headers:
@@ -98,11 +99,42 @@ def n8n_proxy(request, path=''):
                     location = location.replace('http://127.0.0.1:5678/', '/n8n/')
                 response_headers['Location'] = location
         
-        # Create streaming response
-        django_response = StreamingHttpResponse(
-            response.iter_content(chunk_size=8192),
-            status=response.status_code
-        )
+        # Handle content encoding - if response is gzipped, we need to decompress it
+        # or let Django handle it by not setting content-encoding
+        content_encoding = response.headers.get('Content-Encoding', '').lower()
+        
+        if content_encoding in ['gzip', 'deflate', 'br']:
+            # For compressed content, we need to decompress it
+            import gzip
+            import io
+            
+            if content_encoding == 'gzip':
+                # Decompress gzip content
+                compressed_data = response.content
+                decompressed_data = gzip.decompress(compressed_data)
+                # Remove content-encoding header since we're decompressing
+                response_headers.pop('Content-Encoding', None)
+                response_headers.pop('content-encoding', None)
+                
+                # Create regular response with decompressed content
+                django_response = HttpResponse(
+                    decompressed_data,
+                    status=response.status_code
+                )
+            else:
+                # For other encodings, use streaming but remove encoding header
+                response_headers.pop('Content-Encoding', None)
+                response_headers.pop('content-encoding', None)
+                django_response = StreamingHttpResponse(
+                    response.iter_content(chunk_size=8192),
+                    status=response.status_code
+                )
+        else:
+            # For uncompressed content, use streaming
+            django_response = StreamingHttpResponse(
+                response.iter_content(chunk_size=8192),
+                status=response.status_code
+            )
         
         # Set content type
         content_type = response.headers.get('Content-Type', 'text/html')
