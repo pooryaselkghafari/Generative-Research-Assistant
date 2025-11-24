@@ -89,6 +89,7 @@ services:
       - N8N_PATH=/n8n/
       # Behind nginx/Django proxy, so trust forwarded headers
       - N8N_TRUST_PROXY=true
+      - N8N_TRUSTED_PROXIES=loopback,linklocal,uniquelocal
       # Security settings (address deprecation warnings)
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
