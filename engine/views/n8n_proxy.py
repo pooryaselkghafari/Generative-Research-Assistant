@@ -16,7 +16,7 @@ N8N_BASE_URL = 'http://127.0.0.1:5678'
 
 
 @staff_member_required
-def n8n_proxy(request, path=''):
+def n8n_proxy(request, path=None):
     """
     Proxy requests to n8n, ensuring only admin users can access.
     
@@ -25,6 +25,15 @@ def n8n_proxy(request, path=''):
     """
     try:
         # Build the target URL - remove leading slash from path if present
+        # Handle both cases: path parameter provided or not
+        if path is None:
+            # Extract path from request.path (remove /n8n/ prefix)
+            request_path = request.path
+            if request_path.startswith('/n8n/'):
+                path = request_path[5:]  # Remove '/n8n/' prefix
+            else:
+                path = ''
+        
         path = path.lstrip('/') if path else ''
         if path:
             target_url = f"{N8N_BASE_URL}/{path}"
