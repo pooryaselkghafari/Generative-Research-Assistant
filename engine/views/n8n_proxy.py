@@ -73,7 +73,8 @@ def n8n_proxy(request, path=None):
         headers['Host'] = 'localhost:5678'
         headers['X-Forwarded-Proto'] = request.scheme
         headers['X-Forwarded-Host'] = request.get_host()
-        headers['X-Forwarded-For'] = request.META.get('REMOTE_ADDR', '')
+        # Do not forward X-Forwarded-For to n8n to avoid trust proxy errors
+        headers.pop('X-Forwarded-For', None)
         
         # Remove Accept-Encoding to request uncompressed response from n8n
         # This avoids compression issues in the proxy chain
