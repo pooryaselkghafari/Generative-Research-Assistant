@@ -243,6 +243,7 @@ def n8n_proxy(request, path=None):
             cookie_header = response.headers.get('Set-Cookie')
             if cookie_header:
                 set_cookie_headers = [cookie_header]
+        logger.info(f"n8n Set-Cookie headers: {set_cookie_headers}")
         for cookie in set_cookie_headers:
             try:
                 django_response.headers.appendlist('Set-Cookie', cookie)
