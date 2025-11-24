@@ -57,9 +57,10 @@ def n8n_proxy(request, path=''):
         headers['X-Forwarded-Host'] = request.get_host()
         headers['X-Forwarded-For'] = request.META.get('REMOTE_ADDR', '')
         
-        # Explicitly request uncompressed response OR let requests auto-decompress
-        # Remove Accept-Encoding to get uncompressed, or keep it and let requests handle it
-        # We'll keep Accept-Encoding but ensure requests decompresses
+        # Remove Accept-Encoding to request uncompressed response from n8n
+        # This avoids compression issues in the proxy chain
+        if 'Accept-Encoding' in headers:
+            del headers['Accept-Encoding']
         
         # Get request body for methods that support it
         body = None
@@ -69,31 +70,30 @@ def n8n_proxy(request, path=''):
         logger.debug(f"Proxying {request.method} request to n8n: {target_url}")
         
         # Make request to n8n
-        # Note: requests automatically decompresses gzip/deflate responses when stream=False
-        # But we need to ensure the response is actually decompressed
+        # We've removed Accept-Encoding, so n8n should return uncompressed content
         response = requests.request(
             method=request.method,
             url=target_url,
             headers=headers,
             data=body,
-            stream=False,  # Set to False to let requests handle decompression automatically
+            stream=False,
             timeout=60,
             allow_redirects=False
         )
         
-        # Force decompression if needed - requests should have done this automatically
-        # But let's verify by checking if content-encoding is still present
+        # Check if response is still compressed (shouldn't be, but handle it just in case)
         content_encoding = response.headers.get('Content-Encoding', '').lower()
-        if content_encoding in ['gzip', 'deflate', 'br']:
-            # If still compressed, manually decompress
+        if content_encoding in ['gzip', 'deflate']:
+            # Manually decompress if somehow still compressed
             import gzip
-            if content_encoding == 'gzip':
-                try:
+            try:
+                if content_encoding == 'gzip':
                     response._content = gzip.decompress(response.content)
-                except Exception as e:
-                    logger.warning(f"Failed to decompress gzip content: {e}")
-            # Remove content-encoding header
-            del response.headers['Content-Encoding']
+                # Remove content-encoding header after decompression
+                del response.headers['Content-Encoding']
+                logger.info(f"Manually decompressed {content_encoding} content from n8n")
+            except Exception as e:
+                logger.error(f"Failed to decompress {content_encoding} content: {e}", exc_info=True)
         
         # Prepare response headers
         response_headers = {}
