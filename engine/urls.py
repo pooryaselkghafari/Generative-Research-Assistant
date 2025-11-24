@@ -26,6 +26,11 @@ from engine.views.visualization import (
     generate_correlation_heatmap, generate_anova_plot_view,
     _generate_multinomial_ordinal_spotlight_from_predictions
 )
+from engine.views.agent_templates import (
+    agent_template_list, agent_template_create, agent_template_detail,
+    agent_template_toggle_status, agent_template_test, agent_template_api_list
+)
+from engine.views.chatbot import chatbot_endpoint
 
 urlpatterns = [
     path('', landing_view, name='landing'),
@@ -71,6 +76,15 @@ urlpatterns = [
     path('session/<int:session_id>/history/', download_session_history_view, name='download_session_history'),
     path('session/<int:session_id>/add-model-errors/', add_model_errors_to_dataset, name='add_model_errors_to_dataset'),
     path('api/ai-chat/', ai_chat, name='ai_chat'),
+    # Agent Templates (Admin)
+    path('admin/agent-templates/', agent_template_list, name='agent_template_list'),
+    path('admin/agent-templates/create/', agent_template_create, name='agent_template_create'),
+    path('admin/agent-templates/<int:template_id>/', agent_template_detail, name='agent_template_detail'),
+    path('admin/agent-templates/<int:template_id>/toggle/', agent_template_toggle_status, name='agent_template_toggle_status'),
+    path('admin/agent-templates/<int:template_id>/test/', agent_template_test, name='agent_template_test'),
+    path('api/agent-templates/', agent_template_api_list, name='agent_template_api_list'),
+    # Chatbot with n8n integration
+    path('api/chat/', chatbot_endpoint, name='chatbot_endpoint'),
     # Privacy and Legal
     path('privacy/', privacy_policy_view, name='privacy_policy'),
     path('terms/', terms_of_service_view, name='terms_of_service'),

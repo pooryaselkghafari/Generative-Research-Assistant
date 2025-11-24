@@ -9,6 +9,7 @@ from django.utils.safestring import mark_safe
 from .models import (
     Dataset, AnalysisSession, UserProfile, SubscriptionPlan, Payment, Page,
     SubscriptionTierSettings, PrivacyPolicy, TermsOfService, SiteSettings,
+    AgentTemplate,
     AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket,
     AIProvider
 )
@@ -433,6 +434,38 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         return False
 
 admin.site.register(SiteSettings, SiteSettingsAdmin)
+
+
+class AgentTemplateAdmin(admin.ModelAdmin):
+    """Admin interface for Agent Templates."""
+    list_display = ('name', 'status', 'visibility', 'mode_key', 'created_at', 'updated_at')
+    list_filter = ('status', 'visibility', 'created_at')
+    search_fields = ('name', 'description', 'mode_key', 'n8n_webhook_url')
+    readonly_fields = ('created_at', 'updated_at', 'created_by')
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'description', 'status', 'visibility')
+        }),
+        ('n8n Configuration', {
+            'fields': ('n8n_webhook_url', 'mode_key', 'default_parameters'),
+            'description': 'Configure the n8n webhook URL and optional mode key for chatbot routing.'
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # Creating new object
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('created_by')
+
+admin.site.register(AgentTemplate, AgentTemplateAdmin)
 
 
 class AIFineTuningFileAdmin(admin.ModelAdmin):

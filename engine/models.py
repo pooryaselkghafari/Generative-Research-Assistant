@@ -349,6 +349,95 @@ class SiteSettings(models.Model):
         settings, created = cls.objects.get_or_create(pk=1)
         return settings
 
+class AgentTemplate(models.Model):
+    """
+    Represents an n8n workflow template that can be used by the chatbot.
+    
+    Each template links a chatbot mode or use case to a specific n8n webhook workflow.
+    """
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+        ('draft', 'Draft'),
+    ]
+    
+    VISIBILITY_CHOICES = [
+        ('internal', 'Internal Only'),
+        ('customer_facing', 'Customer Facing'),
+    ]
+    
+    name = models.CharField(
+        max_length=200,
+        unique=True,
+        help_text="Unique name for this agent template (e.g., 'research_agent', 'sop_agent')"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of what this agent template does"
+    )
+    n8n_webhook_url = models.URLField(
+        max_length=500,
+        help_text="Full URL to the n8n webhook endpoint (e.g., http://localhost:5678/webhook/abc123)"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='draft',
+        help_text="Template status: active (usable), inactive (disabled), draft (in development)"
+    )
+    visibility = models.CharField(
+        max_length=20,
+        choices=VISIBILITY_CHOICES,
+        default='customer_facing',
+        help_text="Who can use this template: internal (staff only) or customer_facing (all users)"
+    )
+    mode_key = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Optional: Chatbot mode key that maps to this template (e.g., 'research_agent'). If set, this template will be used when user selects this mode."
+    )
+    default_parameters = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Default parameters to send to n8n webhook (JSON object)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_agent_templates',
+        help_text="User who created this template"
+    )
+    
+    class Meta:
+        verbose_name = "Agent Template"
+        verbose_name_plural = "Agent Templates"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['mode_key']),
+            models.Index(fields=['visibility']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_status_display()})"
+    
+    def is_usable(self):
+        """Check if template is active and ready to use."""
+        return self.status == 'active'
+    
+    def can_be_used_by(self, user):
+        """Check if user can use this template."""
+        if self.visibility == 'internal' and not user.is_staff:
+            return False
+        return self.is_usable()
+
+
 class TestResult(models.Model):
     """Store test execution results for tracking."""
     TEST_CATEGORIES = [

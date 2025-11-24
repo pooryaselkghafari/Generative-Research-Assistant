@@ -356,6 +356,7 @@ os.makedirs(logs_dir, exist_ok=True)
 # No need to add it dynamically since it's already in the list
 
 MIDDLEWARE = [
+    'engine.middleware.n8n_auth.N8nAuthMiddleware',  # Protect n8n access - must be early
     'allauth.account.middleware.AccountMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
