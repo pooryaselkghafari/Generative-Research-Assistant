@@ -136,14 +136,42 @@ def n8n_proxy(request, path=''):
         response_headers.pop('Content-Encoding', None)
         response_headers.pop('content-encoding', None)
         
-        # Create response with decompressed content
+        # Get content type
+        content_type = response.headers.get('Content-Type', 'text/html')
+        
+        # For HTML/JavaScript content, rewrite URLs to use /n8n/ prefix
+        content = response.content
+        if content_type.startswith('text/html') or content_type.startswith('application/javascript') or content_type.startswith('text/javascript'):
+            try:
+                content_str = content.decode('utf-8')
+                # Rewrite common patterns that n8n might generate
+                # Replace absolute paths that don't have /n8n/ prefix
+                content_str = content_str.replace('href="/', 'href="/n8n/')
+                content_str = content_str.replace("href='/", "href='/n8n/")
+                content_str = content_str.replace('src="/', 'src="/n8n/')
+                content_str = content_str.replace("src='/", "src='/n8n/")
+                content_str = content_str.replace('action="/', 'action="/n8n/')
+                content_str = content_str.replace("action='/", "action='/n8n/")
+                # Replace API calls
+                content_str = content_str.replace('"/rest/', '"/n8n/rest/')
+                content_str = content_str.replace("'/rest/", "'/n8n/rest/")
+                content_str = content_str.replace('"/webhook/', '"/n8n/webhook/')
+                content_str = content_str.replace("'/webhook/", "'/n8n/webhook/")
+                # Replace base URLs
+                content_str = content_str.replace('http://localhost:5678/', '/n8n/')
+                content_str = content_str.replace('http://127.0.0.1:5678/', '/n8n/')
+                content = content_str.encode('utf-8')
+            except (UnicodeDecodeError, AttributeError):
+                # If content can't be decoded as text, use as-is
+                pass
+        
+        # Create response with content
         django_response = HttpResponse(
-            response.content,
+            content,
             status=response.status_code
         )
         
         # Set content type
-        content_type = response.headers.get('Content-Type', 'text/html')
         django_response['Content-Type'] = content_type
         
         # Set all other headers
