@@ -2,10 +2,12 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from engine.views.admin_n8n import n8n_embedded
 
 # Use configurable admin URL for security (less predictable than /admin/)
 admin_url = getattr(settings, 'ADMIN_URL', 'gra-management')
 urlpatterns = [
+    path(f'{admin_url}/n8n/', n8n_embedded, name='admin:n8n_embedded'),
     path(f'{admin_url}/', admin.site.urls),
     # Custom account URLs (login, register, etc.) - must come before allauth
     path('accounts/', include('accounts.urls')),

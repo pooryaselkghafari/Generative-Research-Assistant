@@ -1,0 +1,53 @@
+{% extends "admin/index.html" %}
+{% load static %}
+
+{% block content %}
+{{ block.super }}
+
+<div class="module">
+    <table>
+        <caption>
+            <a href="{% url 'admin:n8n_embedded' %}" class="section" title="n8n Workflow Automation">
+                n8n Workflow Automation
+            </a>
+        </caption>
+        <tr>
+            <th scope="row">
+                <a href="{% url 'admin:n8n_embedded' %}">
+                    <strong>n8n Workflows</strong>
+                </a>
+            </th>
+            <td>
+                <a href="{% url 'admin:n8n_embedded' %}" class="addlink">
+                    Open n8n
+                </a>
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">
+                <a href="{% url 'admin:engine_agenttemplate_changelist' %}">
+                    <strong>Agent Templates</strong>
+                </a>
+            </th>
+            <td>
+                <a href="{% url 'admin:engine_agenttemplate_changelist' %}" class="viewlink">
+                    Manage Templates
+                </a>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<style>
+.module table {
+    width: 100%;
+}
+.module table th {
+    padding: 10px;
+}
+.module table td {
+    padding: 10px;
+}
+</style>
+{% endblock %}
+
