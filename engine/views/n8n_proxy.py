@@ -4,6 +4,7 @@ Django view to proxy requests to n8n, ensuring admin authentication.
 import requests
 from django.http import StreamingHttpResponse, HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
 import logging
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 N8N_BASE_URL = 'http://127.0.0.1:5678'
 
 
+@csrf_exempt
 @staff_member_required
 def n8n_proxy(request, path=None):
     """
