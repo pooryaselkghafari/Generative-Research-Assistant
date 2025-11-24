@@ -243,7 +243,7 @@ def n8n_proxy(request, path=None):
             if cookie_header:
                 set_cookie_headers = [cookie_header]
         for cookie in set_cookie_headers:
-            django_response.headers.add_header('Set-Cookie', cookie)
+            django_response['Set-Cookie'] = cookie
         
         # Set all other headers
         for key, value in response_headers.items():
