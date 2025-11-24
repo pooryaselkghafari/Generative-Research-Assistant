@@ -91,6 +91,7 @@ services:
       - N8N_TRUST_PROXY=true
       - N8N_TRUSTED_PROXIES=loopback,linklocal,uniquelocal
       - N8N_RATE_LIMITS_DISABLED=true
+      - N8N_DIAGNOSTICS_ENABLED=false
       # Security settings (address deprecation warnings)
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
