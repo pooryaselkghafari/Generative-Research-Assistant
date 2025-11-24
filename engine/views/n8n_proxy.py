@@ -8,6 +8,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
 import logging
 import urllib.parse
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -140,29 +141,41 @@ def n8n_proxy(request, path=''):
         content_type = response.headers.get('Content-Type', 'text/html')
         
         # For HTML/JavaScript content, rewrite URLs to use /n8n/ prefix
+        # But be smart: n8n with N8N_PATH already generates /n8n/ URLs, so don't double-prefix
         content = response.content
         if content_type.startswith('text/html') or content_type.startswith('application/javascript') or content_type.startswith('text/javascript'):
             try:
                 content_str = content.decode('utf-8')
-                # Rewrite common patterns that n8n might generate
-                # Replace absolute paths that don't have /n8n/ prefix
-                content_str = content_str.replace('href="/', 'href="/n8n/')
-                content_str = content_str.replace("href='/", "href='/n8n/")
-                content_str = content_str.replace('src="/', 'src="/n8n/')
-                content_str = content_str.replace("src='/", "src='/n8n/")
-                content_str = content_str.replace('action="/', 'action="/n8n/')
-                content_str = content_str.replace("action='/", "action='/n8n/")
-                # Replace API calls
-                content_str = content_str.replace('"/rest/', '"/n8n/rest/')
-                content_str = content_str.replace("'/rest/", "'/n8n/rest/")
-                content_str = content_str.replace('"/webhook/', '"/n8n/webhook/')
-                content_str = content_str.replace("'/webhook/", "'/n8n/webhook/")
-                # Replace base URLs
+                # Only rewrite URLs that don't already start with /n8n/
+                # Use regex to be more precise
+                import re
+                
+                # Replace href="/..." but not href="/n8n/..."
+                content_str = re.sub(r'href="/(?!n8n/)', 'href="/n8n/', content_str)
+                content_str = re.sub(r"href='/(?!n8n/)", "href='/n8n/", content_str)
+                
+                # Replace src="/..." but not src="/n8n/..."
+                content_str = re.sub(r'src="/(?!n8n/)', 'src="/n8n/', content_str)
+                content_str = re.sub(r"src='/(?!n8n/)", "src='/n8n/", content_str)
+                
+                # Replace action="/..." but not action="/n8n/..."
+                content_str = re.sub(r'action="/(?!n8n/)', 'action="/n8n/', content_str)
+                content_str = re.sub(r"action='/(?!n8n/)", "action='/n8n/", content_str)
+                
+                # Replace API calls that don't have /n8n/ prefix
+                content_str = re.sub(r'"/rest/(?!n8n/)', '"/n8n/rest/', content_str)
+                content_str = re.sub(r"'/rest/(?!n8n/)", "'/n8n/rest/", content_str)
+                content_str = re.sub(r'"/webhook/(?!n8n/)', '"/n8n/webhook/', content_str)
+                content_str = re.sub(r"'/webhook/(?!n8n/)", "'/n8n/webhook/", content_str)
+                
+                # Replace base URLs (these should always be replaced)
                 content_str = content_str.replace('http://localhost:5678/', '/n8n/')
                 content_str = content_str.replace('http://127.0.0.1:5678/', '/n8n/')
+                
                 content = content_str.encode('utf-8')
-            except (UnicodeDecodeError, AttributeError):
+            except (UnicodeDecodeError, AttributeError) as e:
                 # If content can't be decoded as text, use as-is
+                logger.debug(f"Could not decode content for URL rewriting: {e}")
                 pass
         
         # Create response with content
