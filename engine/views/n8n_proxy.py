@@ -25,6 +25,8 @@ def n8n_proxy(request, path=None):
     running on localhost:5678, preserving the request method, headers, and body.
     """
     try:
+        logger.info(f"n8n_proxy called: path={path}, request.path={request.path}, method={request.method}")
+        
         # Build the target URL - remove leading slash from path if present
         # Handle both cases: path parameter provided or not
         if path is None:
@@ -39,7 +41,10 @@ def n8n_proxy(request, path=None):
         if path:
             target_url = f"{N8N_BASE_URL}/{path}"
         else:
-            target_url = N8N_BASE_URL
+            # For root /n8n/, target n8n root
+            target_url = f"{N8N_BASE_URL}/"
+        
+        logger.info(f"Target URL: {target_url}")
         
         # Add query string if present
         if request.GET:
