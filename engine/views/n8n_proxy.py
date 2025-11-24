@@ -57,11 +57,9 @@ def n8n_proxy(request, path=''):
         headers['X-Forwarded-Host'] = request.get_host()
         headers['X-Forwarded-For'] = request.META.get('REMOTE_ADDR', '')
         
-        # Remove Accept-Encoding to get uncompressed response (we'll handle compression ourselves)
-        # Or let requests handle it automatically
-        if 'Accept-Encoding' in headers:
-            # Keep it but requests will auto-decompress
-            pass
+        # Explicitly request uncompressed response OR let requests auto-decompress
+        # Remove Accept-Encoding to get uncompressed, or keep it and let requests handle it
+        # We'll keep Accept-Encoding but ensure requests decompresses
         
         # Get request body for methods that support it
         body = None
@@ -71,7 +69,8 @@ def n8n_proxy(request, path=''):
         logger.debug(f"Proxying {request.method} request to n8n: {target_url}")
         
         # Make request to n8n
-        # Note: requests automatically decompresses gzip/deflate responses
+        # Note: requests automatically decompresses gzip/deflate responses when stream=False
+        # But we need to ensure the response is actually decompressed
         response = requests.request(
             method=request.method,
             url=target_url,
@@ -81,6 +80,20 @@ def n8n_proxy(request, path=''):
             timeout=60,
             allow_redirects=False
         )
+        
+        # Force decompression if needed - requests should have done this automatically
+        # But let's verify by checking if content-encoding is still present
+        content_encoding = response.headers.get('Content-Encoding', '').lower()
+        if content_encoding in ['gzip', 'deflate', 'br']:
+            # If still compressed, manually decompress
+            import gzip
+            if content_encoding == 'gzip':
+                try:
+                    response._content = gzip.decompress(response.content)
+                except Exception as e:
+                    logger.warning(f"Failed to decompress gzip content: {e}")
+            # Remove content-encoding header
+            del response.headers['Content-Encoding']
         
         # Prepare response headers
         response_headers = {}
