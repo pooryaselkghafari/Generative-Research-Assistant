@@ -143,9 +143,9 @@ def n8n_proxy(request, path=None):
                     del response.headers['Content-Encoding']
                 logger.debug(f"Content too short to be compressed, removing Content-Encoding header")
         
-        # Prepare response headers
+        # Prepare response headers (handle multi-value headers like Set-Cookie separately)
         response_headers = {}
-        excluded_headers = ['transfer-encoding', 'connection', 'content-length']
+        excluded_headers = ['transfer-encoding', 'connection', 'content-length', 'set-cookie']
         # We need to preserve content-encoding for gzip/deflate, but handle it properly
         for key, value in response.headers.items():
             key_lower = key.lower()
@@ -229,6 +229,21 @@ def n8n_proxy(request, path=None):
         
         # Set content type
         django_response['Content-Type'] = content_type
+
+        # Copy Set-Cookie headers explicitly (requests collapses duplicates)
+        set_cookie_headers = []
+        raw_headers = getattr(response.raw, 'headers', None)
+        if raw_headers is not None:
+            try:
+                set_cookie_headers = raw_headers.getlist('Set-Cookie')
+            except Exception:
+                set_cookie_headers = []
+        if not set_cookie_headers:
+            cookie_header = response.headers.get('Set-Cookie')
+            if cookie_header:
+                set_cookie_headers = [cookie_header]
+        for cookie in set_cookie_headers:
+            django_response.headers.add_header('Set-Cookie', cookie)
         
         # Set all other headers
         for key, value in response_headers.items():
