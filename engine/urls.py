@@ -31,6 +31,7 @@ from engine.views.agent_templates import (
     agent_template_toggle_status, agent_template_test, agent_template_api_list
 )
 from engine.views.chatbot import chatbot_endpoint
+from engine.views.n8n_proxy import n8n_proxy
 
 urlpatterns = [
     path('', landing_view, name='landing'),
@@ -85,6 +86,9 @@ urlpatterns = [
     path('api/agent-templates/', agent_template_api_list, name='agent_template_api_list'),
     # Chatbot with n8n integration
     path('api/chat/', chatbot_endpoint, name='chatbot_endpoint'),
+    # n8n proxy (must be after other routes to catch all /n8n/* paths)
+    path('n8n/', n8n_proxy, name='n8n_proxy'),
+    path('n8n/<path:path>', n8n_proxy, name='n8n_proxy_path'),
     # Privacy and Legal
     path('privacy/', privacy_policy_view, name='privacy_policy'),
     path('terms/', terms_of_service_view, name='terms_of_service'),

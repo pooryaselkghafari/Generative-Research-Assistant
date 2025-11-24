@@ -80,11 +80,18 @@ services:
       # - DB_POSTGRESDB_DATABASE=n8n
       # - DB_POSTGRESDB_USER=postgres
       # - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD}
+      # SQLite pool size (addresses deprecation warning)
+      - DB_SQLITE_POOL_SIZE=5
       # Security: Disable public access
       - N8N_PUBLIC_API_DISABLED=false
       - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
       # Note: We don't use N8N_PATH because nginx handles the /n8n/ routing
       # n8n runs at root, nginx proxies /n8n/ to n8n's root
+      # Security settings (address deprecation warnings)
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
+      # Task runners (optional, but recommended)
+      - N8N_RUNNERS_ENABLED=${N8N_RUNNERS_ENABLED:-false}
     volumes:
       - n8n_data:/home/node/.n8n
       - n8n_workflows:/home/node/.n8n/workflows
