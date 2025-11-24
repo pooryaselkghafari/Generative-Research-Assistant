@@ -81,19 +81,30 @@ def n8n_proxy(request, path=''):
             allow_redirects=False
         )
         
-        # Check if response is still compressed (shouldn't be, but handle it just in case)
+        # Check if response is actually compressed
+        # Sometimes Content-Encoding header is set but content isn't actually compressed
         content_encoding = response.headers.get('Content-Encoding', '').lower()
         if content_encoding in ['gzip', 'deflate']:
-            # Manually decompress if somehow still compressed
-            import gzip
-            try:
-                if content_encoding == 'gzip':
+            # Check if content is actually compressed by looking at magic bytes
+            content_bytes = response.content[:2] if len(response.content) >= 2 else b''
+            is_gzipped = content_bytes == b'\x1f\x8b'  # gzip magic bytes
+            
+            if is_gzipped and content_encoding == 'gzip':
+                # Content is actually gzipped, decompress it
+                import gzip
+                try:
                     response._content = gzip.decompress(response.content)
-                # Remove content-encoding header after decompression
-                del response.headers['Content-Encoding']
-                logger.info(f"Manually decompressed {content_encoding} content from n8n")
-            except Exception as e:
-                logger.error(f"Failed to decompress {content_encoding} content: {e}", exc_info=True)
+                    # Remove content-encoding header after decompression
+                    if 'Content-Encoding' in response.headers:
+                        del response.headers['Content-Encoding']
+                    logger.debug(f"Decompressed gzip content from n8n")
+                except Exception as e:
+                    logger.warning(f"Failed to decompress gzip content (content may not be compressed): {e}")
+            else:
+                # Header says gzip but content isn't actually compressed - remove the header
+                if 'Content-Encoding' in response.headers:
+                    del response.headers['Content-Encoding']
+                logger.debug(f"Content-Encoding header present but content is not compressed, removing header")
         
         # Prepare response headers
         response_headers = {}
