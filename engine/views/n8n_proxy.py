@@ -57,6 +57,12 @@ def n8n_proxy(request, path=''):
         headers['X-Forwarded-Host'] = request.get_host()
         headers['X-Forwarded-For'] = request.META.get('REMOTE_ADDR', '')
         
+        # Remove Accept-Encoding to get uncompressed response (we'll handle compression ourselves)
+        # Or let requests handle it automatically
+        if 'Accept-Encoding' in headers:
+            # Keep it but requests will auto-decompress
+            pass
+        
         # Get request body for methods that support it
         body = None
         if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
@@ -65,12 +71,13 @@ def n8n_proxy(request, path=''):
         logger.debug(f"Proxying {request.method} request to n8n: {target_url}")
         
         # Make request to n8n
+        # Note: requests automatically decompresses gzip/deflate responses
         response = requests.request(
             method=request.method,
             url=target_url,
             headers=headers,
             data=body,
-            stream=True,
+            stream=False,  # Set to False to let requests handle decompression automatically
             timeout=60,
             allow_redirects=False
         )
@@ -99,42 +106,17 @@ def n8n_proxy(request, path=''):
                     location = location.replace('http://127.0.0.1:5678/', '/n8n/')
                 response_headers['Location'] = location
         
-        # Handle content encoding - if response is gzipped, we need to decompress it
-        # or let Django handle it by not setting content-encoding
-        content_encoding = response.headers.get('Content-Encoding', '').lower()
+        # requests library automatically decompresses gzip/deflate responses
+        # So response.content is already decompressed
+        # Remove content-encoding header since we've decompressed it
+        response_headers.pop('Content-Encoding', None)
+        response_headers.pop('content-encoding', None)
         
-        if content_encoding in ['gzip', 'deflate', 'br']:
-            # For compressed content, we need to decompress it
-            import gzip
-            import io
-            
-            if content_encoding == 'gzip':
-                # Decompress gzip content
-                compressed_data = response.content
-                decompressed_data = gzip.decompress(compressed_data)
-                # Remove content-encoding header since we're decompressing
-                response_headers.pop('Content-Encoding', None)
-                response_headers.pop('content-encoding', None)
-                
-                # Create regular response with decompressed content
-                django_response = HttpResponse(
-                    decompressed_data,
-                    status=response.status_code
-                )
-            else:
-                # For other encodings, use streaming but remove encoding header
-                response_headers.pop('Content-Encoding', None)
-                response_headers.pop('content-encoding', None)
-                django_response = StreamingHttpResponse(
-                    response.iter_content(chunk_size=8192),
-                    status=response.status_code
-                )
-        else:
-            # For uncompressed content, use streaming
-            django_response = StreamingHttpResponse(
-                response.iter_content(chunk_size=8192),
-                status=response.status_code
-            )
+        # Create response with decompressed content
+        django_response = HttpResponse(
+            response.content,
+            status=response.status_code
+        )
         
         # Set content type
         content_type = response.headers.get('Content-Type', 'text/html')
