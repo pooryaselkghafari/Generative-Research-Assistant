@@ -83,8 +83,8 @@ services:
       # Security: Disable public access
       - N8N_PUBLIC_API_DISABLED=false
       - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
-      # Path prefix for n8n (will be accessed via /n8n/)
-      - N8N_PATH=${N8N_PATH:-/n8n/}
+      # Note: We don't use N8N_PATH because nginx handles the /n8n/ routing
+      # n8n runs at root, nginx proxies /n8n/ to n8n's root
     volumes:
       - n8n_data:/home/node/.n8n
       - n8n_workflows:/home/node/.n8n/workflows
