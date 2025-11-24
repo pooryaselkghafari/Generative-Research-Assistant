@@ -24,7 +24,9 @@ class N8nAuthMiddleware:
         # Check if request is for n8n
         if request.path.startswith('/n8n/'):
             # Allow access only if user is authenticated and is staff/admin
-            if not request.user.is_authenticated:
+            # Use getattr with default to handle cases where user might not be set
+            user = getattr(request, 'user', None)
+            if not user or not user.is_authenticated:
                 logger.warning(
                     f"Unauthenticated access attempt to n8n: {request.path}",
                     extra={
@@ -36,12 +38,12 @@ class N8nAuthMiddleware:
                 admin_url = getattr(request, 'admin_url', '/whereadmingoeshere/login/')
                 return redirect(f'{admin_url}?next={request.path}')
             
-            if not request.user.is_staff:
+            if not user.is_staff:
                 logger.warning(
                     f"Non-admin access attempt to n8n: {request.path}",
                     extra={
-                        'user_id': request.user.id,
-                        'username': request.user.username,
+                        'user_id': user.id if user else None,
+                        'username': user.username if user else 'anonymous',
                         'ip': request.META.get('REMOTE_ADDR')
                     }
                 )
@@ -52,8 +54,8 @@ class N8nAuthMiddleware:
             logger.info(
                 f"Admin access to n8n: {request.path}",
                 extra={
-                    'user_id': request.user.id,
-                    'username': request.user.username
+                    'user_id': user.id if user else None,
+                    'username': user.username if user else 'anonymous'
                 }
             )
         

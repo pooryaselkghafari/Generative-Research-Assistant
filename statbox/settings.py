@@ -356,17 +356,18 @@ os.makedirs(logs_dir, exist_ok=True)
 # No need to add it dynamically since it's already in the list
 
 MIDDLEWARE = [
-    'engine.middleware.n8n_auth.N8nAuthMiddleware',  # Protect n8n access - must be early
     'allauth.account.middleware.AccountMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',  # Must be before N8nAuthMiddleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Admin security middleware (must be after AuthenticationMiddleware)
     'statbox.middleware.AdminSecurityMiddleware',
+    # n8n auth middleware (must be after AuthenticationMiddleware)
+    'engine.middleware.n8n_auth.N8nAuthMiddleware',
 ]
 
 ROOT_URLCONF = 'statbox.urls'
