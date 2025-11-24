@@ -87,9 +87,10 @@ urlpatterns = [
     # Chatbot with n8n integration
     path('api/chat/', chatbot_endpoint, name='chatbot_endpoint'),
     # n8n proxy (must be after other routes to catch all /n8n/* paths)
-    # Order matters: more specific path first
-    path('n8n/<path:path>', n8n_proxy, {'path': ''}, name='n8n_proxy_path'),
-    path('n8n/', n8n_proxy, {'path': ''}, name='n8n_proxy'),
+    # Order matters: more specific path first (with path parameter)
+    path('n8n/<path:path>', n8n_proxy, name='n8n_proxy_path'),
+    # Root /n8n/ path (no path parameter)
+    path('n8n/', n8n_proxy, name='n8n_proxy'),
     # Privacy and Legal
     path('privacy/', privacy_policy_view, name='privacy_policy'),
     path('terms/', terms_of_service_view, name='terms_of_service'),
