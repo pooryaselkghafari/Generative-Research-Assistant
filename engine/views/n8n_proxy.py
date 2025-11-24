@@ -77,19 +77,42 @@ def n8n_proxy(request, path=None):
         if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
             body = request.body
         
-        logger.debug(f"Proxying {request.method} request to n8n: {target_url}")
+        logger.info(f"Proxying {request.method} request to n8n: {target_url} (path: {path})")
         
         # Make request to n8n
         # We've removed Accept-Encoding, so n8n should return uncompressed content
-        response = requests.request(
-            method=request.method,
-            url=target_url,
-            headers=headers,
-            data=body,
-            stream=False,
-            timeout=60,
-            allow_redirects=False
-        )
+        try:
+            response = requests.request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                data=body,
+                stream=False,
+                timeout=60,
+                allow_redirects=False
+            )
+            logger.info(f"Received response from n8n: {response.status_code} for {target_url}")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error to n8n at {target_url}: {e}")
+            return HttpResponse(
+                "Cannot connect to n8n. Please ensure n8n is running on port 5678.",
+                status=502,
+                content_type='text/plain'
+            )
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Timeout connecting to n8n at {target_url}: {e}")
+            return HttpResponse(
+                "Timeout connecting to n8n. Please try again.",
+                status=504,
+                content_type='text/plain'
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error connecting to n8n: {e}", exc_info=True)
+            return HttpResponse(
+                f"Error connecting to n8n: {str(e)}",
+                status=502,
+                content_type='text/plain'
+            )
         
         # Check if response is actually compressed
         # Sometimes Content-Encoding header is set but content isn't actually compressed
