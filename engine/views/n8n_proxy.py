@@ -70,7 +70,8 @@ def n8n_proxy(request, path=None):
                 headers[key.replace('_', '-')] = value
         
         # Set proper headers for n8n
-        headers['Host'] = 'localhost:5678'
+        # Use public host so n8n issues cookies for the right domain
+        headers['Host'] = request.get_host()
         headers['X-Forwarded-Proto'] = request.scheme
         headers['X-Forwarded-Host'] = request.get_host()
         # Remove X-Forwarded-For header entirely
