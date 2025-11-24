@@ -12,6 +12,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# n8n base URL - use localhost since we're in the same Docker network (host mode)
 N8N_BASE_URL = 'http://127.0.0.1:5678'
 
 
