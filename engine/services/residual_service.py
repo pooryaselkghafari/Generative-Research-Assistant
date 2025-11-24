@@ -188,14 +188,14 @@ class ResidualCalculationService:
         
         # Raw residuals
         residuals = fitted_model.resid
-        col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_raw'
+        col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_raw'
         residual_columns[col_name] = residuals
         column_names.append(col_name)
         
         # Standardized residuals
         if hasattr(fitted_model, 'resid_pearson'):
             pearson_residuals = fitted_model.resid_pearson
-            col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_pearson'
+            col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_pearson'
             residual_columns[col_name] = pearson_residuals
             column_names.append(col_name)
         
@@ -215,28 +215,28 @@ class ResidualCalculationService:
         # Response residuals
         if hasattr(fitted_model, 'resid_response'):
             response_residuals = fitted_model.resid_response
-            col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_response'
+            col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_response'
             residual_columns[col_name] = response_residuals
             column_names.append(col_name)
         
         # Pearson residuals
         if hasattr(fitted_model, 'resid_pearson'):
             pearson_residuals = fitted_model.resid_pearson
-            col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_pearson'
+            col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_pearson'
             residual_columns[col_name] = pearson_residuals
             column_names.append(col_name)
         
         # Deviance residuals
         if hasattr(fitted_model, 'resid_deviance'):
             deviance_residuals = fitted_model.resid_deviance
-            col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_deviance'
+            col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_deviance'
             residual_columns[col_name] = deviance_residuals
             column_names.append(col_name)
         
         # Working residuals
         if hasattr(fitted_model, 'resid_working'):
             working_residuals = fitted_model.resid_working
-            col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_working'
+            col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_working'
             residual_columns[col_name] = working_residuals
             column_names.append(col_name)
         
@@ -311,7 +311,7 @@ class ResidualCalculationService:
                         category_name = category_names[col_idx]
                     else:
                         category_name = f'cat{col_idx}'
-                    col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_response_{category_name}'
+                    col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_response_{category_name}'
                     residual_columns[col_name] = pd.Series(response_residuals[:, col_idx])
                     column_names.append(col_name)
                 print(f"DEBUG: Successfully calculated {response_residuals.shape[1]} response residual columns")
@@ -351,12 +351,12 @@ class ResidualCalculationService:
                 residual_series = residuals[col]
                 if isinstance(residual_series, pd.Series):
                     if len(residual_series.shape) == 1:
-                        col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_{residual_type}_{col}'
+                        col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_{residual_type}_{col}'
                         residual_columns[col_name] = residual_series
                         column_names.append(col_name)
                 else:
                     residual_series = pd.Series(residual_series)
-                    col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_{residual_type}_{col}'
+                    col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_{residual_type}_{col}'
                     residual_columns[col_name] = residual_series
                     column_names.append(col_name)
                     
@@ -368,19 +368,19 @@ class ResidualCalculationService:
                         category_name = category_names[col_idx]
                     else:
                         category_name = f'cat{col_idx}'
-                    col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_{residual_type}_{category_name}'
+                    col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_{residual_type}_{category_name}'
                     residual_columns[col_name] = pd.Series(residuals[:, col_idx])
                     column_names.append(col_name)
             else:
                 # 1D array
-                col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_{residual_type}'
+                col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_{residual_type}'
                 residual_columns[col_name] = pd.Series(residuals)
                 column_names.append(col_name)
         else:
             # Try to convert to Series
             try:
                 residual_series = pd.Series(residuals)
-                col_name = f'{session_name}_{dv_safe}_{model_type_name}_error_{residual_type}'
+                col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual_{residual_type}'
                 residual_columns[col_name] = residual_series
                 column_names.append(col_name)
             except Exception as e:
@@ -443,7 +443,7 @@ class ResidualCalculationService:
                 response_residuals.loc[actual_values_clean.index] = response_residuals_clean
                 response_residuals.loc[actual_values_full.isna()] = np.nan
                 
-                col_name = f'{session_name}_{dv_safe}_{model_type_name}_error'
+                col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual'
                 residual_columns[col_name] = response_residuals
                 column_names.append(col_name)
                 print(f"DEBUG: Added {col_name} with {len(response_residuals.dropna())} non-null values")
@@ -453,7 +453,7 @@ class ResidualCalculationService:
                 response_residuals = pd.Series(index=df.index, dtype=float)
                 min_len = min(len(actual_values_clean), len(predicted_prob))
                 response_residuals.iloc[:min_len] = actual_values_clean.iloc[:min_len].values - predicted_prob[:min_len]
-                col_name = f'{session_name}_{dv_safe}_{model_type_name}_error'
+                col_name = f'{session_name}_{dv_safe}_{model_type_name}_residual'
                 residual_columns[col_name] = response_residuals
                 column_names.append(col_name)
         except Exception as e:
@@ -485,9 +485,9 @@ class ResidualCalculationService:
                 try:
                     residuals = getattr(fitted_model, attr)
                     if attr == 'resid':
-                        base_name = 'error'
+                        base_name = 'residual'
                     else:
-                        base_name = attr.replace('resid', 'error')
+                        base_name = attr.replace('resid', 'residual')
                     
                     col_name = f'{session_name}_{dv_safe}_{model_type_name}_{base_name}'
                     

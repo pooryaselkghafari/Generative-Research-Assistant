@@ -88,7 +88,7 @@ def open_cleaner(request, dataset_id):
         # Provide more detailed error message for debugging
         response = HttpResponse(
             f"Failed to read dataset: {e}\n\n"
-            f"If you recently added model errors to this dataset, the file may need to be re-uploaded.\n"
+            f"If you recently added model residuals to this dataset, the file may need to be re-uploaded.\n"
             f"Error details: {error_msg}",
             status=400,
             content_type="text/plain"

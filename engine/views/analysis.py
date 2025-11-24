@@ -528,7 +528,7 @@ def add_model_errors_to_dataset(request, session_id):
             print(f"DEBUG: Error saving dataset after adding residuals: {save_error}")
             print(f"DEBUG: Traceback: {error_details}")
             return JsonResponse({
-                'error': f'Failed to save dataset after adding errors: {str(save_error)}'
+                'error': f'Failed to save dataset after adding residuals: {str(save_error)}'
             }, status=500)
         
         # CRITICAL: Verify session was not modified (safety check)

@@ -99,25 +99,9 @@
               <span class="req-icon"></span>
               <span>One uppercase letter (A-Z)</span>
             </li>
-            <li id="req-lowercase" class="requirement-item">
-              <span class="req-icon"></span>
-              <span>One lowercase letter (a-z)</span>
-            </li>
             <li id="req-number" class="requirement-item">
               <span class="req-icon"></span>
               <span>One number (0-9)</span>
-            </li>
-            <li id="req-special" class="requirement-item">
-              <span class="req-icon"></span>
-              <span>One special character (!@#$%^&*()_+-=[]{}|;:,.<>/?)</span>
-            </li>
-            <li id="req-not-common" class="requirement-item">
-              <span class="req-icon"></span>
-              <span>Not a common password</span>
-            </li>
-            <li id="req-not-similar" class="requirement-item">
-              <span class="req-icon"></span>
-              <span>Not too similar to username or email</span>
             </li>
           </ul>
           <div class="password-strength-indicator">
@@ -747,24 +731,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const emailInput = document.getElementById('id_email');
   
   function validatePassword(password) {
-    const username = usernameInput ? usernameInput.value.toLowerCase() : '';
-    const email = emailInput ? emailInput.value.toLowerCase().split('@')[0] : '';
-    const passwordLower = password.toLowerCase();
-    
     const checks = {
       length: password.length >= 12,
       uppercase: /[A-Z]/.test(password),
-      lowercase: /[a-z]/.test(password),
       number: /\d/.test(password),
-      special: /[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]/.test(password),
-      notCommon: password.length >= 12 && !['password', '12345678', 'qwerty', 'abc123'].some(common => passwordLower.includes(common)),
-      notSimilar: !username || passwordLower.indexOf(username) === -1,
     };
-    
-    // Check similarity to email username part
-    if (email && email.length >= 3) {
-      checks.notSimilar = checks.notSimilar && passwordLower.indexOf(email) === -1;
-    }
     
     return checks;
   }
@@ -779,11 +750,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const requirements = {
       'req-length': checks.length,
       'req-uppercase': checks.uppercase,
-      'req-lowercase': checks.lowercase,
       'req-number': checks.number,
-      'req-special': checks.special,
-      'req-not-common': checks.notCommon,
-      'req-not-similar': checks.notSimilar,
     };
     
     let validCount = 0;
@@ -828,13 +795,6 @@ document.addEventListener('DOMContentLoaded', function() {
   if (passwordInput) {
     passwordInput.addEventListener('input', updatePasswordRequirements);
     passwordInput.addEventListener('blur', updatePasswordRequirements);
-    // Also check when username or email changes
-    if (usernameInput) {
-      usernameInput.addEventListener('input', updatePasswordRequirements);
-    }
-    if (emailInput) {
-      emailInput.addEventListener('input', updatePasswordRequirements);
-    }
   }
 
   const hasAgreed = sessionStorage.getItem('userAgreementAccepted');
