@@ -85,8 +85,8 @@ services:
       # Security: Disable public access
       - N8N_PUBLIC_API_DISABLED=false
       - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
-      # Note: We don't use N8N_PATH because nginx handles the /n8n/ routing
-      # n8n runs at root, nginx proxies /n8n/ to n8n's root
+      # Set path prefix so n8n knows it's behind /n8n/ reverse proxy
+      - N8N_PATH=/n8n/
       # Security settings (address deprecation warnings)
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
