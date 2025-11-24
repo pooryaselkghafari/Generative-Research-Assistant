@@ -110,25 +110,35 @@ def n8n_proxy(request, path=None):
         content_encoding = response.headers.get('Content-Encoding', '').lower()
         if content_encoding in ['gzip', 'deflate']:
             # Check if content is actually compressed by looking at magic bytes
-            content_bytes = response.content[:2] if len(response.content) >= 2 else b''
-            is_gzipped = content_bytes == b'\x1f\x8b'  # gzip magic bytes
-            
-            if is_gzipped and content_encoding == 'gzip':
-                # Content is actually gzipped, decompress it
-                import gzip
-                try:
-                    response._content = gzip.decompress(response.content)
-                    # Remove content-encoding header after decompression
+            # Only check if we have at least 2 bytes
+            if len(response.content) >= 2:
+                content_bytes = response.content[:2]
+                is_gzipped = content_bytes == b'\x1f\x8b'  # gzip magic bytes
+                
+                if is_gzipped and content_encoding == 'gzip':
+                    # Content is actually gzipped, decompress it
+                    import gzip
+                    try:
+                        response._content = gzip.decompress(response.content)
+                        # Remove content-encoding header after decompression
+                        if 'Content-Encoding' in response.headers:
+                            del response.headers['Content-Encoding']
+                        logger.debug(f"Decompressed gzip content from n8n")
+                    except Exception as e:
+                        logger.warning(f"Failed to decompress gzip content: {e}")
+                        # Remove the header even if decompression failed
+                        if 'Content-Encoding' in response.headers:
+                            del response.headers['Content-Encoding']
+                else:
+                    # Header says gzip but content isn't actually compressed - remove the header
                     if 'Content-Encoding' in response.headers:
                         del response.headers['Content-Encoding']
-                    logger.debug(f"Decompressed gzip content from n8n")
-                except Exception as e:
-                    logger.warning(f"Failed to decompress gzip content (content may not be compressed): {e}")
+                    logger.debug(f"Content-Encoding header present but content is not compressed, removing header")
             else:
-                # Header says gzip but content isn't actually compressed - remove the header
+                # Content too short to be gzipped, remove header
                 if 'Content-Encoding' in response.headers:
                     del response.headers['Content-Encoding']
-                logger.debug(f"Content-Encoding header present but content is not compressed, removing header")
+                logger.debug(f"Content too short to be compressed, removing Content-Encoding header")
         
         # Prepare response headers
         response_headers = {}
@@ -173,19 +183,23 @@ def n8n_proxy(request, path=None):
                 # Use regex to be more precise
                 import re
                 
-                # Replace href="/..." but not href="/n8n/..."
+                # n8n with N8N_PATH=/n8n/ already generates URLs with /n8n/ prefix
+                # So we need to be careful not to double-prefix
+                # Only rewrite URLs that don't already start with /n8n/
+                
+                # Replace href="/..." but not href="/n8n/..." (avoid double prefix)
                 content_str = re.sub(r'href="/(?!n8n/)', 'href="/n8n/', content_str)
                 content_str = re.sub(r"href='/(?!n8n/)", "href='/n8n/", content_str)
                 
-                # Replace src="/..." but not src="/n8n/..."
+                # Replace src="/..." but not src="/n8n/..." (avoid double prefix)
                 content_str = re.sub(r'src="/(?!n8n/)', 'src="/n8n/', content_str)
                 content_str = re.sub(r"src='/(?!n8n/)", "src='/n8n/", content_str)
                 
-                # Replace action="/..." but not action="/n8n/..."
+                # Replace action="/..." but not action="/n8n/..." (avoid double prefix)
                 content_str = re.sub(r'action="/(?!n8n/)', 'action="/n8n/', content_str)
                 content_str = re.sub(r"action='/(?!n8n/)", "action='/n8n/", content_str)
                 
-                # Replace API calls that don't have /n8n/ prefix
+                # Replace API calls that don't have /n8n/ prefix (avoid double prefix)
                 content_str = re.sub(r'"/rest/(?!n8n/)', '"/n8n/rest/', content_str)
                 content_str = re.sub(r"'/rest/(?!n8n/)", "'/n8n/rest/", content_str)
                 content_str = re.sub(r'"/webhook/(?!n8n/)', '"/n8n/webhook/', content_str)
@@ -194,6 +208,9 @@ def n8n_proxy(request, path=None):
                 # Replace base URLs (these should always be replaced)
                 content_str = content_str.replace('http://localhost:5678/', '/n8n/')
                 content_str = content_str.replace('http://127.0.0.1:5678/', '/n8n/')
+                
+                # Fix any double prefixes that might have been created
+                content_str = content_str.replace('/n8n/n8n/', '/n8n/')
                 
                 content = content_str.encode('utf-8')
             except (UnicodeDecodeError, AttributeError) as e:

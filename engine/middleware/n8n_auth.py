@@ -25,8 +25,10 @@ class N8nAuthMiddleware:
         if request.path.startswith('/n8n/'):
             # Allow access only if user is authenticated and is staff/admin
             # Use getattr with default to handle cases where user might not be set
+            # Also check if user has is_authenticated attribute (it might not be set yet by AuthenticationMiddleware)
             user = getattr(request, 'user', None)
-            if not user or not user.is_authenticated:
+            is_authenticated = getattr(user, 'is_authenticated', False) if user else False
+            if not user or not is_authenticated:
                 logger.warning(
                     f"Unauthenticated access attempt to n8n: {request.path}",
                     extra={
