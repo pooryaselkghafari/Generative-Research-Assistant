@@ -87,6 +87,8 @@ services:
       - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
       # Set path prefix so n8n knows it's behind /n8n/ reverse proxy
       - N8N_PATH=/n8n/
+      # Behind nginx/Django proxy, so trust forwarded headers
+      - N8N_TRUST_PROXY=true
       # Security settings (address deprecation warnings)
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
