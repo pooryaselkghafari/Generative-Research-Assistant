@@ -67,7 +67,7 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
     list_display = ('name', 'price_monthly', 'price_yearly', 'max_datasets', 'max_sessions', 'ai_tier', 'workflow_template', 'is_active', 'created_at')
     list_filter = ('is_active', 'ai_tier', 'created_at')
     search_fields = ('name', 'description')
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('created_at',)  # updated_at will be added after migration
     fieldsets = (
         ('Plan Information', {
             'fields': ('name', 'description', 'is_active'),
@@ -90,7 +90,7 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
             'description': 'AI access level and the agent template (n8n workflow) used for chatbot access. Users without a workflow will see an upgrade message.'
         }),
         ('Metadata', {
-            'fields': ('created_at', 'updated_at'),
+            'fields': ('created_at',),  # updated_at will be added after migration
             'classes': ('collapse',)
         }),
     )
