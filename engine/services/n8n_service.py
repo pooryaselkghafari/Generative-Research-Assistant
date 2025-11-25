@@ -345,9 +345,43 @@ class N8nService:
                     f"Received keys: {list(response.keys())}"
                 )
         
-        # Ensure 'reply' is a string
+        # Ensure 'reply' is a string (convert if needed)
+        reply = response.get('reply')
+        if not isinstance(reply, str):
+            # Try to extract string from list/dict structures
+            if isinstance(reply, list) and len(reply) > 0:
+                # Get first item from list
+                first_item = reply[0]
+                if isinstance(first_item, dict):
+                    # Try to extract message/content from dict
+                    reply = (
+                        first_item.get('message') or 
+                        first_item.get('content') or 
+                        first_item.get('text') or
+                        first_item.get('response') or
+                        str(first_item)
+                    )
+                else:
+                    reply = str(first_item)
+            elif isinstance(reply, dict):
+                # Try to extract message from dict
+                reply = (
+                    reply.get('message') or 
+                    reply.get('content') or 
+                    reply.get('text') or
+                    reply.get('response') or
+                    str(reply)
+                )
+            else:
+                # Convert to string as last resort
+                reply = str(reply) if reply is not None else ''
+            
+            # Update response with converted reply
+            response['reply'] = reply
+        
+        # Final check - ensure it's a string
         if not isinstance(response.get('reply'), str):
-            raise ValueError(f"n8n response 'reply' field must be a string, got {type(response.get('reply'))}")
+            raise ValueError(f"n8n response 'reply' field must be a string after conversion, got {type(response.get('reply'))}")
     
     @staticmethod
     def build_chatbot_payload(
