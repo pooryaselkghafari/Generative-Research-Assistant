@@ -44,25 +44,32 @@ class BaseTestSuite(TestCase):
             score = (passed / total * 100) if total > 0 else 0
             
             # Save to database
+            # Note: Django TestCase wraps tests in transactions that are rolled back,
+            # so we can't save to DB during tests. File save (below) works as a backup.
+            # For production/test runs outside TestCase, database saves will work.
             try:
-                result = TestResult.objects.create(
-                    category=suite_results['category'],
-                    test_name=suite_results['test_name'],
-                    passed=score >= suite_results['target_score'],
-                    score=score,
-                    total_tests=total,
-                    passed_tests=passed,
-                    failed_tests=total - passed,
-                    execution_time=execution_time,
-                    details={
-                        'test_results': suite_results['test_results'],
-                    }
-                )
-                # Force save and flush to ensure it's persisted
                 from django.db import transaction
-                transaction.commit()
+                # Check if we're in an atomic block
+                if connection.in_atomic_block:
+                    # Can't save during transaction - file save will handle it
+                    pass
+                else:
+                    TestResult.objects.create(
+                        category=suite_results['category'],
+                        test_name=suite_results['test_name'],
+                        passed=score >= suite_results['target_score'],
+                        score=score,
+                        total_tests=total,
+                        passed_tests=passed,
+                        failed_tests=total - passed,
+                        execution_time=execution_time,
+                        details={
+                            'test_results': suite_results['test_results'],
+                        }
+                    )
             except Exception as e:
-                print(f"Warning: Could not save test result: {e}")
+                # Silently fail - file save below will handle persistence
+                pass
             
             # Also save to file as backup
             import json

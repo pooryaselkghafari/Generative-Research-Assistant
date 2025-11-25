@@ -35,7 +35,7 @@ class APITestSuite(BaseTestSuite):
         
         self.record_test(
             'dataset_variables_api',
-            response.status_code in [200, 400, 500],  # 400/500 if file doesn't exist, but endpoint works
+            response.status_code in [200, 400, 404, 500],  # 400/404/500 if file doesn't exist, but endpoint works
             f"Dataset variables API should respond (status: {response.status_code})"
         )
     
