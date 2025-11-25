@@ -24,7 +24,7 @@ class Command(BaseCommand):
                 SELECT column_name 
                 FROM information_schema.columns 
                 WHERE table_name='engine_subscriptionplan' 
-                AND column_name IN ('max_datasets', 'max_sessions', 'max_file_size_mb', 'ai_tier', 'workflow_template_id')
+                AND column_name IN ('max_datasets', 'max_sessions', 'max_file_size_mb', 'workflow_template_id')
             """)
             new_fields = [row[0] for row in cursor.fetchall()]
             

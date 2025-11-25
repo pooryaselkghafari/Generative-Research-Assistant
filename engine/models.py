@@ -37,13 +37,6 @@ class UserProfile(models.Model):
         return 'free'
     
     @property
-    def ai_tier(self):
-        """Backward compatibility: return plan's ai_tier"""
-        if self.subscription_plan:
-            return self.subscription_plan.ai_tier
-        return 'none'
-    
-    @property
     def is_subscription_active(self):
         if not self.subscription_end:
             return False
@@ -72,43 +65,13 @@ class UserProfile(models.Model):
         }
     
     def get_ai_features(self):
-        """Get AI features based on plan's ai_tier"""
-        if not self.subscription_plan:
-            return {
-                'ai_enabled': False,
-                'model_type': None,
-                'rag_enabled': False,
-                'fine_tuning_enabled': False,
-            }
-        
-        ai_tier = self.subscription_plan.ai_tier
-        features = {
-            'none': {
-                'ai_enabled': False,
-                'model_type': None,
-                'rag_enabled': False,
-                'fine_tuning_enabled': False,
-            },
-            'general': {
-                'ai_enabled': True,
-                'model_type': 'general_fine_tuned',
-                'rag_enabled': False,
-                'fine_tuning_enabled': False,
-            },
-            'rag': {
-                'ai_enabled': True,
-                'model_type': 'general_fine_tuned',
-                'rag_enabled': True,
-                'fine_tuning_enabled': False,
-            },
-            'fine_tuned': {
-                'ai_enabled': True,
-                'model_type': 'user_fine_tuned',
-                'rag_enabled': True,
-                'fine_tuning_enabled': True,
-            },
+        """Get AI features - returns default disabled state"""
+        return {
+            'ai_enabled': False,
+            'model_type': None,
+            'rag_enabled': False,
+            'fine_tuning_enabled': False,
         }
-        return features.get(ai_tier, features['none'])
 
 class Dataset(models.Model):
     name = models.CharField(max_length=200)
@@ -163,13 +126,6 @@ class SubscriptionPlan(models.Model):
     Unified subscription plan model that combines pricing, features, limits, and workflow configuration.
     Replaces the previous SubscriptionTierSettings and SubscriptionPlan separation.
     """
-    AI_TIER_CHOICES = [
-        ('none', 'No AI Access'),
-        ('general', 'General Fine-tuned Model'),
-        ('rag', 'RAG (Retrieval-Augmented Generation)'),
-        ('fine_tuned', 'User Fine-tuned Model'),
-    ]
-    
     # Basic Information
     name = models.CharField(max_length=50, unique=True, help_text="Plan name (e.g., 'Free', 'Pro', 'Enterprise')")
     description = models.TextField(help_text="Description of this subscription plan")
@@ -189,14 +145,6 @@ class SubscriptionPlan(models.Model):
     max_datasets = models.IntegerField(default=5, help_text="Maximum number of datasets. Use -1 for unlimited.")
     max_sessions = models.IntegerField(default=10, help_text="Maximum number of analysis sessions. Use -1 for unlimited.")
     max_file_size_mb = models.IntegerField(default=10, help_text="Maximum file size in MB. Use -1 for unlimited.")
-    
-    # AI Configuration
-    ai_tier = models.CharField(
-        max_length=20,
-        choices=AI_TIER_CHOICES,
-        default='none',
-        help_text="AI access level for this plan"
-    )
     
     # Workflow Configuration
     workflow_template = models.ForeignKey(

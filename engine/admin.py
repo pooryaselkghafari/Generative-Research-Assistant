@@ -64,8 +64,8 @@ class AnalysisSessionAdmin(admin.ModelAdmin):
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
     """Unified admin interface for subscription plans with all settings in one place."""
-    list_display = ('name', 'price_monthly', 'price_yearly', 'max_datasets', 'max_sessions', 'ai_tier', 'workflow_template', 'is_active', 'created_at', 'updated_at')
-    list_filter = ('is_active', 'ai_tier', 'created_at')
+    list_display = ('name', 'price_monthly', 'price_yearly', 'max_datasets', 'max_sessions', 'workflow_template', 'is_active', 'created_at', 'updated_at')
+    list_filter = ('is_active', 'created_at')
     search_fields = ('name', 'description')
     readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
@@ -85,9 +85,9 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
             'fields': ('max_datasets', 'max_sessions', 'max_file_size_mb'),
             'description': 'Resource limits for this plan. Use -1 for unlimited. Users can override these in their profile if needed.'
         }),
-        ('AI & Workflow Configuration', {
-            'fields': ('ai_tier', 'workflow_template'),
-            'description': 'AI access level and the agent template (n8n workflow) used for chatbot access. Users without a workflow will see an upgrade message.'
+        ('Workflow Configuration', {
+            'fields': ('workflow_template',),
+            'description': 'Agent template (n8n workflow) used for chatbot access. Users without a workflow will see an upgrade message.'
         }),
         ('Metadata', {
             'fields': ('created_at', 'updated_at'),
@@ -96,18 +96,18 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
     )
 
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'subscription_plan', 'get_ai_tier', 'get_datasets_count', 'get_sessions_count', 'is_active', 'subscription_status')
+    list_display = ('user', 'subscription_plan', 'get_datasets_count', 'get_sessions_count', 'is_active', 'subscription_status')
     list_filter = ('subscription_plan', 'is_active', 'created_at')
     search_fields = ('user__username', 'user__email', 'subscription_plan__name')
-    readonly_fields = ('created_at', 'updated_at', 'subscription_status', 'usage_stats', 'get_ai_tier')
+    readonly_fields = ('created_at', 'updated_at', 'subscription_status', 'usage_stats')
     raw_id_fields = ('subscription_plan',)
     fieldsets = (
         ('User Information', {
             'fields': ('user', 'is_active')
         }),
         ('Subscription', {
-            'fields': ('subscription_plan', 'get_ai_tier', 'subscription_start', 'subscription_end', 'subscription_status'),
-            'description': 'User\'s subscription plan. AI tier is determined by the plan.'
+            'fields': ('subscription_plan', 'subscription_start', 'subscription_end', 'subscription_status'),
+            'description': 'User\'s subscription plan and status.'
         }),
         ('Stripe Information', {
             'fields': ('stripe_customer_id', 'stripe_subscription_id'),
@@ -126,13 +126,6 @@ class UserProfileAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    
-    def get_ai_tier(self, obj):
-        """Display AI tier from subscription plan"""
-        if obj.subscription_plan:
-            return obj.subscription_plan.get_ai_tier_display()
-        return 'No AI Access'
-    get_ai_tier.short_description = 'AI Tier'
     
     def subscription_status(self, obj):
         """Display subscription status"""

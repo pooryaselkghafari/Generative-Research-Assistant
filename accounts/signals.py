@@ -20,10 +20,7 @@ def create_user_profile(sender, instance, created, **kwargs):
         try:
             profile, created_profile = UserProfile.objects.get_or_create(
                 user=instance,
-                defaults={
-                    'subscription_type': 'free',
-                    'ai_tier': 'none'
-                }
+                defaults={}
             )
             if created_profile:
                 logger.info(f"Created UserProfile via signal for user: {instance.username}")

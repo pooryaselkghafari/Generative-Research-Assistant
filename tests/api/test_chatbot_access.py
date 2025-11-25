@@ -6,7 +6,7 @@ import pytest
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
-from engine.models import AgentTemplate, SubscriptionTierSettings, UserProfile
+from engine.models import AgentTemplate, SubscriptionPlan, UserProfile
 
 User = get_user_model()
 
@@ -23,9 +23,15 @@ class TestChatbotAccess:
 
     def test_access_denied_when_no_workflow(self, client, user):
         client.force_login(user)
-        # Ensure user profile exists with default tier lacking workflow
-        UserProfile.objects.create(user=user, subscription_type='free')
-        SubscriptionTierSettings.objects.create(tier='free')
+        # Ensure user profile exists with default plan lacking workflow
+        free_plan = SubscriptionPlan.objects.create(
+            name='Free',
+            price_monthly=0,
+            max_datasets=5,
+            max_sessions=10,
+            max_file_size_mb=10
+        )
+        UserProfile.objects.create(user=user, subscription_plan=free_plan)
 
         response = client.get(reverse('chatbot_access_check'))
         assert response.status_code == 200
@@ -42,12 +48,15 @@ class TestChatbotAccess:
             status='active',
             visibility='customer_facing'
         )
-        SubscriptionTierSettings.objects.create(
-            tier='free',
-            workflow_template=template,
-            ai_tier='general'
+        free_plan = SubscriptionPlan.objects.create(
+            name='Free',
+            price_monthly=0,
+            max_datasets=5,
+            max_sessions=10,
+            max_file_size_mb=10,
+            workflow_template=template
         )
-        UserProfile.objects.create(user=user, subscription_type='free')
+        UserProfile.objects.create(user=user, subscription_plan=free_plan)
 
         response = client.get(reverse('chatbot_access_check'))
         assert response.status_code == 200

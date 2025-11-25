@@ -232,7 +232,6 @@ def profile_view(request):
                 'max_datasets': 5,
                 'max_sessions': 10,
                 'max_file_size_mb': 10,
-                'ai_tier': 'none',
                 'is_active': True,
             }
         )
@@ -350,10 +349,7 @@ def create_checkout_session(request, plan_id):
         # Get or create user profile (handle case where profile doesn't exist)
         profile, created = UserProfile.objects.get_or_create(
             user=request.user,
-            defaults={
-                'subscription_type': 'free',
-                'ai_tier': 'none'
-            }
+            defaults={}
         )
         
         # Create or get Stripe customer
@@ -394,10 +390,7 @@ def cancel_subscription(request):
         # Get or create user profile (handle case where profile doesn't exist)
         profile, created = UserProfile.objects.get_or_create(
             user=request.user,
-            defaults={
-                'subscription_type': 'free',
-                'ai_tier': 'none'
-            }
+            defaults={}
         )
         if profile.stripe_subscription_id:
             stripe.Subscription.modify(

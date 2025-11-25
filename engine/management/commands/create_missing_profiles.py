@@ -46,7 +46,6 @@ class Command(BaseCommand):
                 'max_datasets': 5,
                 'max_sessions': 10,
                 'max_file_size_mb': 10,
-                'ai_tier': 'none',
                 'is_active': True,
             }
         )
