@@ -124,7 +124,32 @@ class N8nService:
                     }
                 )
                 
-                # Raise an exception for bad status codes
+                # Check for error status codes and provide detailed error info
+                if not response.ok:
+                    error_body = response.text[:1000] if response.text else "(empty response)"
+                    logger.error(
+                        f"n8n webhook returned error status {response.status_code}",
+                        extra={
+                            'webhook_url': normalized_url,
+                            'original_url': webhook_url,
+                            'status_code': response.status_code,
+                            'response_text': error_body,
+                            'payload_keys': list(sanitized_payload.keys())
+                        }
+                    )
+                    # Try to parse error message from response
+                    try:
+                        error_json = response.json()
+                        error_message = error_json.get('message') or error_json.get('error') or str(error_json)
+                    except:
+                        error_message = error_body
+                    
+                    raise requests.exceptions.HTTPError(
+                        f"{response.status_code} Server Error: {error_message} for url: {normalized_url}",
+                        response=response
+                    )
+                
+                # Raise an exception for any other bad status codes
                 response.raise_for_status()
                 
                 # Check if response is empty
