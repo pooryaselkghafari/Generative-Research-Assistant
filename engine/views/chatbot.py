@@ -8,10 +8,54 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from engine.models import AgentTemplate
+from django.urls import reverse
+from engine.models import AgentTemplate, UserProfile, SubscriptionTierSettings
 from engine.services.n8n_service import N8nService
 
 logger = logging.getLogger(__name__)
+
+def _get_subscription_template(user):
+    """Return the agent template mapped to the user's subscription tier, if any."""
+    profile, _ = UserProfile.objects.get_or_create(
+        user=user,
+        defaults={'subscription_type': 'free', 'ai_tier': 'none'}
+    )
+    tier_settings = (
+        SubscriptionTierSettings.objects.select_related('workflow_template')
+        .filter(tier=profile.subscription_type, is_active=True)
+        .first()
+    )
+    if tier_settings and tier_settings.workflow_template and tier_settings.workflow_template.is_usable():
+        return tier_settings.workflow_template
+    return None
+
+
+@login_required
+@require_http_methods(["GET"])
+def chatbot_access_check(request):
+    """
+    Check whether the current user has access to the chatbot based on their subscription tier.
+    """
+    template = _get_subscription_template(request.user)
+    if not template:
+        upgrade_url = reverse('subscription')
+        return JsonResponse({
+            'allowed': False,
+            'requires_upgrade': True,
+            'message': 'Your current subscription is not connected to the Generative Research Assistant yet. Upgrade to unlock AI workflows.',
+            'upgrade_url': upgrade_url,
+        })
+
+    return JsonResponse({
+        'allowed': True,
+        'template': {
+            'id': template.id,
+            'name': template.name,
+            'description': template.description,
+            'n8n_webhook_url': template.n8n_webhook_url,
+            'workflow': template.workflow.workflow_id if template.workflow else None,
+        }
+    })
 
 
 @login_required
@@ -93,22 +137,18 @@ def chatbot_endpoint(request):
                     'error': f'Template with mode_key "{mode_key}" not found'
                 }, status=404)
         else:
-            # Default: Use first active customer-facing template
-            template = AgentTemplate.objects.filter(
-                status='active',
-                visibility='customer_facing'
-            ).first()
-            
-            if not template:
-                # Fallback: Use first active template (even if internal)
-                if request.user.is_staff:
-                    template = AgentTemplate.objects.filter(status='active').first()
+            template = _get_subscription_template(request.user)
         
+        if not template and request.user.is_staff:
+            template = AgentTemplate.objects.filter(status='active').first()
+
         if not template:
             return JsonResponse({
                 'success': False,
-                'error': 'No active agent template available'
-            }, status=404)
+                'error': 'No workflow is connected to your subscription yet. Please upgrade to unlock AI chat.',
+                'requires_upgrade': True,
+                'upgrade_url': reverse('subscription')
+            }, status=403)
         
         # Check if user can use this template
         if not template.can_be_used_by(request.user):

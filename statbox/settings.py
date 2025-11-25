@@ -93,6 +93,11 @@ STRIPE_PUBLIC_KEY = os.environ.get('STRIPE_PUBLIC_KEY', '')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
 
+# n8n integration settings
+N8N_API_BASE_URL = os.environ.get('N8N_API_BASE_URL', 'http://127.0.0.1:5678')
+N8N_API_KEY = os.environ.get('N8N_API_KEY')
+N8N_WEBHOOK_URL = os.environ.get('N8N_WEBHOOK_URL', os.environ.get('WEBHOOK_URL', 'http://127.0.0.1:5678/'))
+
 # Email settings
 # Supports Resend API (recommended) or SMTP
 # Option 1: Resend API (more reliable, no SMTP ports needed)

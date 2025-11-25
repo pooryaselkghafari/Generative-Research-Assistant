@@ -668,8 +668,68 @@
         }
       }
       
-      // Show "Coming Soon" popup for GRA feature
       function showGRAComingSoonPopup() {
+        fetch('/api/chat/access/', {
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'include'
+        })
+        .then(response => {
+          if (response.status === 401) {
+            window.location.href = `/accounts/login/?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+            return null;
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (!data) return;
+          if (data.allowed) {
+            renderGrapopup({
+              title: 'AI Chat Coming Soon',
+              message: `Your subscription is connected to the “${data.template.name}” workflow. We are finalizing the Generative Research Assistant experience and will unlock full conversations soon.`,
+              features: [
+                'Connected workflow: ' + data.template.name,
+                'Webhook ready: ' + (data.template.n8n_webhook_url || 'Configured in n8n'),
+                'Stay tuned for automated insights and guided analysis'
+              ],
+              buttonLabel: 'Great!'
+            });
+          } else if (data.requires_upgrade) {
+            renderGrapopup({
+              title: 'Upgrade Required',
+              message: data.message || 'Upgrade your subscription to access the Generative Research Assistant.',
+              features: [
+                'Unlock AI-powered workflows',
+                'Chat with Generative Research Assistant',
+                'Access advanced research automation'
+              ],
+              buttonLabel: 'Upgrade Subscription',
+              buttonHref: data.upgrade_url || '/accounts/subscription/'
+            });
+          } else {
+            renderGrapopup();
+          }
+        })
+        .catch(error => {
+          console.error('Failed to check chatbot access', error);
+          renderGrapopup();
+        });
+      }
+
+      function renderGrapopup(options = {}) {
+        const {
+          title = 'AI Feature Coming Soon!',
+          message = 'The Generative Research Assistant will launch soon with guided insights, contextual recommendations, and automated workflows.',
+          features = [
+            'Get help interpreting your results',
+            'Ask questions about your analysis',
+            'Receive guidance on statistical methods'
+          ],
+          buttonLabel = 'Got it',
+          buttonHref = null,
+        } = options;
+
         const popup = document.createElement('div');
         popup.className = 'gra-coming-soon-popup';
         popup.innerHTML = `
@@ -680,48 +740,34 @@
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
               </svg>
             </div>
-            <h3 class="gra-popup-title">AI Feature Coming Soon!</h3>
-            <p class="gra-popup-message">
-              The Generative Research Assistant (GRA) AI feature will be added to the app soon. 
-              This will allow you to interact with an AI assistant to help with your statistical analyses, 
-              interpret results, and guide you through the analysis process.
-            </p>
+            <h3 class="gra-popup-title">${title}</h3>
+            <p class="gra-popup-message">${message}</p>
             <div class="gra-popup-features">
-              <div class="gra-popup-feature">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                <span>Get help interpreting your results</span>
-              </div>
-              <div class="gra-popup-feature">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                <span>Ask questions about your analysis</span>
-              </div>
-              <div class="gra-popup-feature">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                <span>Receive guidance on statistical methods</span>
-              </div>
+              ${features.map(feature => `
+                <div class="gra-popup-feature">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>${feature}</span>
+                </div>
+              `).join('')}
             </div>
-            <button class="gra-popup-button" onclick="this.closest('.gra-coming-soon-popup').remove()">
-              Got it
+            <button class="gra-popup-button">
+              ${buttonLabel}
             </button>
           </div>
         `;
-        
-        document.body.appendChild(popup);
-        
-        // Auto-remove after 10 seconds
-        setTimeout(() => {
-          if (popup.parentElement) {
-            popup.remove();
+
+        const button = popup.querySelector('.gra-popup-button');
+        button.addEventListener('click', () => {
+          if (buttonHref) {
+            window.location.href = buttonHref;
           }
-        }, 10000);
-        
-        // Add keyboard handler
+          popup.remove();
+        });
+
+        document.body.appendChild(popup);
+
         const handleKeyPress = (e) => {
           if (e.key === 'Escape' || e.key === 'Enter') {
             popup.remove();

@@ -9,7 +9,7 @@ from django.utils.safestring import mark_safe
 from .models import (
     Dataset, AnalysisSession, UserProfile, SubscriptionPlan, Payment, Page,
     SubscriptionTierSettings, PrivacyPolicy, TermsOfService, SiteSettings,
-    AgentTemplate,
+    AgentTemplate, N8nWorkflow,
     AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket,
     AIProvider
 )
@@ -71,9 +71,9 @@ class SubscriptionTierSettingsAdmin(admin.ModelAdmin):
             'fields': ('max_datasets', 'max_sessions', 'max_file_size_mb'),
             'description': 'Use -1 for unlimited. These limits apply to all users on this tier unless overridden in their profile.'
         }),
-        ('AI Features', {
-            'fields': ('ai_tier',),
-            'description': 'AI access level for this tier. Users on this tier will have access to the selected AI features.'
+        ('AI Features & Workflow', {
+            'fields': ('ai_tier', 'workflow_template'),
+            'description': 'AI access level for this tier and the agent template (workflow) used for the chatbot.'
         }),
     )
     readonly_fields = ('created_at', 'updated_at')
@@ -438,13 +438,13 @@ admin.site.register(SiteSettings, SiteSettingsAdmin)
 
 class AgentTemplateAdmin(admin.ModelAdmin):
     """Admin interface for Agent Templates."""
-    list_display = ('name', 'status', 'visibility', 'mode_key', 'created_at', 'updated_at')
+    list_display = ('name', 'status', 'visibility', 'mode_key', 'workflow', 'created_at', 'updated_at')
     list_filter = ('status', 'visibility', 'created_at')
     search_fields = ('name', 'description', 'mode_key', 'n8n_webhook_url')
     readonly_fields = ('created_at', 'updated_at', 'created_by')
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'description', 'status', 'visibility')
+            'fields': ('name', 'description', 'status', 'visibility', 'workflow')
         }),
         ('n8n Configuration', {
             'fields': ('n8n_webhook_url', 'mode_key', 'default_parameters'),
@@ -466,6 +466,76 @@ class AgentTemplateAdmin(admin.ModelAdmin):
         return qs.select_related('created_by')
 
 admin.site.register(AgentTemplate, AgentTemplateAdmin)
+
+
+class N8nWorkflowAdmin(admin.ModelAdmin):
+    """Read-only admin for n8n workflows with sync action."""
+    list_display = ('name', 'workflow_id', 'active', 'updated_at', 'linked_templates')
+    search_fields = ('name', 'workflow_id', 'description')
+    list_filter = ('active',)
+    readonly_fields = ('workflow_id', 'name', 'active', 'version_id', 'webhook_id', 'test_url', 'production_url',
+                       'tags', 'description', 'data', 'n8n_created_at', 'n8n_updated_at', 'created_at', 'updated_at')
+    actions = ['sync_from_n8n']
+
+    def linked_templates(self, obj):
+        count = obj.agent_templates.count()
+        if count == 0:
+            return 'None'
+        url = reverse('admin:engine_agenttemplate_changelist') + f'?workflow__id__exact={obj.id}'
+        return format_html('<a href="{}">{} template(s)</a>', url, count)
+    linked_templates.short_description = 'Agent Templates'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        if request.method == 'POST':
+            return False
+        return super().has_change_permission(request, obj)
+
+    def sync_from_n8n(self, request, queryset):
+        from django.utils.dateparse import parse_datetime
+        from engine.services.n8n_api_client import N8nAPIClient
+
+        client = N8nAPIClient()
+        try:
+            workflows = client.list_workflows()
+        except Exception as exc:
+            self.message_user(request, f"Failed to fetch workflows from n8n: {exc}", level='error')
+            return
+
+        created = 0
+        updated = 0
+
+        for wf in workflows:
+            defaults = {
+                'name': wf.get('name') or f"Workflow {wf.get('id')}",
+                'active': wf.get('active', False),
+                'tags': wf.get('tags') or [],
+                'version_id': str(wf.get('versionId') or ''),
+                'webhook_id': str(wf.get('webhookId') or ''),
+                'test_url': wf.get('testUrl', '') or '',
+                'production_url': wf.get('productionUrl', '') or '',
+                'description': (wf.get('settings') or {}).get('notes', ''),
+                'data': wf,
+                'n8n_created_at': parse_datetime(wf.get('createdAt')) if wf.get('createdAt') else None,
+                'n8n_updated_at': parse_datetime(wf.get('updatedAt')) if wf.get('updatedAt') else None,
+            }
+            _, is_created = N8nWorkflow.objects.update_or_create(
+                workflow_id=wf.get('id'),
+                defaults=defaults
+            )
+            if is_created:
+                created += 1
+            else:
+                updated += 1
+
+        self.message_user(request, f"Synced {len(workflows)} workflows (created {created}, updated {updated}).")
+
+    sync_from_n8n.short_description = "Sync workflows from n8n"
+
+
+admin.site.register(N8nWorkflow, N8nWorkflowAdmin)
 
 
 class AIFineTuningFileAdmin(admin.ModelAdmin):

@@ -169,6 +169,14 @@ class SubscriptionTierSettings(models.Model):
     max_sessions = models.IntegerField(default=10, help_text="Maximum number of analysis sessions. Use -1 for unlimited.")
     max_file_size_mb = models.IntegerField(default=10, help_text="Maximum file size in MB. Use -1 for unlimited.")
     ai_tier = models.CharField(max_length=20, choices=AI_TIER_CHOICES, default='none', help_text="AI access level for this tier")
+    workflow_template = models.ForeignKey(
+        'AgentTemplate',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Associate this subscription tier with an Agent Template (n8n workflow) for chatbot access.",
+        related_name='subscription_tiers'
+    )
     description = models.TextField(blank=True, help_text="Description of this tier")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -349,6 +357,35 @@ class SiteSettings(models.Model):
         settings, created = cls.objects.get_or_create(pk=1)
         return settings
 
+
+class N8nWorkflow(models.Model):
+    """
+    Local cache of n8n workflows so admins can map them to chatbots/subscriptions.
+    """
+    workflow_id = models.IntegerField(unique=True, help_text="n8n internal workflow ID")
+    name = models.CharField(max_length=255)
+    active = models.BooleanField(default=False)
+    tags = models.JSONField(default=list, blank=True)
+    version_id = models.CharField(max_length=100, blank=True)
+    webhook_id = models.CharField(max_length=100, blank=True)
+    test_url = models.URLField(blank=True)
+    production_url = models.URLField(blank=True)
+    description = models.TextField(blank=True)
+    data = models.JSONField(default=dict, blank=True, help_text="Raw workflow payload for reference")
+    n8n_created_at = models.DateTimeField(null=True, blank=True)
+    n8n_updated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "n8n Workflow"
+        verbose_name_plural = "n8n Workflows"
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} (ID: {self.workflow_id})"
+
+
 class AgentTemplate(models.Model):
     """
     Represents an n8n workflow template that can be used by the chatbot.
@@ -397,6 +434,14 @@ class AgentTemplate(models.Model):
         null=True,
         unique=True,
         help_text="Optional: Chatbot mode key that maps to this template (e.g., 'research_agent'). If set, this template will be used when user selects this mode."
+    )
+    workflow = models.ForeignKey(
+        'N8nWorkflow',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='agent_templates',
+        help_text="Optional: Link this template to a synced n8n workflow for easier management."
     )
     default_parameters = models.JSONField(
         default=dict,
