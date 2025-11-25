@@ -36,21 +36,25 @@ class N8nService:
         - https://generativera.com/n8n/webhook/abc123 -> http://127.0.0.1:5678/webhook/abc123
         - http://localhost:5678/webhook/abc123 -> http://127.0.0.1:5678/webhook/abc123 (no change)
         
+        Important: n8n webhooks should be called at /webhook/ID (not /n8n/webhook/ID)
+        when calling directly from backend.
+        
         Args:
             webhook_url: Original webhook URL (public or direct)
             
         Returns:
-            Normalized URL for direct backend calls
+            Normalized URL for direct backend calls (removes /n8n/ prefix if present)
         """
         if not webhook_url:
             return webhook_url
         
-        # Extract webhook path from public URL
-        # Pattern: https://domain.com/n8n/webhook/ID or /n8n/webhook/ID
+        # Extract webhook ID from URL
+        # Pattern: https://domain.com/n8n/webhook/ID or /n8n/webhook/ID or /webhook/ID
         match = re.search(r'/webhook/([^/?]+)', webhook_url)
         if match:
             webhook_id = match.group(1)
-            # Build direct URL
+            # Build direct URL - use /webhook/ID (NOT /n8n/webhook/ID)
+            # n8n expects webhooks at /webhook/ID when called directly
             return f"{N8nService.N8N_DIRECT_URL}/webhook/{webhook_id}"
         
         # If already a direct URL or doesn't match pattern, return as-is
