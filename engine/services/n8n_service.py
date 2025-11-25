@@ -7,6 +7,7 @@ and parsing responses.
 import json
 import logging
 import requests
+import re
 from typing import Dict, Any, Optional
 from django.conf import settings
 
@@ -21,6 +22,39 @@ class N8nService:
     
     # Maximum number of retries for failed requests
     MAX_RETRIES = int(getattr(settings, 'N8N_MAX_RETRIES', 2))
+    
+    # n8n base URL for direct calls (when Django calls n8n from backend)
+    # Use localhost since both containers are on host network
+    N8N_DIRECT_URL = getattr(settings, 'N8N_DIRECT_URL', 'http://127.0.0.1:5678')
+    
+    @staticmethod
+    def _normalize_webhook_url(webhook_url: str) -> str:
+        """
+        Convert public webhook URL to direct localhost URL for backend calls.
+        
+        Converts URLs like:
+        - https://generativera.com/n8n/webhook/abc123 -> http://127.0.0.1:5678/webhook/abc123
+        - http://localhost:5678/webhook/abc123 -> http://127.0.0.1:5678/webhook/abc123 (no change)
+        
+        Args:
+            webhook_url: Original webhook URL (public or direct)
+            
+        Returns:
+            Normalized URL for direct backend calls
+        """
+        if not webhook_url:
+            return webhook_url
+        
+        # Extract webhook path from public URL
+        # Pattern: https://domain.com/n8n/webhook/ID or /n8n/webhook/ID
+        match = re.search(r'/webhook/([^/?]+)', webhook_url)
+        if match:
+            webhook_id = match.group(1)
+            # Build direct URL
+            return f"{N8nService.N8N_DIRECT_URL}/webhook/{webhook_id}"
+        
+        # If already a direct URL or doesn't match pattern, return as-is
+        return webhook_url
     
     @staticmethod
     def call_webhook(
@@ -50,9 +84,19 @@ class N8nService:
         if retries is None:
             retries = N8nService.MAX_RETRIES
         
+        # Normalize webhook URL (convert public URL to direct localhost URL)
+        normalized_url = N8nService._normalize_webhook_url(webhook_url)
+        
         # Validate webhook URL
-        if not webhook_url or not webhook_url.startswith(('http://', 'https://')):
-            raise ValueError(f"Invalid webhook URL: {webhook_url}")
+        if not normalized_url or not normalized_url.startswith(('http://', 'https://')):
+            raise ValueError(f"Invalid webhook URL: {normalized_url} (original: {webhook_url})")
+        
+        # Log URL conversion for debugging
+        if normalized_url != webhook_url:
+            logger.debug(
+                f"Converted webhook URL: {webhook_url} -> {normalized_url}",
+                extra={'original_url': webhook_url, 'normalized_url': normalized_url}
+            )
         
         # Sanitize payload (remove None values, ensure JSON-serializable)
         sanitized_payload = N8nService._sanitize_payload(payload)
@@ -61,16 +105,17 @@ class N8nService:
         for attempt in range(retries + 1):
             try:
                 logger.info(
-                    f"Calling n8n webhook: {webhook_url} (attempt {attempt + 1}/{retries + 1})",
+                    f"Calling n8n webhook: {normalized_url} (attempt {attempt + 1}/{retries + 1})",
                     extra={
-                        'webhook_url': webhook_url,
+                        'webhook_url': normalized_url,
+                        'original_url': webhook_url,
                         'attempt': attempt + 1,
                         'payload_keys': list(sanitized_payload.keys())
                     }
                 )
                 
                 response = requests.post(
-                    webhook_url,
+                    normalized_url,
                     json=sanitized_payload,
                     timeout=timeout,
                     headers={
@@ -87,7 +132,8 @@ class N8nService:
                     logger.error(
                         f"Empty response from n8n webhook",
                         extra={
-                            'webhook_url': webhook_url,
+                            'webhook_url': normalized_url,
+                            'original_url': webhook_url,
                             'status_code': response.status_code,
                             'headers': dict(response.headers)
                         }
@@ -105,7 +151,8 @@ class N8nService:
                     logger.error(
                         f"Invalid JSON response from n8n webhook: {e}",
                         extra={
-                            'webhook_url': webhook_url,
+                            'webhook_url': normalized_url,
+                            'original_url': webhook_url,
                             'status_code': response.status_code,
                             'content_type': response.headers.get('Content-Type', 'unknown'),
                             'response_text': response_preview
@@ -121,9 +168,10 @@ class N8nService:
                 N8nService._validate_response(result)
                 
                 logger.info(
-                    f"Successfully called n8n webhook: {webhook_url}",
+                    f"Successfully called n8n webhook: {normalized_url}",
                     extra={
-                        'webhook_url': webhook_url,
+                        'webhook_url': normalized_url,
+                        'original_url': webhook_url,
                         'response_keys': list(result.keys()) if isinstance(result, dict) else None
                     }
                 )
@@ -134,7 +182,7 @@ class N8nService:
                 last_exception = e
                 logger.warning(
                     f"Timeout calling n8n webhook (attempt {attempt + 1}/{retries + 1}): {e}",
-                    extra={'webhook_url': webhook_url, 'timeout': timeout}
+                    extra={'webhook_url': normalized_url, 'original_url': webhook_url, 'timeout': timeout}
                 )
                 if attempt < retries:
                     continue
@@ -144,7 +192,7 @@ class N8nService:
                 last_exception = e
                 logger.error(
                     f"Error calling n8n webhook (attempt {attempt + 1}/{retries + 1}): {e}",
-                    extra={'webhook_url': webhook_url, 'error': str(e)}
+                    extra={'webhook_url': normalized_url, 'original_url': webhook_url, 'error': str(e)}
                 )
                 if attempt < retries:
                     continue
