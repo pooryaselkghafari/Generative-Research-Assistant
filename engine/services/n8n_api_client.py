@@ -67,14 +67,29 @@ class N8nAPIClient:
         """
         Return all workflows available in n8n.
 
-        Response structure may differ between versions; we normalize to a list.
+        n8n has two relevant APIs:
+        - `/api/v1` (requires API key)
+        - `/rest`   (requires session cookies)
+
+        We try the API-key endpoint first and fall back to /rest for backwards compatibility.
         """
-        data = self._request("GET", "/rest/workflows")
-        if isinstance(data, dict) and "data" in data:
-            return data["data"]
-        if isinstance(data, list):
-            return data
-        logger.warning("Unexpected n8n workflow response format: %s", type(data))
+        endpoints = ["/api/v1/workflows", "/rest/workflows"]
+        last_error: Optional[Exception] = None
+
+        for endpoint in endpoints:
+            try:
+                data = self._request("GET", endpoint)
+                if isinstance(data, dict) and "data" in data:
+                    return data["data"]
+                if isinstance(data, list):
+                    return data
+                logger.warning("Unexpected n8n workflow response format for %s: %s", endpoint, type(data))
+            except Exception as exc:  # noqa: BLE001 - bubble up last error if all endpoints fail
+                last_error = exc
+                logger.warning("Failed to fetch workflows via %s: %s", endpoint, exc)
+
+        if last_error:
+            raise last_error
         return []
 
     def get_workflow(self, workflow_id: int) -> Dict[str, Any]:
