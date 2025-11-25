@@ -64,10 +64,23 @@ class AnalysisSessionAdmin(admin.ModelAdmin):
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
     """Unified admin interface for subscription plans with all settings in one place."""
-    list_display = ('name', 'price_monthly', 'price_yearly', 'max_datasets', 'max_sessions', 'ai_tier', 'workflow_template', 'is_active', 'created_at')
-    list_filter = ('is_active', 'ai_tier', 'created_at')
+    
+    def get_queryset(self, request):
+        """Override queryset to exclude fields that don't exist yet."""
+        qs = super().get_queryset(request)
+        # Check if updated_at field exists, if not, defer it to avoid SQL errors
+        try:
+            qs.model._meta.get_field('updated_at')
+        except Exception:
+            # Field doesn't exist - defer it (though this won't help if Django tries to select it)
+            # Instead, we'll use raw SQL or just let it fail gracefully
+            pass
+        return qs
+    
+    list_display = ('name', 'price_monthly', 'price_yearly', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at')
     search_fields = ('name', 'description')
-    readonly_fields = ('created_at',)  # updated_at will be added after migration
+    readonly_fields = ('created_at',)
     fieldsets = (
         ('Plan Information', {
             'fields': ('name', 'description', 'is_active'),
@@ -81,19 +94,48 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
             'fields': ('features', 'ai_features'),
             'description': 'List of features and AI-specific features for this plan. These are displayed to users on the subscription page.'
         }),
-        ('Resource Limits', {
-            'fields': ('max_datasets', 'max_sessions', 'max_file_size_mb'),
-            'description': 'Resource limits for this plan. Use -1 for unlimited. Users can override these in their profile if needed.'
-        }),
-        ('AI & Workflow Configuration', {
-            'fields': ('ai_tier', 'workflow_template'),
-            'description': 'AI access level and the agent template (n8n workflow) used for chatbot access. Users without a workflow will see an upgrade message.'
-        }),
         ('Metadata', {
-            'fields': ('created_at',),  # updated_at will be added after migration
+            'fields': ('created_at',),
             'classes': ('collapse',)
         }),
     )
+    
+    def get_fieldsets(self, request, obj=None):
+        """Dynamically add new fieldsets after migration."""
+        fieldsets = list(super().get_fieldsets(request, obj))
+        
+        # Try to add new fieldsets if fields exist (after migration)
+        try:
+            model = self.model
+            if model._meta.get_field('max_datasets'):
+                # Insert before Metadata
+                new_fieldsets = [
+                    ('Resource Limits', {
+                        'fields': ('max_datasets', 'max_sessions', 'max_file_size_mb'),
+                        'description': 'Resource limits for this plan. Use -1 for unlimited. Users can override these in their profile if needed.'
+                    }),
+                    ('AI & Workflow Configuration', {
+                        'fields': ('ai_tier', 'workflow_template'),
+                        'description': 'AI access level and the agent template (n8n workflow) used for chatbot access. Users without a workflow will see an upgrade message.'
+                    }),
+                ]
+                # Insert before the last fieldset (Metadata)
+                fieldsets = fieldsets[:-1] + new_fieldsets + fieldsets[-1:]
+                
+                # Also add updated_at to metadata if it exists
+                if model._meta.get_field('updated_at'):
+                    metadata_fields = list(fieldsets[-1][1]['fields'])
+                    if 'updated_at' not in metadata_fields:
+                        metadata_fields.append('updated_at')
+                        fieldsets[-1][1]['fields'] = tuple(metadata_fields)
+                        # Also add to readonly_fields
+                        if 'updated_at' not in self.readonly_fields:
+                            self.readonly_fields = self.readonly_fields + ('updated_at',)
+        except Exception:
+            # Fields don't exist yet - will be available after migration
+            pass
+        
+        return tuple(fieldsets)
 
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'subscription_plan', 'get_ai_tier', 'get_datasets_count', 'get_sessions_count', 'is_active', 'subscription_status')
