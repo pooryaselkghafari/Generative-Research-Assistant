@@ -6,7 +6,7 @@ who were created before the profile system was fully implemented.
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from engine.models import UserProfile, SubscriptionTierSettings
+from engine.models import UserProfile, SubscriptionPlan
 
 
 class Command(BaseCommand):
@@ -36,13 +36,22 @@ class Command(BaseCommand):
         
         self.stdout.write(f'Found {len(users_without_profiles)} user(s) without profiles:')
         
-        # Try to get free tier settings
-        try:
-            tier_settings = SubscriptionTierSettings.objects.get(tier='free')
-            default_ai_tier = tier_settings.ai_tier
-        except SubscriptionTierSettings.DoesNotExist:
-            default_ai_tier = 'none'
-            self.stdout.write(self.style.WARNING('⚠ SubscriptionTierSettings not found, using default ai_tier="none"'))
+        # Get or create free plan as default
+        free_plan, created = SubscriptionPlan.objects.get_or_create(
+            name='Free',
+            defaults={
+                'description': 'Free tier with basic features',
+                'price_monthly': 0,
+                'price_yearly': 0,
+                'max_datasets': 5,
+                'max_sessions': 10,
+                'max_file_size_mb': 10,
+                'ai_tier': 'none',
+                'is_active': True,
+            }
+        )
+        if created:
+            self.stdout.write(self.style.SUCCESS('✓ Created default Free plan'))
         
         created_count = 0
         for user in users_without_profiles:
@@ -52,8 +61,7 @@ class Command(BaseCommand):
                 try:
                     profile = UserProfile.objects.create(
                         user=user,
-                        subscription_type='free',
-                        ai_tier=default_ai_tier
+                        subscription_plan=free_plan
                     )
                     created_count += 1
                     self.stdout.write(self.style.SUCCESS(f'    ✓ Created profile for {user.username}'))

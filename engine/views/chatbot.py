@@ -9,24 +9,22 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.urls import reverse
-from engine.models import AgentTemplate, UserProfile, SubscriptionTierSettings
+from engine.models import AgentTemplate, UserProfile, SubscriptionPlan
 from engine.services.n8n_service import N8nService
 
 logger = logging.getLogger(__name__)
 
 def _get_subscription_template(user):
-    """Return the agent template mapped to the user's subscription tier, if any."""
+    """Return the agent template mapped to the user's subscription plan, if any."""
     profile, _ = UserProfile.objects.get_or_create(
         user=user,
-        defaults={'subscription_type': 'free', 'ai_tier': 'none'}
+        defaults={}
     )
-    tier_settings = (
-        SubscriptionTierSettings.objects.select_related('workflow_template')
-        .filter(tier=profile.subscription_type, is_active=True)
-        .first()
-    )
-    if tier_settings and tier_settings.workflow_template and tier_settings.workflow_template.is_usable():
-        return tier_settings.workflow_template
+    # Get workflow template from user's subscription plan
+    if profile.subscription_plan and profile.subscription_plan.is_active:
+        template = profile.subscription_plan.workflow_template
+        if template and template.is_usable():
+            return template
     return None
 
 

@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 from .models import (
     Dataset, AnalysisSession, UserProfile, SubscriptionPlan, Payment, Page,
-    SubscriptionTierSettings, PrivacyPolicy, TermsOfService, SiteSettings,
+    PrivacyPolicy, TermsOfService, SiteSettings,
     AgentTemplate, N8nWorkflow,
     AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket,
     AIProvider
@@ -23,12 +23,14 @@ class UserProfileInline(admin.StackedInline):
 
 class CustomUserAdmin(UserAdmin):
     inlines = (UserProfileInline,)
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_subscription_type')
-    list_filter = ('is_staff', 'is_superuser', 'is_active', 'profile__subscription_type')
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_subscription_plan')
+    list_filter = ('is_staff', 'is_superuser', 'is_active', 'profile__subscription_plan')
     
-    def get_subscription_type(self, obj):
-        return obj.profile.subscription_type
-    get_subscription_type.short_description = 'Subscription'
+    def get_subscription_plan(self, obj):
+        if hasattr(obj, 'profile') and obj.profile.subscription_plan:
+            return obj.profile.subscription_plan.name
+        return 'No Plan'
+    get_subscription_plan.short_description = 'Subscription'
 
 class DatasetAdmin(admin.ModelAdmin):
     list_display = ('name', 'get_user_display', 'file_size_mb', 'uploaded_at')
@@ -60,61 +62,52 @@ class AnalysisSessionAdmin(admin.ModelAdmin):
     get_user_display.short_description = 'User'
     get_user_display.admin_order_field = 'user__username'
 
-class SubscriptionTierSettingsAdmin(admin.ModelAdmin):
-    list_display = ('tier', 'max_datasets', 'max_sessions', 'max_file_size_mb', 'ai_tier', 'is_active', 'updated_at')
-    list_filter = ('is_active', 'ai_tier', 'tier')
-    fieldsets = (
-        ('Tier Information', {
-            'fields': ('tier', 'description', 'is_active')
-        }),
-        ('Resource Limits', {
-            'fields': ('max_datasets', 'max_sessions', 'max_file_size_mb'),
-            'description': 'Use -1 for unlimited. These limits apply to all users on this tier unless overridden in their profile.'
-        }),
-        ('AI Features & Workflow', {
-            'fields': ('ai_tier', 'workflow_template'),
-            'description': 'AI access level for this tier and the agent template (workflow) used for the chatbot.'
-        }),
-    )
-    readonly_fields = ('created_at', 'updated_at')
-
 class SubscriptionPlanAdmin(admin.ModelAdmin):
-    list_display = ('name', 'tier_key', 'price_monthly', 'price_yearly', 'is_active', 'tier_settings_link')
-    list_filter = ('is_active', 'tier_key')
-    search_fields = ('name', 'description', 'tier_key')
+    """Unified admin interface for subscription plans with all settings in one place."""
+    list_display = ('name', 'price_monthly', 'price_yearly', 'max_datasets', 'max_sessions', 'ai_tier', 'workflow_template', 'is_active', 'updated_at')
+    list_filter = ('is_active', 'ai_tier', 'created_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
         ('Plan Information', {
-            'fields': ('name', 'tier_key', 'description', 'is_active')
+            'fields': ('name', 'description', 'is_active'),
+            'description': 'Basic information about this subscription plan.'
         }),
         ('Pricing', {
-            'fields': ('price_monthly', 'price_yearly', 'stripe_price_id_monthly', 'stripe_price_id_yearly')
+            'fields': ('price_monthly', 'price_yearly', 'stripe_price_id_monthly', 'stripe_price_id_yearly'),
+            'description': 'Pricing information for monthly and yearly subscriptions. Connect to Stripe using the Price IDs.'
         }),
         ('Features', {
             'fields': ('features', 'ai_features'),
-            'description': 'List of features and AI-specific features for this plan. These are displayed to users.'
+            'description': 'List of features and AI-specific features for this plan. These are displayed to users on the subscription page.'
+        }),
+        ('Resource Limits', {
+            'fields': ('max_datasets', 'max_sessions', 'max_file_size_mb'),
+            'description': 'Resource limits for this plan. Use -1 for unlimited. Users can override these in their profile if needed.'
+        }),
+        ('AI & Workflow Configuration', {
+            'fields': ('ai_tier', 'workflow_template'),
+            'description': 'AI access level and the agent template (n8n workflow) used for chatbot access. Users without a workflow will see an upgrade message.'
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
         }),
     )
-    
-    def tier_settings_link(self, obj):
-        """Link to tier settings"""
-        if obj.tier_key:
-            url = reverse('admin:engine_subscriptiontiersettings_change', args=[obj.get_tier_settings().id]) if obj.get_tier_settings() else '#'
-            if url != '#':
-                return format_html('<a href="{}">View Tier Settings</a>', url)
-        return '-'
-    tier_settings_link.short_description = 'Tier Settings'
 
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'subscription_type', 'ai_tier', 'get_datasets_count', 'get_sessions_count', 'is_active', 'subscription_status')
-    list_filter = ('subscription_type', 'ai_tier', 'is_active')
-    search_fields = ('user__username', 'user__email')
-    readonly_fields = ('created_at', 'updated_at', 'subscription_status', 'usage_stats')
+    list_display = ('user', 'subscription_plan', 'get_ai_tier', 'get_datasets_count', 'get_sessions_count', 'is_active', 'subscription_status')
+    list_filter = ('subscription_plan', 'is_active', 'created_at')
+    search_fields = ('user__username', 'user__email', 'subscription_plan__name')
+    readonly_fields = ('created_at', 'updated_at', 'subscription_status', 'usage_stats', 'get_ai_tier')
+    raw_id_fields = ('subscription_plan',)
     fieldsets = (
         ('User Information', {
             'fields': ('user', 'is_active')
         }),
         ('Subscription', {
-            'fields': ('subscription_type', 'ai_tier', 'subscription_start', 'subscription_end', 'subscription_status')
+            'fields': ('subscription_plan', 'get_ai_tier', 'subscription_start', 'subscription_end', 'subscription_status'),
+            'description': 'User\'s subscription plan. AI tier is determined by the plan.'
         }),
         ('Stripe Information', {
             'fields': ('stripe_customer_id', 'stripe_subscription_id'),
@@ -122,7 +115,7 @@ class UserProfileAdmin(admin.ModelAdmin):
         }),
         ('Custom Limits (Optional)', {
             'fields': ('max_datasets', 'max_sessions', 'max_file_size_mb'),
-            'description': 'Override tier defaults. Leave blank to use tier defaults. Use -1 for unlimited.'
+            'description': 'Override plan defaults. Leave blank to use plan defaults. Use -1 for unlimited.'
         }),
         ('Usage Statistics', {
             'fields': ('usage_stats',),
@@ -133,6 +126,13 @@ class UserProfileAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+    
+    def get_ai_tier(self, obj):
+        """Display AI tier from subscription plan"""
+        if obj.subscription_plan:
+            return obj.subscription_plan.get_ai_tier_display()
+        return 'No AI Access'
+    get_ai_tier.short_description = 'AI Tier'
     
     def subscription_status(self, obj):
         """Display subscription status"""
@@ -408,7 +408,6 @@ admin.site.register(User, CustomUserAdmin)
 admin.site.register(Dataset, DatasetAdmin)
 admin.site.register(AnalysisSession, AnalysisSessionAdmin)
 admin.site.register(UserProfile, UserProfileAdmin)
-admin.site.register(SubscriptionTierSettings, SubscriptionTierSettingsAdmin)
 admin.site.register(SubscriptionPlan, SubscriptionPlanAdmin)
 admin.site.register(Payment, PaymentAdmin)
 admin.site.register(Page, PageAdmin)

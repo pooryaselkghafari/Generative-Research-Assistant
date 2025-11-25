@@ -15,25 +15,31 @@ class CustomAccountAdapter(DefaultAccountAdapter):
     def save_user(self, request, user, form, commit=True):
         user = super().save_user(request, user, form, commit)
         if commit:
-            # Create user profile with free tier defaults
+            # Create user profile with free plan defaults
             try:
+                from engine.models import SubscriptionPlan
+                free_plan, _ = SubscriptionPlan.objects.get_or_create(
+                    name='Free',
+                    defaults={
+                        'description': 'Free tier with basic features',
+                        'price_monthly': 0,
+                        'price_yearly': 0,
+                        'max_datasets': 5,
+                        'max_sessions': 10,
+                        'max_file_size_mb': 10,
+                        'ai_tier': 'none',
+                        'is_active': True,
+                    }
+                )
                 profile, created = UserProfile.objects.get_or_create(
                     user=user,
                     defaults={
-                        'subscription_type': 'free',
-                        'ai_tier': 'none'
+                        'subscription_plan': free_plan
                     }
                 )
-                
-                # Update AI tier from tier settings if available (only for new profiles)
-                if created:
-                    try:
-                        from engine.models import SubscriptionTierSettings
-                        tier_settings = SubscriptionTierSettings.objects.get(tier='free')
-                        profile.ai_tier = tier_settings.ai_tier
-                        profile.save()
-                    except SubscriptionTierSettings.DoesNotExist:
-                        pass
+                if created and not profile.subscription_plan:
+                    profile.subscription_plan = free_plan
+                    profile.save()
             except Exception as e:
                 # Log error but don't break registration
                 logger.error(f"Failed to create user profile in adapter: {e}")
@@ -64,26 +70,32 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         """Save user after social login."""
         user = super().save_user(request, sociallogin, form)
         
-        # Create user profile for social accounts with free tier defaults
+        # Create user profile for social accounts with free plan defaults
         # This is critical for Google OAuth users
         try:
+            from engine.models import SubscriptionPlan
+            free_plan, _ = SubscriptionPlan.objects.get_or_create(
+                name='Free',
+                defaults={
+                    'description': 'Free tier with basic features',
+                    'price_monthly': 0,
+                    'price_yearly': 0,
+                    'max_datasets': 5,
+                    'max_sessions': 10,
+                    'max_file_size_mb': 10,
+                    'ai_tier': 'none',
+                    'is_active': True,
+                }
+            )
             profile, created = UserProfile.objects.get_or_create(
                 user=user,
                 defaults={
-                    'subscription_type': 'free',
-                    'ai_tier': 'none'
+                    'subscription_plan': free_plan
                 }
             )
-            
-            # Update AI tier from tier settings if available (only for new profiles)
-            if created:
-                from engine.models import SubscriptionTierSettings
-                try:
-                    tier_settings = SubscriptionTierSettings.objects.get(tier='free')
-                    profile.ai_tier = tier_settings.ai_tier
-                    profile.save()
-                except SubscriptionTierSettings.DoesNotExist:
-                    pass
+            if created and not profile.subscription_plan:
+                profile.subscription_plan = free_plan
+                profile.save()
             
             if created:
                 logger.info(f"Created UserProfile for Google OAuth user: {user.username}")
@@ -95,12 +107,14 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             logger.error(f"Failed to create UserProfile for Google OAuth user {user.username}: {e}", exc_info=True)
             # Try to create a basic profile as fallback
             try:
-                UserProfile.objects.create(
-                    user=user,
-                    subscription_type='free',
-                    ai_tier='none'
-                )
-                logger.info(f"Created fallback UserProfile for user: {user.username}")
+                from engine.models import SubscriptionPlan
+                free_plan = SubscriptionPlan.objects.filter(name='Free').first()
+                if free_plan:
+                    UserProfile.objects.create(
+                        user=user,
+                        subscription_plan=free_plan
+                    )
+                    logger.info(f"Created fallback UserProfile for user: {user.username}")
             except Exception as e2:
                 logger.error(f"Failed to create fallback UserProfile for user {user.username}: {e2}", exc_info=True)
         

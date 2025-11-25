@@ -220,13 +220,29 @@ def profile_view(request):
     try:
         # Get or create user profile (handle case where profile doesn't exist)
         # This is critical for Google OAuth users who might not have profiles
+        from engine.models import SubscriptionPlan
+        
+        # Get or create free plan as default
+        free_plan, _ = SubscriptionPlan.objects.get_or_create(
+            name='Free',
+            defaults={
+                'description': 'Free tier with basic features',
+                'price_monthly': 0,
+                'price_yearly': 0,
+                'max_datasets': 5,
+                'max_sessions': 10,
+                'max_file_size_mb': 10,
+                'ai_tier': 'none',
+                'is_active': True,
+            }
+        )
+        
         created = False
         try:
             profile, created = UserProfile.objects.get_or_create(
                 user=request.user,
                 defaults={
-                    'subscription_type': 'free',
-                    'ai_tier': 'none'
+                    'subscription_plan': free_plan
                 }
             )
             if created:
@@ -241,23 +257,15 @@ def profile_view(request):
                 # Last resort: create a minimal profile without get_or_create
                 profile = UserProfile.objects.create(
                     user=request.user,
-                    subscription_type='free',
-                    ai_tier='none'
+                    subscription_plan=free_plan
                 )
                 created = True
                 logger.warning(f"Created UserProfile using fallback method for user {request.user.username}")
         
-        # If profile was just created, try to set AI tier from tier settings
-        if created:
-            try:
-                from engine.models import SubscriptionTierSettings
-                tier_settings = SubscriptionTierSettings.objects.get(tier='free')
-                profile.ai_tier = tier_settings.ai_tier
-                profile.save()
-            except SubscriptionTierSettings.DoesNotExist:
-                logger.warning("SubscriptionTierSettings for 'free' tier not found, using default 'none'")
-            except Exception as e:
-                logger.warning(f"Error setting AI tier from tier settings: {e}")
+        # If profile was just created without a plan, assign free plan
+        if created and not profile.subscription_plan:
+            profile.subscription_plan = free_plan
+            profile.save()
         
         # Build context with safe fallbacks
         try:
@@ -294,34 +302,36 @@ def profile_view(request):
 def subscription_view(request):
     # Get or create user profile (handle case where profile doesn't exist)
     # This is critical for Google OAuth users who might not have profiles
-    profile, created = UserProfile.objects.get_or_create(
-        user=request.user,
+    from engine.models import SubscriptionPlan
+    
+    # Get or create free plan as default
+    free_plan, _ = SubscriptionPlan.objects.get_or_create(
+        name='Free',
         defaults={
-            'subscription_type': 'free',
-            'ai_tier': 'none'
+            'description': 'Free tier with basic features',
+            'price_monthly': 0,
+            'price_yearly': 0,
+            'max_datasets': 5,
+            'max_sessions': 10,
+            'max_file_size_mb': 10,
+            'ai_tier': 'none',
+            'is_active': True,
         }
     )
     
-    # If profile was just created, try to set AI tier from tier settings
-    if created:
-        try:
-            from engine.models import SubscriptionTierSettings
-            tier_settings = SubscriptionTierSettings.objects.get(tier='free')
-            profile.ai_tier = tier_settings.ai_tier
-            profile.save()
-        except SubscriptionTierSettings.DoesNotExist:
-            pass
-    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly')
+    profile, created = UserProfile.objects.get_or_create(
+        user=request.user,
+        defaults={
+            'subscription_plan': free_plan
+        }
+    )
     
-    # Update user's AI tier based on subscription type
-    from engine.models import SubscriptionTierSettings
-    try:
-        tier_settings = SubscriptionTierSettings.objects.get(tier=profile.subscription_type)
-        if profile.ai_tier != tier_settings.ai_tier:
-            profile.ai_tier = tier_settings.ai_tier
-            profile.save()
-    except SubscriptionTierSettings.DoesNotExist:
-        pass
+    # If profile was just created without a plan, assign free plan
+    if created and not profile.subscription_plan:
+        profile.subscription_plan = free_plan
+        profile.save()
+    
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly')
     
     context = {
         'profile': profile,
@@ -435,7 +445,7 @@ def stripe_webhook(request):
 
 def handle_successful_payment(session):
     try:
-        from engine.models import SubscriptionPlan, SubscriptionTierSettings
+        from engine.models import SubscriptionPlan
         from datetime import timedelta
         
         customer_id = session['customer']
@@ -457,27 +467,9 @@ def handle_successful_payment(session):
                     stripe_price_id_yearly=price_id
                 ).first()
         
-        # Update subscription type based on plan's tier_key
-        if plan and plan.tier_key:
-            profile.subscription_type = plan.tier_key
-        elif plan:
-            # Fallback: try to match plan name to tier
-            plan_name_lower = plan.name.lower()
-            if 'free' in plan_name_lower:
-                profile.subscription_type = 'free'
-            elif 'low' in plan_name_lower or 'basic' in plan_name_lower:
-                profile.subscription_type = 'low'
-            elif 'mid' in plan_name_lower or 'pro' in plan_name_lower:
-                profile.subscription_type = 'mid'
-            elif 'high' in plan_name_lower or 'enterprise' in plan_name_lower:
-                profile.subscription_type = 'high'
-        
-        # Update AI tier from tier settings
-        try:
-            tier_settings = SubscriptionTierSettings.objects.get(tier=profile.subscription_type)
-            profile.ai_tier = tier_settings.ai_tier
-        except SubscriptionTierSettings.DoesNotExist:
-            pass
+        # Update subscription plan directly
+        if plan:
+            profile.subscription_plan = plan
         
         profile.subscription_start = timezone.now()
         profile.subscription_end = timezone.now() + timedelta(days=30)
@@ -487,12 +479,12 @@ def handle_successful_payment(session):
 
 def handle_subscription_update(subscription):
     try:
-        from engine.models import SubscriptionPlan, SubscriptionTierSettings
+        from engine.models import SubscriptionPlan
         
         profile = UserProfile.objects.get(stripe_subscription_id=subscription['id'])
         if subscription['status'] == 'active':
             profile.is_active = True
-            # Try to update tier from plan if available
+            # Try to update plan from Stripe if available
             if 'items' in subscription and subscription['items'].get('data'):
                 price_id = subscription['items']['data'][0]['price']['id']
                 plan = SubscriptionPlan.objects.filter(
@@ -503,14 +495,8 @@ def handle_subscription_update(subscription):
                         stripe_price_id_yearly=price_id
                     ).first()
                 
-                if plan and plan.tier_key:
-                    profile.subscription_type = plan.tier_key
-                    # Update AI tier
-                    try:
-                        tier_settings = SubscriptionTierSettings.objects.get(tier=plan.tier_key)
-                        profile.ai_tier = tier_settings.ai_tier
-                    except SubscriptionTierSettings.DoesNotExist:
-                        pass
+                if plan:
+                    profile.subscription_plan = plan
         else:
             profile.is_active = False
         profile.save()
@@ -519,8 +505,13 @@ def handle_subscription_update(subscription):
 
 def handle_subscription_cancellation(subscription):
     try:
+        from engine.models import SubscriptionPlan
+        
         profile = UserProfile.objects.get(stripe_subscription_id=subscription['id'])
-        profile.subscription_type = 'free'
+        # Set to free plan
+        free_plan = SubscriptionPlan.objects.filter(name='Free').first()
+        if free_plan:
+            profile.subscription_plan = free_plan
         profile.stripe_subscription_id = None
         profile.is_active = False
         profile.save()
