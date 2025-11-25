@@ -685,16 +685,13 @@
         .then(data => {
           if (!data) return;
           if (data.allowed) {
-            renderGrapopup({
-              title: 'AI Chat Coming Soon',
-              message: `Your subscription is connected to the “${data.template.name}” workflow. We are finalizing the Generative Research Assistant experience and will unlock full conversations soon.`,
-              features: [
-                'Connected workflow: ' + data.template.name,
-                'Webhook ready: ' + (data.template.n8n_webhook_url || 'Configured in n8n'),
-                'Stay tuned for automated insights and guided analysis'
-              ],
-              buttonLabel: 'Great!'
-            });
+            // Store template info for chat
+            if (data.template) {
+              aiChatContext.template_id = data.template.id;
+              aiChatContext.template_name = data.template.name;
+            }
+            // Open the chatbox instead of showing "Coming Soon" popup
+            toggleAIChatbox();
           } else if (data.requires_upgrade) {
             renderGrapopup({
               title: 'Upgrade Required',
@@ -819,7 +816,7 @@
                          getCookie('csrftoken');
 
         // Send request to backend
-        const chatUrl = '{% url "ai_chat" %}';
+        const chatUrl = '/api/chat/';
         fetch(chatUrl, {
           method: 'POST',
           headers: {
@@ -828,7 +825,9 @@
           },
           body: JSON.stringify({
             message: message,
-            context: aiChatContext
+            template_id: aiChatContext.template_id,
+            conversation_id: aiChatContext.conversation_id,
+            chat_history: aiChatContext.chat_history || []
           })
         })
         .then(response => response.json())
