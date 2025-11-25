@@ -23,11 +23,30 @@ def _get_subscription_template(user):
     # Get workflow template from user's subscription plan
     # Check if user has a subscription plan (regardless of plan's is_active status)
     # The plan's is_active only indicates if it's available for purchase, not if user can use it
-    if profile.subscription_plan:
-        template = profile.subscription_plan.workflow_template
-        if template and template.is_usable():
-            return template
-    return None
+    if not profile.subscription_plan:
+        logger.debug(f"User {user.id} has no subscription plan assigned")
+        return None
+    
+    template = profile.subscription_plan.workflow_template
+    if not template:
+        logger.debug(
+            f"User {user.id} has subscription plan '{profile.subscription_plan.name}' "
+            f"but no workflow_template is connected"
+        )
+        return None
+    
+    if not template.is_usable():
+        logger.debug(
+            f"User {user.id} has template '{template.name}' but it's not usable "
+            f"(status: {template.status})"
+        )
+        return None
+    
+    logger.debug(
+        f"User {user.id} has access to template '{template.name}' "
+        f"via subscription plan '{profile.subscription_plan.name}'"
+    )
+    return template
 
 
 @login_required
@@ -36,15 +55,46 @@ def chatbot_access_check(request):
     """
     Check whether the current user has access to the chatbot based on their subscription tier.
     """
-    template = _get_subscription_template(request.user)
-    if not template:
+    try:
+        template = _get_subscription_template(request.user)
+        if not template:
+            # Log why access was denied for debugging
+            profile = request.user.profile
+            if not profile.subscription_plan:
+                reason = "No subscription plan assigned"
+            elif not profile.subscription_plan.workflow_template:
+                reason = f"Plan '{profile.subscription_plan.name}' has no workflow_template connected"
+            else:
+                template_status = profile.subscription_plan.workflow_template.status
+                reason = f"Template status is '{template_status}' (must be 'active')"
+            
+            logger.info(
+                f"Chatbot access denied for user {request.user.id}: {reason}",
+                extra={
+                    'user_id': request.user.id,
+                    'reason': reason,
+                    'has_plan': profile.subscription_plan is not None,
+                    'plan_name': profile.subscription_plan.name if profile.subscription_plan else None,
+                    'has_workflow_template': profile.subscription_plan.workflow_template is not None if profile.subscription_plan else False,
+                }
+            )
+            
+            upgrade_url = reverse('subscription')
+            return JsonResponse({
+                'allowed': False,
+                'requires_upgrade': True,
+                'message': 'Your current subscription is not connected to the Generative Research Assistant yet. Upgrade to unlock AI workflows.',
+                'upgrade_url': upgrade_url,
+            })
+    except Exception as e:
+        logger.error(f"Error checking chatbot access for user {request.user.id}: {e}", exc_info=True)
         upgrade_url = reverse('subscription')
         return JsonResponse({
             'allowed': False,
             'requires_upgrade': True,
-            'message': 'Your current subscription is not connected to the Generative Research Assistant yet. Upgrade to unlock AI workflows.',
+            'message': 'Error checking access. Please try again later.',
             'upgrade_url': upgrade_url,
-        })
+        }, status=500)
 
     return JsonResponse({
         'allowed': True,
