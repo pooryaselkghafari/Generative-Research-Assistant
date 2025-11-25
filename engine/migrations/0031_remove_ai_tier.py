@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("engine", "0028_merge_subscription_models"),
+        ("engine", "0030_add_updated_at_to_subscriptionplan"),
     ]
 
     operations = [
