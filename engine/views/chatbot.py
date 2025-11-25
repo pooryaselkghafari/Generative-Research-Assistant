@@ -21,7 +21,9 @@ def _get_subscription_template(user):
         defaults={}
     )
     # Get workflow template from user's subscription plan
-    if profile.subscription_plan and profile.subscription_plan.is_active:
+    # Check if user has a subscription plan (regardless of plan's is_active status)
+    # The plan's is_active only indicates if it's available for purchase, not if user can use it
+    if profile.subscription_plan:
         template = profile.subscription_plan.workflow_template
         if template and template.is_usable():
             return template
