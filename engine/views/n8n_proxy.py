@@ -102,6 +102,12 @@ def n8n_proxy(request, path=None):
         # Remove X-Forwarded-For header entirely
         headers.pop('X-Forwarded-For', None)
         
+        # Forward WebSocket upgrade headers if present (for real-time node execution updates)
+        if 'HTTP_UPGRADE' in request.META:
+            headers['Upgrade'] = request.META['HTTP_UPGRADE']
+        if 'HTTP_CONNECTION' in request.META:
+            headers['Connection'] = request.META['HTTP_CONNECTION']
+        
         # Remove Accept-Encoding to request uncompressed response from n8n
         # This avoids compression issues in the proxy chain
         if 'Accept-Encoding' in headers:
@@ -112,7 +118,12 @@ def n8n_proxy(request, path=None):
         if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
             body = request.body
         
-        logger.info(f"Proxying {request.method} request to n8n: {target_url} (path: {path})")
+        # Determine timeout based on endpoint
+        # Execution endpoints need longer timeouts for long-running workflows
+        is_execution_endpoint = any(endpoint in path for endpoint in ['/executions', '/execute', '/workflow', '/node'])
+        timeout = 300 if is_execution_endpoint else 60  # 5 minutes for execution, 1 minute for others
+        
+        logger.info(f"Proxying {request.method} request to n8n: {target_url} (path: {path}, timeout: {timeout}s)")
         logger.debug(f"Headers: {headers}")
         logger.debug(f"Body: {body[:200] if body else None}")
         
@@ -125,7 +136,7 @@ def n8n_proxy(request, path=None):
             headers=headers,
             data=body,
             stream=False,
-            timeout=60,
+            timeout=timeout,
             allow_redirects=False
             )
             logger.info(f"Received response from n8n: {response.status_code} for {target_url}")
