@@ -278,9 +278,38 @@ class N8nService:
                 response['reply'] = response['message']
             elif 'response' in response:
                 response['reply'] = response['response']
+            elif 'output' in response:
+                # Handle n8n's default output format
+                output = response['output']
+                # If output is a string, use it directly
+                if isinstance(output, str):
+                    response['reply'] = output
+                # If output is a dict, try to extract message/content
+                elif isinstance(output, dict):
+                    response['reply'] = (
+                        output.get('message') or 
+                        output.get('content') or 
+                        output.get('text') or 
+                        output.get('response') or
+                        str(output)
+                    )
+                # If output is a list, get first item
+                elif isinstance(output, list) and len(output) > 0:
+                    first_item = output[0]
+                    if isinstance(first_item, dict):
+                        response['reply'] = (
+                            first_item.get('message') or 
+                            first_item.get('content') or 
+                            first_item.get('text') or
+                            str(first_item)
+                        )
+                    else:
+                        response['reply'] = str(first_item)
+                else:
+                    response['reply'] = str(output)
             else:
                 raise ValueError(
-                    "n8n response must contain 'reply', 'message', or 'response' field. "
+                    "n8n response must contain 'reply', 'message', 'response', or 'output' field. "
                     f"Received keys: {list(response.keys())}"
                 )
         
