@@ -284,27 +284,59 @@ class N8nService:
                 # If output is a string, use it directly
                 if isinstance(output, str):
                     response['reply'] = output
-                # If output is a dict, try to extract message/content
-                elif isinstance(output, dict):
-                    response['reply'] = (
-                        output.get('message') or 
-                        output.get('content') or 
-                        output.get('text') or 
-                        output.get('response') or
-                        str(output)
-                    )
-                # If output is a list, get first item
+                # If output is a list, extract message from first item
                 elif isinstance(output, list) and len(output) > 0:
                     first_item = output[0]
+                    # If first item is a dict, try to extract message/content
                     if isinstance(first_item, dict):
-                        response['reply'] = (
-                            first_item.get('message') or 
-                            first_item.get('content') or 
-                            first_item.get('text') or
-                            str(first_item)
-                        )
+                        # Try common OpenAI response structures
+                        if 'choices' in first_item and isinstance(first_item['choices'], list) and len(first_item['choices']) > 0:
+                            choice = first_item['choices'][0]
+                            if isinstance(choice, dict) and 'message' in choice:
+                                message = choice['message']
+                                if isinstance(message, dict):
+                                    response['reply'] = message.get('content') or message.get('text') or str(message)
+                                else:
+                                    response['reply'] = str(message)
+                            else:
+                                response['reply'] = str(choice)
+                        # Try direct message/content fields
+                        else:
+                            response['reply'] = (
+                                first_item.get('message') or 
+                                first_item.get('content') or 
+                                first_item.get('text') or
+                                first_item.get('response') or
+                                str(first_item)
+                            )
+                    # If first item is a string, use it
+                    elif isinstance(first_item, str):
+                        response['reply'] = first_item
+                    # Otherwise convert to string
                     else:
                         response['reply'] = str(first_item)
+                # If output is a dict, try to extract message/content
+                elif isinstance(output, dict):
+                    # Try OpenAI structure first
+                    if 'choices' in output and isinstance(output['choices'], list) and len(output['choices']) > 0:
+                        choice = output['choices'][0]
+                        if isinstance(choice, dict) and 'message' in choice:
+                            message = choice['message']
+                            if isinstance(message, dict):
+                                response['reply'] = message.get('content') or message.get('text') or str(message)
+                            else:
+                                response['reply'] = str(message)
+                        else:
+                            response['reply'] = str(choice)
+                    # Try direct fields
+                    else:
+                        response['reply'] = (
+                            output.get('message') or 
+                            output.get('content') or 
+                            output.get('text') or 
+                            output.get('response') or
+                            str(output)
+                        )
                 else:
                     response['reply'] = str(output)
             else:
