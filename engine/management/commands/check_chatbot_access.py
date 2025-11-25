@@ -14,18 +14,29 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            'username',
+            'identifier',
             type=str,
-            help='Username to check access for'
+            help='Username, email, or user ID to check access for'
         )
 
     def handle(self, *args, **options):
-        username = options['username']
+        identifier = options['identifier']
         
+        # Try to find user by username, email, or ID
         try:
-            user = User.objects.get(username=username)
+            # Try as ID first
+            if identifier.isdigit():
+                user = User.objects.get(id=int(identifier))
+            else:
+                # Try username
+                try:
+                    user = User.objects.get(username=identifier)
+                except User.DoesNotExist:
+                    # Try email
+                    user = User.objects.get(email=identifier)
         except User.DoesNotExist:
-            self.stdout.write(self.style.ERROR(f"User '{username}' not found"))
+            self.stdout.write(self.style.ERROR(f"User '{identifier}' not found (tried as username, email, and ID)"))
+            self.stdout.write("  → List all users: python manage.py shell -c \"from django.contrib.auth import get_user_model; User = get_user_model(); [print(f'{u.id}: {u.username} ({u.email})') for u in User.objects.all()]\"")
             return
         
         self.stdout.write(self.style.SUCCESS(f"\nChecking chatbot access for: {user.username} (ID: {user.id})"))
