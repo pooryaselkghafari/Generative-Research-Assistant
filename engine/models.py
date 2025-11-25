@@ -361,8 +361,13 @@ class SiteSettings(models.Model):
 class N8nWorkflow(models.Model):
     """
     Local cache of n8n workflows so admins can map them to chatbots/subscriptions.
+    The workflow ID in n8n can be a UUID-like string, so store as CharField.
     """
-    workflow_id = models.IntegerField(unique=True, help_text="n8n internal workflow ID")
+    workflow_id = models.CharField(
+        max_length=64,
+        unique=True,
+        help_text="n8n workflow ID (string)."
+    )
     name = models.CharField(max_length=255)
     active = models.BooleanField(default=False)
     tags = models.JSONField(default=list, blank=True)
