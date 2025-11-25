@@ -64,7 +64,7 @@ class AnalysisSessionAdmin(admin.ModelAdmin):
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
     """Unified admin interface for subscription plans with all settings in one place."""
-    list_display = ('name', 'price_monthly', 'price_yearly', 'max_datasets', 'max_sessions', 'ai_tier', 'workflow_template', 'is_active', 'updated_at')
+    list_display = ('name', 'price_monthly', 'price_yearly', 'max_datasets', 'max_sessions', 'ai_tier', 'workflow_template', 'is_active', 'created_at')
     list_filter = ('is_active', 'ai_tier', 'created_at')
     search_fields = ('name', 'description')
     readonly_fields = ('created_at', 'updated_at')
