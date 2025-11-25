@@ -88,6 +88,10 @@ services:
       - DB_SQLITE_POOL_SIZE=5
       # Security: Disable public access
       - N8N_PUBLIC_API_DISABLED=false
+      # Webhook URL - n8n uses this to generate form/webhook URLs
+      # Must be the public URL where n8n is accessible
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-https://generativera.com/n8n/}
+      # Legacy variable name (some n8n versions use this)
       - WEBHOOK_URL=${N8N_WEBHOOK_URL:-https://generativera.com/n8n/}
       # Set path prefix so n8n knows it's behind /n8n/ reverse proxy
       - N8N_PATH=/n8n/
