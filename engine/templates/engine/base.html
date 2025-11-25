@@ -830,23 +830,39 @@
             chat_history: aiChatContext.chat_history || []
           })
         })
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) {
+            return response.json().then(data => {
+              throw new Error(data.error || 'Request failed');
+            });
+          }
+          return response.json();
+        })
         .then(data => {
           // Remove loading indicator
           const loadingMsg = document.getElementById('aiLoadingMessage');
           if (loadingMsg) loadingMsg.remove();
 
-          if (data.success && data.response) {
+          if (data.success && data.reply) {
             // Add AI response
             const aiMessageDiv = document.createElement('div');
             aiMessageDiv.className = 'ai-message ai-message-assistant';
-            aiMessageDiv.innerHTML = `<div class="ai-message-content">${escapeHtml(data.response)}</div>`;
+            aiMessageDiv.innerHTML = `<div class="ai-message-content">${escapeHtml(data.reply)}</div>`;
             messagesContainer.appendChild(aiMessageDiv);
+            
+            // Update chat history
+            if (!aiChatContext.chat_history) {
+              aiChatContext.chat_history = [];
+            }
+            aiChatContext.chat_history.push(
+              { role: 'user', content: message },
+              { role: 'assistant', content: data.reply }
+            );
           } else {
             // Show error
             const errorDiv = document.createElement('div');
             errorDiv.className = 'ai-message ai-message-assistant';
-            errorDiv.innerHTML = `<div class="ai-message-content" style="color: #dc2626;">${escapeHtml(data.error || data.response || 'Sorry, I encountered an error. Please try again.')}</div>`;
+            errorDiv.innerHTML = `<div class="ai-message-content" style="color: #dc2626;">${escapeHtml(data.error || 'Sorry, I encountered an error. Please try again.')}</div>`;
             messagesContainer.appendChild(errorDiv);
           }
 
@@ -920,3 +936,4 @@
     </footer>
   </body>
 </html>
+
