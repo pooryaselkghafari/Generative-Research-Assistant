@@ -72,6 +72,10 @@ services:
       - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-}
+      # Cookie settings for proper session handling behind proxy
+      - N8N_SESSION_COOKIE_DOMAIN=${N8N_SESSION_COOKIE_DOMAIN:-generativera.com}
+      - N8N_SESSION_COOKIE_SAMESITE=${N8N_SESSION_COOKIE_SAMESITE:-Lax}
+      - N8N_SESSION_COOKIE_SECURE=${N8N_SESSION_COOKIE_SECURE:-true}
       # Use SQLite by default (simpler setup)
       # To use PostgreSQL, uncomment and configure:
       # - DB_TYPE=postgresdb

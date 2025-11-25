@@ -57,10 +57,30 @@ def n8n_proxy(request, path=None):
         # Prepare headers
         headers = {}
         
+        # Extract and forward n8n cookies (but not Django session cookies)
+        n8n_cookies = []
+        if 'HTTP_COOKIE' in request.META:
+            cookie_header = request.META['HTTP_COOKIE']
+            # Parse cookies and filter for n8n-related cookies
+            # Cookies are separated by '; ' or ';'
+            for cookie_pair in cookie_header.split(';'):
+                cookie_pair = cookie_pair.strip()
+                if not cookie_pair:
+                    continue
+                # Extract cookie name (everything before the first '=')
+                # Forward cookies that start with 'n8n-' (n8n-auth, etc.)
+                if '=' in cookie_pair:
+                    cookie_name = cookie_pair.split('=', 1)[0].strip()
+                    if cookie_name.startswith('n8n-'):
+                        n8n_cookies.append(cookie_pair)
+                elif cookie_pair.startswith('n8n-'):
+                    # Handle cookies without '=' (unlikely but possible)
+                    n8n_cookies.append(cookie_pair)
+        
         # Copy relevant headers from request
         for key, value in request.META.items():
             if key.startswith('HTTP_'):
-                # Skip cookies and authorization (we don't want to forward Django auth)
+                # Skip cookies (we handle them separately) and authorization
                 if key in ['HTTP_COOKIE', 'HTTP_AUTHORIZATION']:
                     continue
                 # Convert HTTP_HEADER_NAME to Header-Name
@@ -68,6 +88,11 @@ def n8n_proxy(request, path=None):
                 headers[header_name] = value
             elif key in ['CONTENT_TYPE', 'CONTENT_LENGTH']:
                 headers[key.replace('_', '-')] = value
+        
+        # Forward n8n cookies to n8n
+        if n8n_cookies:
+            headers['Cookie'] = '; '.join(n8n_cookies)
+            logger.debug(f"Forwarding n8n cookies: {headers['Cookie']}")
         
         # Set proper headers for n8n
         # Use public host so n8n issues cookies for the right domain
