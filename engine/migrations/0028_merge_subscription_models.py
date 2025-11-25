@@ -131,6 +131,11 @@ class Migration(migrations.Migration):
             name='name',
             field=models.CharField(help_text="Plan name (e.g., 'Free', 'Pro', 'Enterprise')", max_length=50, unique=True),
         ),
+        migrations.AddField(
+            model_name='subscriptionplan',
+            name='updated_at',
+            field=models.DateTimeField(auto_now=True),
+        ),
         
         # Step 2: Add subscription_plan ForeignKey to UserProfile (nullable for now)
         migrations.AddField(
