@@ -82,15 +82,40 @@ class N8nService:
                 # Raise an exception for bad status codes
                 response.raise_for_status()
                 
+                # Check if response is empty
+                if not response.text or not response.text.strip():
+                    logger.error(
+                        f"Empty response from n8n webhook",
+                        extra={
+                            'webhook_url': webhook_url,
+                            'status_code': response.status_code,
+                            'headers': dict(response.headers)
+                        }
+                    )
+                    raise ValueError(
+                        "Empty response from n8n webhook. "
+                        "Make sure your n8n workflow has a 'Respond to Webhook' node that returns JSON with a 'reply' field."
+                    )
+                
                 # Parse JSON response
                 try:
                     result = response.json()
                 except json.JSONDecodeError as e:
+                    response_preview = response.text[:500] if response.text else "(empty)"
                     logger.error(
                         f"Invalid JSON response from n8n webhook: {e}",
-                        extra={'webhook_url': webhook_url, 'response_text': response.text[:500]}
+                        extra={
+                            'webhook_url': webhook_url,
+                            'status_code': response.status_code,
+                            'content_type': response.headers.get('Content-Type', 'unknown'),
+                            'response_text': response_preview
+                        }
                     )
-                    raise ValueError(f"Invalid JSON response from n8n: {e}")
+                    raise ValueError(
+                        f"Invalid JSON response from n8n: {e}. "
+                        f"Response was: {response_preview}. "
+                        "Make sure your n8n workflow returns valid JSON with a 'reply' field."
+                    )
                 
                 # Validate response structure
                 N8nService._validate_response(result)
