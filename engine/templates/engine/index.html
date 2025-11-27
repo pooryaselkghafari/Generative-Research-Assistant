@@ -1655,6 +1655,119 @@ function addSessionsToPaper(paperId, paperName, sessionIds = null) {
   });
 }
 
+function showAddSessionToPaperModal(sessionId) {
+  // Fetch all papers
+  fetch('/api/papers/', {
+    method: 'GET',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    credentials: 'same-origin'
+  })
+  .then(response => response.json())
+  .then(papers => {
+    if (papers.length === 0) {
+      // No papers exist, ask to create one
+      const paperName = prompt('No papers exist. Enter a name for a new paper:');
+      if (!paperName || !paperName.trim()) return;
+      
+      // Create paper first
+      const formData = new URLSearchParams();
+      formData.append('name', paperName.trim());
+      formData.append('description', '');
+      
+      return fetch('/papers/create/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Add session to newly created paper
+          return addSessionsToPaper(data.paper_id, data.paper_name, [sessionId]);
+        } else {
+          throw new Error(data.error || 'Failed to create paper');
+        }
+      });
+    } else {
+      // Show paper selection
+      const paperList = papers.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+      const selection = prompt(`Select a paper (enter number):\n\n${paperList}\n\nOr enter a new paper name:`);
+      
+      if (!selection || !selection.trim()) return;
+      
+      // Check if it's a number (existing paper)
+      const paperIndex = parseInt(selection.trim()) - 1;
+      if (paperIndex >= 0 && paperIndex < papers.length) {
+        // Add to existing paper
+        return addSessionsToPaper(papers[paperIndex].id, papers[paperIndex].name, [sessionId]);
+      } else {
+        // Create new paper
+        const formData = new URLSearchParams();
+        formData.append('name', selection.trim());
+        formData.append('description', '');
+        
+        return fetch('/papers/create/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCookie('csrftoken')
+          },
+          body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            return addSessionsToPaper(data.paper_id, data.paper_name, [sessionId]);
+          } else {
+            throw new Error(data.error || 'Failed to create paper');
+          }
+        });
+      }
+    }
+  })
+  .then(result => {
+    if (result && result.success) {
+      showNotification(result.message || 'Session added to paper!', 'success');
+      setTimeout(() => location.reload(), 1000);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showNotification(error.message || 'Error adding session to paper', 'error');
+  });
+}
+
+function removeSessionFromPaper(sessionId, paperId) {
+  if (!confirm('Remove this session from the paper?')) {
+    return;
+  }
+  
+  fetch(`/papers/${paperId}/remove-session/${sessionId}/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken')
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showNotification(data.message || 'Session removed from paper', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showNotification(data.error || 'Failed to remove session', 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showNotification('Error removing session from paper', 'error');
+  });
+}
+
 function getCookie(name) {
   let cookieValue = null;
   if (document.cookie && document.cookie !== '') {
