@@ -266,7 +266,6 @@
               <span class="badge" style="background: #667eea; color: white;">{{item.sessions|length}}</span>
             </div>
             <div class="row-right">
-              <button class="icon-btn" title="Add selected sessions to this paper" onclick="event.stopPropagation(); addSessionsToPaper({{item.paper.id}}, '{{item.paper.name|escapejs}}')" style="padding: 4px 8px;">+</button>
             </div>
           </div>
           <ul class="paper-sessions" id="paper-sessions-{{item.paper.id}}" style="display: none; margin-left: 24px; margin-bottom: 8px;">
@@ -310,14 +309,6 @@
             </div>
             <div class="row-right">
               <span class="muted small">{{s.updated_at|date:"M d, H:i"}}</span>
-              <button class="icon-btn" title="Add to paper" onclick="showAddSessionToPaperModal({{s.id}})" style="color: #6b7280; padding: 4px 8px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="12" y1="18" x2="12" y2="12"></line>
-                  <line x1="9" y1="15" x2="15" y2="15"></line>
-                </svg>
-              </button>
               <button class="icon-btn danger" title="Delete session" aria-label="Delete session" onclick="showSingleDeleteConfirmation({{s.id}}, '{{s.name|escapejs}}')">✕</button>
             </div>
           </li>
@@ -1262,6 +1253,45 @@ function showUpdateMessage(message) {
   }, 2000);
 }
 
+// Function to show notification
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed; top: 20px; right: 20px; z-index: 10001;
+    padding: 12px 16px; border-radius: 8px; color: white;
+    font-weight: 500; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transform: translateX(100%); transition: transform 0.3s ease-out;
+  `;
+  
+  const colors = {
+    info: '#3b82f6',
+    success: '#10b981',
+    warning: '#f59e0b',
+    error: '#ef4444'
+  };
+  
+  notification.style.background = colors[type] || colors.info;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  // Animate in
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 10);
+  
+  // Auto remove
+  setTimeout(() => {
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+
 // Show Bayesian DV error modal
 function showBayesianDVErrorModal(dvType) {
   const modal = document.createElement('div');
@@ -1784,18 +1814,23 @@ function showPaperModal(papers, sessionIds, sessionNames) {
   // Store sessionIds in modal for later use
   modal.dataset.sessionIds = sessionIds ? JSON.stringify(sessionIds) : '[]';
   
-  // Event handlers
-  document.getElementById('closePaperModal').onclick = () => modal.remove();
-  document.getElementById('cancelPaperBtn').onclick = () => modal.remove();
-  document.getElementById('submitPaperBtn').onclick = () => submitPaperForm(modal, sessionIds);
-  
-  // Close on overlay click
-  modal.onclick = (e) => {
-    if (e.target === modal) modal.remove();
-  };
-  
-  // Focus on input
-  setTimeout(() => document.getElementById('paperNameInput').focus(), 100);
+  // Event handlers - use setTimeout to ensure elements exist
+  setTimeout(() => {
+    const closeBtn = document.getElementById('closePaperModal');
+    const cancelBtn = document.getElementById('cancelPaperBtn');
+    const submitBtn = document.getElementById('submitPaperBtn');
+    const nameInput = document.getElementById('paperNameInput');
+    
+    if (closeBtn) closeBtn.onclick = () => modal.remove();
+    if (cancelBtn) cancelBtn.onclick = () => modal.remove();
+    if (submitBtn) submitBtn.onclick = () => submitPaperForm(modal, sessionIds);
+    if (nameInput) nameInput.focus();
+    
+    // Close on overlay click
+    modal.onclick = (e) => {
+      if (e.target === modal) modal.remove();
+    };
+  }, 10);
 }
 
 function selectExistingPaper(paperId, paperName) {
