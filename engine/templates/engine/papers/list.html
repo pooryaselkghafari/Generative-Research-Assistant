@@ -1,0 +1,94 @@
+{% extends "engine/base.html" %}
+
+{% block title %}Papers{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1200px; margin: 0 auto; padding: 24px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <h1 style="margin: 0; font-size: 2rem; color: #1f2937;">My Papers</h1>
+    <button class="btn btn-primary" onclick="showCreatePaperModal()">+ New Paper</button>
+  </div>
+
+  {% if papers %}
+  <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px;">
+    {% for item in papers %}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <a href="/papers/{{ item.paper.id }}/" style="text-decoration: none; color: inherit;">{{ item.paper.name }}</a>
+        </h3>
+      </div>
+      <div class="card-body">
+        {% if item.paper.description %}
+        <p style="color: #6b7280; margin-bottom: 12px;">{{ item.paper.description|truncatewords:20 }}</p>
+        {% endif %}
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="badge">{{ item.session_count }} session{{ item.session_count|pluralize }}</span>
+          <span class="muted small">{{ item.paper.updated_at|date:"M d, Y" }}</span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-body" style="text-align: center; padding: 48px;">
+      <p class="muted" style="font-size: 1.1rem; margin-bottom: 16px;">No papers yet.</p>
+      <p class="muted" style="margin-bottom: 24px;">Create a paper to group your analysis sessions together.</p>
+      <button class="btn btn-primary" onclick="showCreatePaperModal()">Create Your First Paper</button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function showCreatePaperModal() {
+  const name = prompt('Enter paper name:');
+  if (!name || !name.trim()) return;
+  
+  const description = prompt('Enter paper description (optional):') || '';
+  
+  const formData = new URLSearchParams();
+  formData.append('name', name.trim());
+  formData.append('description', description.trim());
+  
+  fetch('/papers/create/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert('Paper created successfully!');
+      location.reload();
+    } else {
+      alert(data.error || 'Failed to create paper');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error creating paper');
+  });
+}
+
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+</script>
+{% endblock %}
+

@@ -4,7 +4,7 @@ Views for session management (list, edit, delete).
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
 from django.conf import settings
-from engine.models import AnalysisSession, Dataset
+from engine.models import AnalysisSession, Dataset, Paper
 from engine.modules import get_registry
 from history.history import download_session_history
 import os
@@ -30,10 +30,12 @@ def _list_context(current_session=None, user=None):
     # Filter by user - only show user's own data
     sessions = AnalysisSession.objects.filter(user=user).order_by('-updated_at')[:50]
     datasets = Dataset.objects.filter(user=user).order_by('-uploaded_at')
+    papers = Paper.objects.filter(user=user).order_by('-updated_at')
     registry = get_registry()
     return {
         'sessions': sessions,
         'datasets': datasets,
+        'papers': papers,
         'modules': registry,
         'current': current_session,
         'line_styles': ['solid', 'dashed', 'dotted', 'dashdot'],

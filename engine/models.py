@@ -86,6 +86,35 @@ class Dataset(models.Model):
     def __str__(self):
         return f"{self.name} ({self.user.username if self.user else 'No User'})"
 
+class Paper(models.Model):
+    """
+    Represents a research paper or project that groups multiple analysis sessions.
+    Users can organize their analyses by paper/project for better organization.
+    """
+    name = models.CharField(max_length=200, help_text="Name of the paper or project")
+    description = models.TextField(blank=True, help_text="Optional description of the paper")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='papers', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = "Paper"
+        verbose_name_plural = "Papers"
+        # Users can have multiple papers with the same name
+        unique_together = ['name', 'user']
+    
+    def __str__(self):
+        return f"{self.name} ({self.user.username if self.user else 'No User'})"
+    
+    def get_sessions_count(self):
+        """Get the number of sessions in this paper."""
+        return self.sessions.count()
+    
+    def get_sessions(self):
+        """Get all sessions in this paper, ordered by updated_at."""
+        return self.sessions.all().order_by('-updated_at')
+
 class AnalysisSession(models.Model):
     name = models.CharField(max_length=200)
     module = models.CharField(max_length=100, default='regression')
@@ -95,6 +124,7 @@ class AnalysisSession(models.Model):
     # Foreign key with proper constraint: null/blank allowed but if set, must be valid
     dataset = models.ForeignKey(Dataset, null=True, blank=True, on_delete=models.SET_NULL, related_name='sessions', db_constraint=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions', null=True, blank=True)
+    paper = models.ForeignKey('Paper', on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions', help_text="Optional: Group this session into a paper/project")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     spotlight_rel = models.CharField(max_length=300, null=True, blank=True)

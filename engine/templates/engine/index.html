@@ -200,6 +200,34 @@
 
   <section class="card">
     <div class="card-header">
+      <h2 class="card-title">Papers</h2>
+      <div class="card-actions">
+        <button class="btn btn-sm btn-primary" onclick="showCreatePaperModal()" title="Create new paper">
+          + New Paper
+        </button>
+      </div>
+    </div>
+    <div class="sessions-scroll-container" style="max-height: 200px;">
+      <ul id="paperList" class="list">
+        {% for paper in papers %}
+        <li class="list-row paper-item" data-paper-id="{{paper.id}}">
+          <div class="row-left">
+            <a class="link" href="/papers/{{paper.id}}/" title="{{paper.description|default:''}}">{{paper.name}}</a>
+            <span class="badge" style="margin-left: 8px;">{{paper.get_sessions_count}}</span>
+          </div>
+          <div class="row-right">
+            <button class="icon-btn" title="Add selected sessions to this paper" onclick="addSessionsToPaper({{paper.id}}, '{{paper.name|escapejs}}')">+</button>
+          </div>
+        </li>
+        {% empty %}
+        <li class="muted">No papers yet. Create one to group your sessions.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
       <h2 class="card-title">Sessions</h2>
       <div class="card-actions">
         <button id="selectAllBtn" class="btn btn-sm btn-ghost" onclick="toggleSelectAll()" style="display: none;">
@@ -207,6 +235,9 @@
         </button>
         <button id="bulkDeleteBtn" class="btn btn-sm btn-danger" onclick="bulkDeleteSessions()" style="display: none;">
           Delete Selected
+        </button>
+        <button id="addToPaperBtn" class="btn btn-sm btn-primary" onclick="showAddToPaperModal()" style="display: none;">
+          Add to Paper
         </button>
       </div>
     </div>
@@ -226,10 +257,11 @@
     <div class="sessions-scroll-container">
       <ul id="sessionList" class="list">
         {% for s in sessions %}
-        <li class="list-row session-item" data-session-id="{{s.id}}">
+        <li class="list-row session-item" data-session-id="{{s.id}}" data-paper-id="{{s.paper_id|default:''}}">
           <div class="row-left">
             <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
             <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
+            {% if s.paper %}<span class="badge" style="background: #4CAF50; color: white; margin-left: 8px;" title="Part of paper: {{s.paper.name}}">{{s.paper.name}}</span>{% endif %}
             {% if not s.dataset_id %}<span class="badge warn" title="Dataset deleted">no dataset</span>{% endif %}
           </div>
           <div class="row-right">
@@ -1458,6 +1490,185 @@ function goToVisualize() {
   document.body.appendChild(visualizeForm);
   visualizeForm.submit();
 }
+
+// Paper Management Functions
+function updateSelectionUI() {
+  const checkboxes = document.querySelectorAll('.session-checkbox:checked');
+  const selectAllBtn = document.getElementById('selectAllBtn');
+  const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+  const addToPaperBtn = document.getElementById('addToPaperBtn');
+  
+  if (checkboxes.length > 0) {
+    if (selectAllBtn) selectAllBtn.style.display = 'inline-block';
+    if (bulkDeleteBtn) bulkDeleteBtn.style.display = 'inline-block';
+    if (addToPaperBtn) addToPaperBtn.style.display = 'inline-block';
+  } else {
+    if (selectAllBtn) selectAllBtn.style.display = 'none';
+    if (bulkDeleteBtn) bulkDeleteBtn.style.display = 'none';
+    if (addToPaperBtn) addToPaperBtn.style.display = 'none';
+  }
+}
+
+function toggleSelectAll() {
+  const checkboxes = document.querySelectorAll('.session-checkbox');
+  const selectAllBtn = document.getElementById('selectAllBtn');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  
+  checkboxes.forEach(cb => {
+    cb.checked = !allChecked;
+  });
+  
+  updateSelectionUI();
+  if (selectAllBtn) {
+    selectAllBtn.textContent = allChecked ? 'Select All' : 'Deselect All';
+  }
+}
+
+function showCreatePaperModal() {
+  const name = prompt('Enter paper name:');
+  if (!name || !name.trim()) return;
+  
+  const description = prompt('Enter paper description (optional):') || '';
+  
+  fetch('/papers/create/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: new URLSearchParams({
+      'name': name.trim(),
+      'description': description.trim()
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showNotification('Paper created successfully!', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showNotification(data.error || 'Failed to create paper', 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showNotification('Error creating paper', 'error');
+  });
+}
+
+function showAddToPaperModal() {
+  const checkboxes = document.querySelectorAll('.session-checkbox:checked');
+  if (checkboxes.length === 0) {
+    showNotification('Please select at least one session', 'error');
+    return;
+  }
+  
+  const sessionIds = Array.from(checkboxes).map(cb => cb.value);
+  const paperName = prompt('Enter paper name (or existing paper name to add to):');
+  if (!paperName || !paperName.trim()) return;
+  
+  // First, try to find existing paper or create new one
+  fetch('/papers/create/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: new URLSearchParams({
+      'name': paperName.trim(),
+      'description': ''
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success || data.error && data.error.includes('already exists')) {
+      // If paper exists or was created, get its ID and add sessions
+      return fetch('/api/papers/', {
+        method: 'GET',
+        headers: {
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        credentials: 'same-origin'
+      })
+      .then(response => response.json())
+      .then(papers => {
+        const paper = papers.find(p => p.name === paperName.trim());
+        if (paper) {
+          return addSessionsToPaper(paper.id, paper.name, sessionIds);
+        } else {
+          throw new Error('Paper not found');
+        }
+      });
+    } else {
+      throw new Error(data.error || 'Failed to create/find paper');
+    }
+  })
+  .then(result => {
+    if (result && result.success) {
+      showNotification(result.message || 'Sessions added to paper!', 'success');
+      setTimeout(() => location.reload(), 1000);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showNotification(error.message || 'Error adding sessions to paper', 'error');
+  });
+}
+
+function addSessionsToPaper(paperId, paperName, sessionIds = null) {
+  if (!sessionIds) {
+    const checkboxes = document.querySelectorAll('.session-checkbox:checked');
+    if (checkboxes.length === 0) {
+      showNotification('Please select at least one session', 'error');
+      return Promise.reject('No sessions selected');
+    }
+    sessionIds = Array.from(checkboxes).map(cb => cb.value);
+  }
+  
+  return fetch(`/papers/${paperId}/add-sessions/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: JSON.stringify({
+      'session_ids': sessionIds
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showNotification(data.message || `Added ${data.updated_count} session(s) to "${paperName}"`, 'success');
+      // Uncheck all checkboxes
+      document.querySelectorAll('.session-checkbox').forEach(cb => cb.checked = false);
+      updateSelectionUI();
+      setTimeout(() => location.reload(), 1000);
+      return data;
+    } else {
+      throw new Error(data.error || 'Failed to add sessions to paper');
+    }
+  });
+}
+
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+// Initialize selection UI on page load
+document.addEventListener('DOMContentLoaded', function() {
+  updateSelectionUI();
+});
 </script>
 
 {% endblock %}

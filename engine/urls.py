@@ -32,6 +32,10 @@ from engine.views.agent_templates import (
 )
 from engine.views.chatbot import chatbot_endpoint, chatbot_access_check
 from engine.views.n8n_proxy import n8n_proxy
+from engine.views.papers import (
+    paper_list, paper_create, paper_edit, paper_delete,
+    paper_add_sessions, paper_remove_session, paper_detail_api, paper_list_api
+)
 
 urlpatterns = [
     path('', landing_view, name='landing'),
@@ -77,6 +81,15 @@ urlpatterns = [
     path('session/<int:session_id>/history/', download_session_history_view, name='download_session_history'),
     path('session/<int:session_id>/add-model-errors/', add_model_errors_to_dataset, name='add_model_errors_to_dataset'),
     path('api/ai-chat/', ai_chat, name='ai_chat'),
+    # Papers
+    path('papers/', paper_list, name='paper_list'),
+    path('papers/create/', paper_create, name='paper_create'),
+    path('papers/<int:paper_id>/', paper_edit, name='paper_edit'),
+    path('papers/<int:paper_id>/delete/', paper_delete, name='paper_delete'),
+    path('papers/<int:paper_id>/add-sessions/', paper_add_sessions, name='paper_add_sessions'),
+    path('papers/<int:paper_id>/remove-session/<int:session_id>/', paper_remove_session, name='paper_remove_session'),
+    path('api/papers/<int:paper_id>/', paper_detail_api, name='paper_detail_api'),
+    path('api/papers/', paper_list_api, name='paper_list_api'),
     # Agent Templates (Admin)
     path('admin/agent-templates/', agent_template_list, name='agent_template_list'),
     path('admin/agent-templates/create/', agent_template_create, name='agent_template_create'),

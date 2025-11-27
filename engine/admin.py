@@ -7,7 +7,7 @@ from django import forms
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from .models import (
-    Dataset, AnalysisSession, UserProfile, SubscriptionPlan, Payment, Page,
+    Dataset, AnalysisSession, Paper, UserProfile, SubscriptionPlan, Payment, Page,
     PrivacyPolicy, TermsOfService, SiteSettings,
     AgentTemplate, N8nWorkflow,
     AIFineTuningFile, AIFineTuningCommand, AIFineTuningTemplate, TestResult, Ticket,
@@ -48,11 +48,11 @@ class DatasetAdmin(admin.ModelAdmin):
     get_user_display.admin_order_field = 'user__username'
 
 class AnalysisSessionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'get_user_display', 'module', 'analysis_type', 'created_at')
-    list_filter = ('module', 'analysis_type', 'created_at', 'user')
-    search_fields = ('name', 'user__username', 'user__email', 'formula')
+    list_display = ('name', 'get_user_display', 'get_paper_display', 'module', 'analysis_type', 'created_at')
+    list_filter = ('module', 'analysis_type', 'created_at', 'user', 'paper')
+    search_fields = ('name', 'user__username', 'user__email', 'formula', 'paper__name')
     readonly_fields = ('created_at', 'updated_at')
-    raw_id_fields = ('user', 'dataset')  # Better widgets for selecting users/datasets
+    raw_id_fields = ('user', 'dataset', 'paper')  # Better widgets for selecting users/datasets/papers
     
     def get_user_display(self, obj):
         """Display user with better formatting"""
@@ -400,6 +400,7 @@ admin.site.register(User, CustomUserAdmin)
 
 admin.site.register(Dataset, DatasetAdmin)
 admin.site.register(AnalysisSession, AnalysisSessionAdmin)
+admin.site.register(Paper, PaperAdmin)
 admin.site.register(UserProfile, UserProfileAdmin)
 admin.site.register(SubscriptionPlan, SubscriptionPlanAdmin)
 admin.site.register(Payment, PaymentAdmin)

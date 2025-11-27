@@ -1,0 +1,151 @@
+{% extends "engine/base.html" %}
+
+{% block title %}{{ paper.name }} - Papers{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1200px; margin: 0 auto; padding: 24px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div>
+      <h1 style="margin: 0; font-size: 2rem; color: #1f2937;">{{ paper.name }}</h1>
+      {% if paper.description %}
+      <p style="margin: 8px 0 0 0; color: #6b7280;">{{ paper.description }}</p>
+      {% endif %}
+    </div>
+    <div>
+      <button class="btn btn-primary" onclick="window.location.href='/papers/'">Back to Papers</button>
+      <button class="btn btn-ghost" onclick="editPaper()">Edit</button>
+      <button class="btn btn-danger" onclick="deletePaper()">Delete</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+      <h2 class="card-title">Sessions in this Paper ({{ sessions|length }})</h2>
+    </div>
+    <div class="card-body">
+      {% if sessions %}
+      <ul class="list">
+        {% for session in sessions %}
+        <li class="list-row">
+          <div class="row-left">
+            <a class="link" href="/session/{{ session.id }}/">{{ session.name }}</a>
+            <span class="badge" style="margin-left: 8px;">{{ session.module }}</span>
+            {% if session.analysis_type %}<span class="badge" style="margin-left: 4px;">{{ session.analysis_type }}</span>{% endif %}
+          </div>
+          <div class="row-right">
+            <span class="muted small">{{ session.updated_at|date:"M d, Y H:i" }}</span>
+            <button class="icon-btn" title="Remove from paper" onclick="removeSession({{ session.id }})">✕</button>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No sessions in this paper yet. Add sessions from the main dashboard.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+function editPaper() {
+  const name = prompt('Enter new paper name:', '{{ paper.name|escapejs }}');
+  if (!name || !name.trim()) return;
+  
+  const description = prompt('Enter new paper description:', '{{ paper.description|escapejs }}') || '';
+  
+  const formData = new URLSearchParams();
+  formData.append('name', name.trim());
+  formData.append('description', description.trim());
+  
+  fetch('/papers/{{ paper.id }}/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert('Paper updated successfully!');
+      location.reload();
+    } else {
+      alert(data.error || 'Failed to update paper');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error updating paper');
+  });
+}
+
+function deletePaper() {
+  if (!confirm('Are you sure you want to delete this paper? Sessions will be ungrouped but not deleted.')) {
+    return;
+  }
+  
+  fetch('/papers/{{ paper.id }}/delete/', {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken')
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message);
+      window.location.href = '/papers/';
+    } else {
+      alert(data.error || 'Failed to delete paper');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error deleting paper');
+  });
+}
+
+function removeSession(sessionId) {
+  if (!confirm('Remove this session from the paper?')) {
+    return;
+  }
+  
+  fetch('/papers/{{ paper.id }}/remove-session/' + sessionId + '/', {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken')
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message);
+      location.reload();
+    } else {
+      alert(data.error || 'Failed to remove session');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error removing session');
+  });
+}
+
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+</script>
+{% endblock %}
+
