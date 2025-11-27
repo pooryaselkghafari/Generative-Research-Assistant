@@ -186,6 +186,30 @@
       transform: translate(-50%, -50%) translateY(-20px);
     }
   }
+  
+  /* Drag and drop styles */
+  .draggable-session {
+    cursor: grab;
+    user-select: none;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  
+  .draggable-session:active {
+    cursor: grabbing;
+  }
+  
+  .draggable-session:hover {
+    transform: translateX(2px);
+  }
+  
+  .paper-header {
+    transition: background 0.2s, border 0.2s;
+  }
+  
+  .paper-header.drag-over {
+    background: #e0e7ff !important;
+    border: 2px dashed #667eea !important;
+  }
 </style>
 {% endblock %}
 {# BEFORE (line ~6) #}
@@ -233,12 +257,12 @@
       <ul id="sessionList" class="list">
         {% for item in papers_with_sessions %}
         <li class="paper-group-item" data-paper-id="{{item.paper.id}}">
-          <div class="paper-header" onclick="togglePaperCollapse({{item.paper.id}})" style="cursor: pointer; padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
+          <div class="paper-header" data-paper-id="{{item.paper.id}}" data-paper-name="{{item.paper.name|escapejs}}" onclick="togglePaperCollapse({{item.paper.id}})" style="cursor: pointer; padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
             <div class="row-left" style="display: flex; align-items: center; gap: 8px;">
               <svg class="paper-chevron" data-paper-id="{{item.paper.id}}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s; transform: rotate(0deg);">
                 <polyline points="9 18 15 12 9 6"></polyline>
               </svg>
-              <a class="link" href="/papers/{{item.paper.id}}/" onclick="event.stopPropagation();" style="font-weight: 600; color: #667eea;">{{item.paper.name}}</a>
+              <span class="link" style="font-weight: 600; color: #667eea; cursor: pointer;">{{item.paper.name}}</span>
               <span class="badge" style="background: #667eea; color: white;">{{item.sessions|length}}</span>
             </div>
             <div class="row-right">
@@ -247,7 +271,7 @@
           </div>
           <ul class="paper-sessions" id="paper-sessions-{{item.paper.id}}" style="display: none; margin-left: 24px; margin-bottom: 8px;">
             {% for s in item.sessions %}
-            <li class="list-row session-item" data-session-id="{{s.id}}" data-paper-id="{{s.paper_id|default:''}}">
+            <li class="list-row session-item draggable-session" data-session-id="{{s.id}}" data-paper-id="{{s.paper_id|default:''}}" draggable="true">
               <div class="row-left">
                 <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
                 <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
@@ -278,7 +302,7 @@
         <li style="margin-top: 16px; padding-top: 16px; border-top: 2px solid #e5e7eb;">
           <div style="padding: 8px 12px; color: #6b7280; font-weight: 600; font-size: 0.875rem; margin-bottom: 8px;">Ungrouped Sessions</div>
           {% for s in ungrouped_sessions %}
-          <li class="list-row session-item" data-session-id="{{s.id}}" data-paper-id="">
+          <li class="list-row session-item draggable-session" data-session-id="{{s.id}}" data-paper-id="" draggable="true">
             <div class="row-left">
               <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
               <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
@@ -1940,8 +1964,95 @@ function togglePaperCollapse(paperId) {
   }
 }
 
-// Initialize selection UI on page load
+// Drag and drop functionality for sessions to papers
+let draggedSession = null;
+let dragOverPaper = null;
+
 document.addEventListener('DOMContentLoaded', function() {
+  // Make sessions draggable
+  document.querySelectorAll('.draggable-session').forEach(session => {
+    session.addEventListener('dragstart', function(e) {
+      draggedSession = this;
+      this.style.opacity = '0.5';
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', this.outerHTML);
+    });
+    
+    session.addEventListener('dragend', function(e) {
+      this.style.opacity = '1';
+      // Remove drop zone highlighting
+      document.querySelectorAll('.paper-header').forEach(header => {
+        header.style.background = '#f9fafb';
+        header.style.border = 'none';
+      });
+    });
+  });
+  
+  // Make paper headers drop zones
+  document.querySelectorAll('.paper-header').forEach(header => {
+    header.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      
+      // Highlight drop zone
+      if (dragOverPaper !== this) {
+        // Remove highlight from previous paper
+        if (dragOverPaper) {
+          dragOverPaper.style.background = '#f9fafb';
+          dragOverPaper.style.border = 'none';
+        }
+        dragOverPaper = this;
+        this.style.background = '#e0e7ff';
+        this.style.border = '2px dashed #667eea';
+      }
+    });
+    
+    header.addEventListener('dragleave', function(e) {
+      // Only remove highlight if we're actually leaving the paper header
+      if (!this.contains(e.relatedTarget)) {
+        this.style.background = '#f9fafb';
+        this.style.border = 'none';
+        if (dragOverPaper === this) {
+          dragOverPaper = null;
+        }
+      }
+    });
+    
+    header.addEventListener('drop', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Remove highlight
+      this.style.background = '#f9fafb';
+      this.style.border = 'none';
+      dragOverPaper = null;
+      
+      if (draggedSession) {
+        const sessionId = draggedSession.dataset.sessionId;
+        const paperId = this.dataset.paperId;
+        const paperName = this.dataset.paperName;
+        
+        // Check if session is already in this paper
+        const currentPaperId = draggedSession.dataset.paperId;
+        if (currentPaperId === paperId) {
+          showNotification('Session is already in this paper', 'info');
+          return;
+        }
+        
+        // Add session to paper
+        addSessionsToPaper(paperId, paperName, [sessionId])
+          .then(() => {
+            // Session will be moved after page reload
+          })
+          .catch(error => {
+            console.error('Error adding session to paper:', error);
+          });
+      }
+    });
+  });
+});
+
+  // Initialize selection UI on page load
   updateSelectionUI();
   
   // Expand papers with sessions by default
