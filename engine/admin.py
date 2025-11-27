@@ -61,6 +61,39 @@ class AnalysisSessionAdmin(admin.ModelAdmin):
         return format_html('<span style="color: #999;">No User</span>')
     get_user_display.short_description = 'User'
     get_user_display.admin_order_field = 'user__username'
+    
+    def get_paper_display(self, obj):
+        """Display paper with better formatting"""
+        if obj.paper:
+            return format_html('<a href="/admin/engine/paper/{}/change/">{}</a>', obj.paper.id, obj.paper.name)
+        return format_html('<span style="color: #999;">No Paper</span>')
+    get_paper_display.short_description = 'Paper'
+    get_paper_display.admin_order_field = 'paper__name'
+
+class PaperAdmin(admin.ModelAdmin):
+    list_display = ('name', 'get_user_display', 'get_sessions_count_display', 'created_at', 'updated_at')
+    list_filter = ('created_at', 'user')
+    search_fields = ('name', 'description', 'user__username', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+    raw_id_fields = ('user',)
+    filter_horizontal = ()  # For future: could add tags or categories
+    
+    def get_user_display(self, obj):
+        """Display user with better formatting"""
+        if obj.user:
+            return f"{obj.user.username} ({obj.user.email})"
+        return format_html('<span style="color: #999;">No User</span>')
+    get_user_display.short_description = 'User'
+    get_user_display.admin_order_field = 'user__username'
+    
+    def get_sessions_count_display(self, obj):
+        """Display number of sessions in this paper"""
+        count = obj.get_sessions_count()
+        if count > 0:
+            return format_html('<a href="/admin/engine/analysissession/?paper__id__exact={}">{}</a>', obj.id, count)
+        return '0'
+    get_sessions_count_display.short_description = 'Sessions'
+    get_sessions_count_display.admin_order_field = 'sessions'
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
     """Unified admin interface for subscription plans with all settings in one place."""
