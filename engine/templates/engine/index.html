@@ -1890,7 +1890,14 @@ function addSessionsToPaper(paperId, paperName, sessionIds = null) {
       'session_ids': sessionIds
     })
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      return response.json().then(data => {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      });
+    }
+    return response.json();
+  })
   .then(data => {
     if (data.success) {
       showNotification(data.message || `Added ${data.updated_count} session(s) to "${paperName}"`, 'success');
@@ -1902,6 +1909,10 @@ function addSessionsToPaper(paperId, paperName, sessionIds = null) {
     } else {
       throw new Error(data.error || 'Failed to add sessions to paper');
     }
+  })
+  .catch(error => {
+    console.error('Error in addSessionsToPaper:', error);
+    throw error;
   });
 }
 
@@ -2234,12 +2245,9 @@ function initializeDragAndDrop() {
       
       // Add session to paper
       addSessionsToPaper(paperId, paperName, [sessionId])
-        .then(() => {
-          showNotification(`Session added to "${paperName}"`, 'success');
-        })
         .catch(error => {
           console.error('Error adding session to paper:', error);
-          showNotification('Error adding session to paper', 'error');
+          showNotification(error.message || 'Error adding session to paper', 'error');
         });
     }
   }, true);
