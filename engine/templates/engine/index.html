@@ -1544,35 +1544,42 @@ function toggleSelectAll() {
   }
 }
 
-function showCreatePaperModal() {
-  const name = prompt('Enter paper name:');
-  if (!name || !name.trim()) return;
+function showCreatePaperModal(sessionIds = null) {
+  // Get selected sessions if not provided
+  if (!sessionIds) {
+    const checkboxes = document.querySelectorAll('.session-checkbox:checked');
+    sessionIds = Array.from(checkboxes).map(cb => cb.value);
+  }
   
-  const description = prompt('Enter paper description (optional):') || '';
+  // Get session names for display
+  const sessionNames = [];
+  if (sessionIds && sessionIds.length > 0) {
+    sessionIds.forEach(id => {
+      const sessionItem = document.querySelector(`.session-item[data-session-id="${id}"]`);
+      if (sessionItem) {
+        const sessionLink = sessionItem.querySelector('a.link');
+        if (sessionLink) {
+          sessionNames.push(sessionLink.textContent.trim());
+        }
+      }
+    });
+  }
   
-  fetch('/papers/create/', {
-    method: 'POST',
+  // Fetch existing papers
+  fetch('/api/papers/', {
+    method: 'GET',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRFToken': getCookie('csrftoken')
     },
-    body: new URLSearchParams({
-      'name': name.trim(),
-      'description': description.trim()
-    })
+    credentials: 'same-origin'
   })
   .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      showNotification('Paper created successfully!', 'success');
-      setTimeout(() => location.reload(), 1000);
-    } else {
-      showNotification(data.error || 'Failed to create paper', 'error');
-    }
+  .then(papers => {
+    showPaperModal(papers, sessionIds, sessionNames);
   })
   .catch(error => {
-    console.error('Error:', error);
-    showNotification('Error creating paper', 'error');
+    console.error('Error fetching papers:', error);
+    showPaperModal([], sessionIds, sessionNames);
   });
 }
 
@@ -1584,10 +1591,209 @@ function showAddToPaperModal() {
   }
   
   const sessionIds = Array.from(checkboxes).map(cb => cb.value);
-  const paperName = prompt('Enter paper name (or existing paper name to add to):');
-  if (!paperName || !paperName.trim()) return;
+  showCreatePaperModal(sessionIds);
+}
+
+function showPaperModal(papers, sessionIds, sessionNames) {
+  // Remove existing modal if any
+  const existingModal = document.getElementById('paperModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
   
-  // First, try to find existing paper or create new one
+  // Create modal overlay
+  const modal = document.createElement('div');
+  modal.id = 'paperModal';
+  modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);';
+  
+  // Create modal content
+  const modalContent = document.createElement('div');
+  modalContent.style.cssText = 'background: white; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); animation: modalSlideIn 0.3s ease-out;';
+  
+  // Add animation
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = 'padding: 24px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px 16px 0 0;';
+  header.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="width: 48px; height: 48px; background: rgba(255, 255, 255, 0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+      </div>
+      <div>
+        <h2 style="margin: 0; color: white; font-size: 1.5rem; font-weight: 600;">${sessionIds && sessionIds.length > 0 ? 'Add Sessions to Paper' : 'Create New Paper'}</h2>
+        <p style="margin: 4px 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.875rem;">${sessionIds && sessionIds.length > 0 ? `Adding ${sessionIds.length} session(s)` : 'Organize your analysis sessions'}</p>
+      </div>
+    </div>
+    <button id="closePaperModal" style="background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;" onmouseover="this.style.background='rgba(255, 255, 255, 0.3)'" onmouseout="this.style.background='rgba(255, 255, 255, 0.2)'">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  `;
+  
+  // Body
+  const body = document.createElement('div');
+  body.style.cssText = 'padding: 24px;';
+  
+  // Sessions list (if adding sessions)
+  let sessionsHtml = '';
+  if (sessionIds && sessionIds.length > 0) {
+    sessionsHtml = `
+      <div style="margin-bottom: 24px; padding: 16px; background: #f9fafb; border-radius: 12px; border-left: 4px solid #667eea;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <h3 style="margin: 0; color: #1f2937; font-size: 1rem; font-weight: 600;">Selected Sessions (${sessionIds.length})</h3>
+        </div>
+        <div style="max-height: 150px; overflow-y: auto;">
+          ${sessionNames.map((name, idx) => `
+            <div style="padding: 8px 12px; background: white; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; border: 1px solid #e5e7eb;">
+              <div style="width: 8px; height: 8px; background: #667eea; border-radius: 50%;"></div>
+              <span style="color: #374151; font-size: 0.875rem;">${name}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  // Paper selection/creation
+  let papersHtml = '';
+  if (papers.length > 0) {
+    papersHtml = `
+      <div style="margin-bottom: 24px;">
+        <label style="display: block; margin-bottom: 12px; color: #374151; font-weight: 600; font-size: 0.875rem;">Select Existing Paper</label>
+        <div id="existingPapersList" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px;">
+          ${papers.map(paper => `
+            <div class="paper-option" data-paper-id="${paper.id}" style="padding: 16px; border-bottom: 1px solid #e5e7eb; cursor: pointer; transition: background 0.2s; display: flex; justify-content: space-between; align-items: center;" 
+                 onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'"
+                 onclick="selectExistingPaper(${paper.id}, '${paper.name.replace(/'/g, "\\'")}')">
+              <div>
+                <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">${paper.name}</div>
+                ${paper.description ? `<div style="font-size: 0.875rem; color: #6b7280;">${paper.description}</div>` : ''}
+                <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">${paper.session_count} session(s)</div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div style="text-align: center; margin: 16px 0; color: #6b7280; font-size: 0.875rem;">or</div>
+    `;
+  }
+  
+  body.innerHTML = sessionsHtml + papersHtml + `
+    <div style="margin-bottom: 24px;">
+      <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 0.875rem;">
+        ${papers.length > 0 ? 'Create New Paper' : 'Paper Name'} <span style="color: #ef4444;">*</span>
+      </label>
+      <input type="text" id="paperNameInput" placeholder="e.g., Research Paper 2024" 
+             style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem; transition: border-color 0.2s; box-sizing: border-box;"
+             onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e5e7eb'">
+    </div>
+    <div style="margin-bottom: 24px;">
+      <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 0.875rem;">Description (Optional)</label>
+      <textarea id="paperDescriptionInput" placeholder="Brief description of this paper or project..." rows="3"
+                style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.875rem; font-family: inherit; resize: vertical; transition: border-color 0.2s; box-sizing: border-box;"
+                onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
+    </div>
+  `;
+  
+  // Footer
+  const footer = document.createElement('div');
+  footer.style.cssText = 'padding: 24px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 12px; background: #f9fafb; border-radius: 0 0 16px 16px;';
+  footer.innerHTML = `
+    <button id="cancelPaperBtn" style="padding: 10px 20px; background: white; border: 2px solid #e5e7eb; border-radius: 8px; color: #374151; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+            onmouseover="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'" onmouseout="this.style.borderColor='#e5e7eb'; this.style.background='white'">
+      Cancel
+    </button>
+    <button id="submitPaperBtn" style="padding: 10px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 6px -1px rgba(102, 126, 234, 0.3);"
+            onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 8px -1px rgba(102, 126, 234, 0.4)'" 
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px -1px rgba(102, 126, 234, 0.3)'">
+      ${sessionIds && sessionIds.length > 0 ? 'Add to Paper' : 'Create Paper'}
+    </button>
+  `;
+  
+  // Assemble modal
+  modalContent.appendChild(header);
+  modalContent.appendChild(body);
+  modalContent.appendChild(footer);
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+  
+  // Store sessionIds in modal for later use
+  modal.dataset.sessionIds = sessionIds ? JSON.stringify(sessionIds) : '[]';
+  
+  // Event handlers
+  document.getElementById('closePaperModal').onclick = () => modal.remove();
+  document.getElementById('cancelPaperBtn').onclick = () => modal.remove();
+  document.getElementById('submitPaperBtn').onclick = () => submitPaperForm(modal, sessionIds);
+  
+  // Close on overlay click
+  modal.onclick = (e) => {
+    if (e.target === modal) modal.remove();
+  };
+  
+  // Focus on input
+  setTimeout(() => document.getElementById('paperNameInput').focus(), 100);
+}
+
+function selectExistingPaper(paperId, paperName) {
+  const modal = document.getElementById('paperModal');
+  if (!modal) return;
+  
+  const sessionIds = JSON.parse(modal.dataset.sessionIds || '[]');
+  
+  if (sessionIds.length === 0) {
+    showNotification('No sessions selected', 'error');
+    return;
+  }
+  
+  // Add sessions to existing paper
+  addSessionsToPaper(paperId, paperName, sessionIds)
+    .then(() => {
+      modal.remove();
+    });
+}
+
+function submitPaperForm(modal, sessionIds) {
+  const nameInput = document.getElementById('paperNameInput');
+  const descriptionInput = document.getElementById('paperDescriptionInput');
+  
+  const name = nameInput.value.trim();
+  if (!name) {
+    showNotification('Paper name is required', 'error');
+    nameInput.focus();
+    return;
+  }
+  
+  const description = descriptionInput.value.trim();
+  
+  // Create paper
   fetch('/papers/create/', {
     method: 'POST',
     headers: {
@@ -1595,43 +1801,31 @@ function showAddToPaperModal() {
       'X-CSRFToken': getCookie('csrftoken')
     },
     body: new URLSearchParams({
-      'name': paperName.trim(),
-      'description': ''
+      'name': name,
+      'description': description
     })
   })
   .then(response => response.json())
   .then(data => {
-    if (data.success || data.error && data.error.includes('already exists')) {
-      // If paper exists or was created, get its ID and add sessions
-      return fetch('/api/papers/', {
-        method: 'GET',
-        headers: {
-          'X-CSRFToken': getCookie('csrftoken')
-        },
-        credentials: 'same-origin'
-      })
-      .then(response => response.json())
-      .then(papers => {
-        const paper = papers.find(p => p.name === paperName.trim());
-        if (paper) {
-          return addSessionsToPaper(paper.id, paper.name, sessionIds);
-        } else {
-          throw new Error('Paper not found');
-        }
-      });
+    if (data.success) {
+      // If sessions were selected, add them to the paper
+      if (sessionIds && sessionIds.length > 0) {
+        return addSessionsToPaper(data.paper_id, data.paper_name, sessionIds)
+          .then(() => {
+            modal.remove();
+          });
+      } else {
+        showNotification('Paper created successfully!', 'success');
+        modal.remove();
+        setTimeout(() => location.reload(), 1000);
+      }
     } else {
-      throw new Error(data.error || 'Failed to create/find paper');
-    }
-  })
-  .then(result => {
-    if (result && result.success) {
-      showNotification(result.message || 'Sessions added to paper!', 'success');
-      setTimeout(() => location.reload(), 1000);
+      showNotification(data.error || 'Failed to create paper', 'error');
     }
   })
   .catch(error => {
     console.error('Error:', error);
-    showNotification(error.message || 'Error adding sessions to paper', 'error');
+    showNotification('Error creating paper', 'error');
   });
 }
 
@@ -1671,90 +1865,8 @@ function addSessionsToPaper(paperId, paperName, sessionIds = null) {
 }
 
 function showAddSessionToPaperModal(sessionId) {
-  // Fetch all papers
-  fetch('/api/papers/', {
-    method: 'GET',
-    headers: {
-      'X-CSRFToken': getCookie('csrftoken')
-    },
-    credentials: 'same-origin'
-  })
-  .then(response => response.json())
-  .then(papers => {
-    if (papers.length === 0) {
-      // No papers exist, ask to create one
-      const paperName = prompt('No papers exist. Enter a name for a new paper:');
-      if (!paperName || !paperName.trim()) return;
-      
-      // Create paper first
-      const formData = new URLSearchParams();
-      formData.append('name', paperName.trim());
-      formData.append('description', '');
-      
-      return fetch('/papers/create/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          // Add session to newly created paper
-          return addSessionsToPaper(data.paper_id, data.paper_name, [sessionId]);
-        } else {
-          throw new Error(data.error || 'Failed to create paper');
-        }
-      });
-    } else {
-      // Show paper selection
-      const paperList = papers.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
-      const selection = prompt(`Select a paper (enter number):\n\n${paperList}\n\nOr enter a new paper name:`);
-      
-      if (!selection || !selection.trim()) return;
-      
-      // Check if it's a number (existing paper)
-      const paperIndex = parseInt(selection.trim()) - 1;
-      if (paperIndex >= 0 && paperIndex < papers.length) {
-        // Add to existing paper
-        return addSessionsToPaper(papers[paperIndex].id, papers[paperIndex].name, [sessionId]);
-      } else {
-        // Create new paper
-        const formData = new URLSearchParams();
-        formData.append('name', selection.trim());
-        formData.append('description', '');
-        
-        return fetch('/papers/create/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': getCookie('csrftoken')
-          },
-          body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            return addSessionsToPaper(data.paper_id, data.paper_name, [sessionId]);
-          } else {
-            throw new Error(data.error || 'Failed to create paper');
-          }
-        });
-      }
-    }
-  })
-  .then(result => {
-    if (result && result.success) {
-      showNotification(result.message || 'Session added to paper!', 'success');
-      setTimeout(() => location.reload(), 1000);
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    showNotification(error.message || 'Error adding session to paper', 'error');
-  });
+  // Use the same modal but with single session
+  showCreatePaperModal([sessionId]);
 }
 
 function removeSessionFromPaper(sessionId, paperId) {
