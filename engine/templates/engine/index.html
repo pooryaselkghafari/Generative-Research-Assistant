@@ -200,36 +200,11 @@
 
   <section class="card">
     <div class="card-header">
-      <h2 class="card-title">Papers</h2>
+      <h2 class="card-title">Papers & Sessions</h2>
       <div class="card-actions">
         <button class="btn btn-sm btn-primary" onclick="showCreatePaperModal()" title="Create new paper">
           + New Paper
         </button>
-      </div>
-    </div>
-    <div class="sessions-scroll-container" style="max-height: 200px;">
-      <ul id="paperList" class="list">
-        {% for paper in papers %}
-        <li class="list-row paper-item" data-paper-id="{{paper.id}}">
-          <div class="row-left">
-            <a class="link" href="/papers/{{paper.id}}/" title="{{paper.description|default:''}}">{{paper.name}}</a>
-            <span class="badge" style="margin-left: 8px;">{{paper.get_sessions_count}}</span>
-          </div>
-          <div class="row-right">
-            <button class="icon-btn" title="Add selected sessions to this paper" onclick="addSessionsToPaper({{paper.id}}, '{{paper.name|escapejs}}')">+</button>
-          </div>
-        </li>
-        {% empty %}
-        <li class="muted">No papers yet. Create one to group your sessions.</li>
-        {% endfor %}
-      </ul>
-    </div>
-  </section>
-
-  <section class="card">
-    <div class="card-header">
-      <h2 class="card-title">Sessions</h2>
-      <div class="card-actions">
         <button id="selectAllBtn" class="btn btn-sm btn-ghost" onclick="toggleSelectAll()" style="display: none;">
           Select All
         </button>
@@ -256,42 +231,79 @@
     </div>
     <div class="sessions-scroll-container">
       <ul id="sessionList" class="list">
-        {% for s in sessions %}
-        <li class="list-row session-item" data-session-id="{{s.id}}" data-paper-id="{{s.paper_id|default:''}}">
-          <div class="row-left">
-            <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
-            <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
-            {% if s.paper %}<span class="badge" style="background: #4CAF50; color: white; margin-left: 8px;" title="Part of paper: {{s.paper.name}}">{{s.paper.name}}</span>{% endif %}
-            {% if not s.dataset_id %}<span class="badge warn" title="Dataset deleted">no dataset</span>{% endif %}
-          </div>
-          <div class="row-right">
-            <span class="muted small">{{s.updated_at|date:"M d, H:i"}}</span>
-            {% if s.paper %}
-            <button class="icon-btn" title="Remove from paper: {{s.paper.name}}" onclick="removeSessionFromPaper({{s.id}}, {{s.paper.id}})" style="color: #4CAF50; padding: 4px 8px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
+        {% for item in papers_with_sessions %}
+        <li class="paper-group-item" data-paper-id="{{item.paper.id}}">
+          <div class="paper-header" onclick="togglePaperCollapse({{item.paper.id}})" style="cursor: pointer; padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
+            <div class="row-left" style="display: flex; align-items: center; gap: 8px;">
+              <svg class="paper-chevron" data-paper-id="{{item.paper.id}}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s; transform: rotate(0deg);">
+                <polyline points="9 18 15 12 9 6"></polyline>
               </svg>
-            </button>
-            {% else %}
-            <button class="icon-btn" title="Add to paper" onclick="showAddSessionToPaperModal({{s.id}})" style="color: #6b7280; padding: 4px 8px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="15" y2="15"></line>
-              </svg>
-            </button>
-            {% endif %}
-            <button class="icon-btn danger" title="Delete session" aria-label="Delete session" onclick="showSingleDeleteConfirmation({{s.id}}, '{{s.name|escapejs}}')">✕</button>
+              <a class="link" href="/papers/{{item.paper.id}}/" onclick="event.stopPropagation();" style="font-weight: 600; color: #667eea;">{{item.paper.name}}</a>
+              <span class="badge" style="background: #667eea; color: white;">{{item.sessions|length}}</span>
+            </div>
+            <div class="row-right">
+              <button class="icon-btn" title="Add selected sessions to this paper" onclick="event.stopPropagation(); addSessionsToPaper({{item.paper.id}}, '{{item.paper.name|escapejs}}')" style="padding: 4px 8px;">+</button>
+            </div>
           </div>
+          <ul class="paper-sessions" id="paper-sessions-{{item.paper.id}}" style="display: none; margin-left: 24px; margin-bottom: 8px;">
+            {% for s in item.sessions %}
+            <li class="list-row session-item" data-session-id="{{s.id}}" data-paper-id="{{s.paper_id|default:''}}">
+              <div class="row-left">
+                <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
+                <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
+                {% if not s.dataset_id %}<span class="badge warn" title="Dataset deleted">no dataset</span>{% endif %}
+              </div>
+              <div class="row-right">
+                <span class="muted small">{{s.updated_at|date:"M d, H:i"}}</span>
+                <button class="icon-btn" title="Remove from paper: {{s.paper.name}}" onclick="removeSessionFromPaper({{s.id}}, {{s.paper.id}})" style="color: #4CAF50; padding: 4px 8px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                </button>
+                <button class="icon-btn danger" title="Delete session" aria-label="Delete session" onclick="showSingleDeleteConfirmation({{s.id}}, '{{s.name|escapejs}}')">✕</button>
+              </div>
+            </li>
+            {% empty %}
+            <li class="muted" style="padding: 8px 12px; font-size: 0.875rem;">No sessions in this paper yet</li>
+            {% endfor %}
+          </ul>
         </li>
-        {% empty %}
-        <li class="muted">No sessions yet</li>
         {% endfor %}
+        
+        {% if ungrouped_sessions %}
+        <li style="margin-top: 16px; padding-top: 16px; border-top: 2px solid #e5e7eb;">
+          <div style="padding: 8px 12px; color: #6b7280; font-weight: 600; font-size: 0.875rem; margin-bottom: 8px;">Ungrouped Sessions</div>
+          {% for s in ungrouped_sessions %}
+          <li class="list-row session-item" data-session-id="{{s.id}}" data-paper-id="">
+            <div class="row-left">
+              <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
+              <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
+              {% if not s.dataset_id %}<span class="badge warn" title="Dataset deleted">no dataset</span>{% endif %}
+            </div>
+            <div class="row-right">
+              <span class="muted small">{{s.updated_at|date:"M d, H:i"}}</span>
+              <button class="icon-btn" title="Add to paper" onclick="showAddSessionToPaperModal({{s.id}})" style="color: #6b7280; padding: 4px 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+              </button>
+              <button class="icon-btn danger" title="Delete session" aria-label="Delete session" onclick="showSingleDeleteConfirmation({{s.id}}, '{{s.name|escapejs}}')">✕</button>
+            </div>
+          </li>
+          {% endfor %}
+        </li>
+        {% endif %}
+        
+        {% if not papers_with_sessions and not ungrouped_sessions %}
+        <li class="muted">No sessions yet</li>
+        {% endif %}
       </ul>
     </div>
   </section>
@@ -1910,9 +1922,41 @@ function getCookie(name) {
   return cookieValue;
 }
 
+// Paper collapse/expand functionality
+function togglePaperCollapse(paperId) {
+  const sessionsList = document.getElementById(`paper-sessions-${paperId}`);
+  const chevron = document.querySelector(`.paper-chevron[data-paper-id="${paperId}"]`);
+  
+  if (sessionsList && chevron) {
+    const isExpanded = sessionsList.style.display !== 'none';
+    
+    if (isExpanded) {
+      sessionsList.style.display = 'none';
+      chevron.style.transform = 'rotate(0deg)';
+    } else {
+      sessionsList.style.display = 'block';
+      chevron.style.transform = 'rotate(90deg)';
+    }
+  }
+}
+
 // Initialize selection UI on page load
 document.addEventListener('DOMContentLoaded', function() {
   updateSelectionUI();
+  
+  // Expand papers with sessions by default
+  document.querySelectorAll('.paper-sessions').forEach(sessionsList => {
+    const paperId = sessionsList.id.replace('paper-sessions-', '');
+    const sessions = sessionsList.querySelectorAll('.session-item');
+    if (sessions.length > 0) {
+      // Expand if it has sessions
+      sessionsList.style.display = 'block';
+      const chevron = document.querySelector(`.paper-chevron[data-paper-id="${paperId}"]`);
+      if (chevron) {
+        chevron.style.transform = 'rotate(90deg)';
+      }
+    }
+  });
 });
 </script>
 

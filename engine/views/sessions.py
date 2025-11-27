@@ -31,9 +31,40 @@ def _list_context(current_session=None, user=None):
     sessions = AnalysisSession.objects.filter(user=user).order_by('-updated_at')[:50]
     datasets = Dataset.objects.filter(user=user).order_by('-uploaded_at')
     papers = Paper.objects.filter(user=user).order_by('-updated_at')
+    
+    # Group sessions by paper
+    sessions_by_paper = {}
+    ungrouped_sessions = []
+    
+    for session in sessions:
+        if session.paper:
+            paper_id = session.paper.id
+            if paper_id not in sessions_by_paper:
+                sessions_by_paper[paper_id] = {
+                    'paper': session.paper,
+                    'sessions': []
+                }
+            sessions_by_paper[paper_id]['sessions'].append(session)
+        else:
+            ungrouped_sessions.append(session)
+    
+    # Convert to list for template
+    papers_with_sessions = []
+    for paper in papers:
+        if paper.id in sessions_by_paper:
+            papers_with_sessions.append(sessions_by_paper[paper.id])
+        else:
+            # Paper exists but has no sessions yet
+            papers_with_sessions.append({
+                'paper': paper,
+                'sessions': []
+            })
+    
     registry = get_registry()
     return {
         'sessions': sessions,
+        'ungrouped_sessions': ungrouped_sessions,
+        'papers_with_sessions': papers_with_sessions,
         'datasets': datasets,
         'papers': papers,
         'modules': registry,
