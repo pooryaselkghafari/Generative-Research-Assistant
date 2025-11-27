@@ -266,6 +266,11 @@
           </div>
           <div class="row-right">
             <span class="muted small">{{s.updated_at|date:"M d, H:i"}}</span>
+            {% if s.paper %}
+            <button class="icon-btn" title="Remove from paper: {{s.paper.name}}" onclick="removeSessionFromPaper({{s.id}}, {{s.paper.id}})" style="color: #4CAF50;">📄</button>
+            {% else %}
+            <button class="icon-btn" title="Add to paper" onclick="showAddSessionToPaperModal({{s.id}})" style="color: #6b7280;">📄</button>
+            {% endif %}
             <button class="icon-btn danger" title="Delete session" aria-label="Delete session" onclick="showSingleDeleteConfirmation({{s.id}}, '{{s.name|escapejs}}')">✕</button>
           </div>
         </li>
