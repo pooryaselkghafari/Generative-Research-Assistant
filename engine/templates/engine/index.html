@@ -1746,37 +1746,10 @@ function showPaperModal(papers, sessionIds, sessionNames) {
     `;
   }
   
-  // Paper selection/creation
-  let papersHtml = '';
-  if (papers.length > 0) {
-    papersHtml = `
-      <div style="margin-bottom: 24px;">
-        <label style="display: block; margin-bottom: 12px; color: #374151; font-weight: 600; font-size: 0.875rem;">Select Existing Paper</label>
-        <div id="existingPapersList" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px;">
-          ${papers.map(paper => `
-            <div class="paper-option" data-paper-id="${paper.id}" style="padding: 16px; border-bottom: 1px solid #e5e7eb; cursor: pointer; transition: background 0.2s; display: flex; justify-content: space-between; align-items: center;" 
-                 onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'"
-                 onclick="selectExistingPaper(${paper.id}, '${paper.name.replace(/'/g, "\\'")}')">
-              <div>
-                <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">${paper.name}</div>
-                ${paper.description ? `<div style="font-size: 0.875rem; color: #6b7280;">${paper.description}</div>` : ''}
-                <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 4px;">${paper.session_count} session(s)</div>
-              </div>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-      <div style="text-align: center; margin: 16px 0; color: #6b7280; font-size: 0.875rem;">or</div>
-    `;
-  }
-  
-  body.innerHTML = sessionsHtml + papersHtml + `
+  body.innerHTML = sessionsHtml + `
     <div style="margin-bottom: 24px;">
       <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 0.875rem;">
-        ${papers.length > 0 ? 'Create New Paper' : 'Paper Name'} <span style="color: #ef4444;">*</span>
+        Paper Name <span style="color: #ef4444;">*</span>
       </label>
       <input type="text" id="paperNameInput" placeholder="e.g., Research Paper 2024" 
              style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem; transition: border-color 0.2s; box-sizing: border-box;"
