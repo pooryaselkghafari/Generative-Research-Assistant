@@ -272,13 +272,13 @@
           <ul class="paper-sessions" id="paper-sessions-{{item.paper.id}}" style="display: none; margin-left: 24px; margin-bottom: 8px;">
             {% for s in item.sessions %}
             <li class="list-row session-item draggable-session" data-session-id="{{s.id}}" data-paper-id="{{s.paper_id|default:''}}" draggable="true">
-              <div class="row-left">
+              <div class="row-left" style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
                 <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
+                <span class="muted small" style="font-size: 0.75rem; color: #9ca3af; white-space: nowrap;">{{s.updated_at|date:"M d, H:i"}}</span>
                 {% if not s.dataset_id %}<span class="badge warn" title="Dataset deleted">no dataset</span>{% endif %}
               </div>
               <div class="row-right">
-                <span class="muted small">{{s.updated_at|date:"M d, H:i"}}</span>
                 <button class="icon-btn" title="Remove from paper: {{s.paper.name}}" onclick="removeSessionFromPaper({{s.id}}, {{s.paper.id}})" style="color: #4CAF50; padding: 4px 8px;">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -303,13 +303,13 @@
           <div style="padding: 8px 12px; color: #6b7280; font-weight: 600; font-size: 0.875rem; margin-bottom: 8px;">Ungrouped Sessions</div>
           {% for s in ungrouped_sessions %}
           <li class="list-row session-item draggable-session" data-session-id="{{s.id}}" data-paper-id="" draggable="true">
-            <div class="row-left">
+            <div class="row-left" style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; margin-right: 8px;">
               <a class="link" href="/session/{{s.id}}/">{{s.name}}</a>
+              <span class="muted small" style="font-size: 0.75rem; color: #9ca3af; white-space: nowrap;">{{s.updated_at|date:"M d, H:i"}}</span>
               {% if not s.dataset_id %}<span class="badge warn" title="Dataset deleted">no dataset</span>{% endif %}
             </div>
             <div class="row-right">
-              <span class="muted small">{{s.updated_at|date:"M d, H:i"}}</span>
               <button class="icon-btn danger" title="Delete session" aria-label="Delete session" onclick="showSingleDeleteConfirmation({{s.id}}, '{{s.name|escapejs}}')">✕</button>
             </div>
           </li>
