@@ -2162,21 +2162,29 @@ function initializeDragAndDrop() {
   document.addEventListener('dragstart', function(e) {
     if (e.target.closest('.draggable-session')) {
       const session = e.target.closest('.draggable-session');
-      draggedSession = session;
-      session.style.opacity = '0.5';
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', session.dataset.sessionId);
+      if (session) {
+        draggedSession = session;
+        if (session.style) {
+          session.style.opacity = '0.5';
+        }
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', session.dataset.sessionId || '');
+      }
     }
   }, true);
   
   document.addEventListener('dragend', function(e) {
     if (e.target.closest('.draggable-session')) {
       const session = e.target.closest('.draggable-session');
-      session.style.opacity = '1';
+      if (session && session.style) {
+        session.style.opacity = '1';
+      }
       // Remove drop zone highlighting
       document.querySelectorAll('.paper-header').forEach(header => {
-        header.style.background = '';
-        header.style.border = '';
+        if (header && header.style) {
+          header.style.background = '';
+          header.style.border = '';
+        }
       });
       draggedSession = null;
     }
@@ -2193,13 +2201,15 @@ function initializeDragAndDrop() {
       // Highlight drop zone
       if (dragOverPaper !== header) {
         // Remove highlight from previous paper
-        if (dragOverPaper) {
+        if (dragOverPaper && dragOverPaper.style) {
           dragOverPaper.style.background = '';
           dragOverPaper.style.border = '';
         }
         dragOverPaper = header;
-        header.style.background = '#e0e7ff';
-        header.style.border = '2px dashed #667eea';
+        if (header && header.style) {
+          header.style.background = '#e0e7ff';
+          header.style.border = '2px dashed #667eea';
+        }
       }
     }
   }, true);
@@ -2207,8 +2217,10 @@ function initializeDragAndDrop() {
   document.addEventListener('dragleave', function(e) {
     const header = e.target.closest('.paper-header');
     if (header && !header.contains(e.relatedTarget)) {
-      header.style.background = '';
-      header.style.border = '';
+      if (header.style) {
+        header.style.background = '';
+        header.style.border = '';
+      }
       if (dragOverPaper === header) {
         dragOverPaper = null;
       }
@@ -2222,8 +2234,10 @@ function initializeDragAndDrop() {
       e.stopPropagation();
       
       // Remove highlight
-      header.style.background = '';
-      header.style.border = '';
+      if (header && header.style) {
+        header.style.background = '';
+        header.style.border = '';
+      }
       const previousDragOver = dragOverPaper;
       dragOverPaper = null;
       
