@@ -3,6 +3,29 @@
 ## Problem
 The 500 error occurs because the database is missing the `keywords` and `target_journals` fields on the `Paper` model. The migration exists but hasn't been applied.
 
+## Solution: Fix Migration Conflict First
+
+**IMPORTANT**: There's a migration conflict that must be resolved first!
+
+### Step 1: Create Merge Migration
+
+The server has migration `0029_alter_subscriptionplan_options_and_more` that doesn't exist locally, creating a conflict. Run:
+
+```bash
+# On the server
+docker-compose exec web python manage.py makemigrations --merge engine
+```
+
+This will create a merge migration (likely `0036_merge_0029_0035.py`) that resolves the conflict.
+
+### Step 2: Run Migration
+
+After creating the merge migration, run:
+
+```bash
+docker-compose exec web python manage.py migrate engine
+```
+
 ## Solution: Run Migration
 
 ### Option 1: Using Docker Compose (Recommended for Production)

@@ -7,6 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("engine", "0034_alter_aiprovider_api_key_and_more"),
+        ("engine", "0029_alter_subscriptionplan_options_and_more"),  # Merge dependency
     ]
 
     operations = [
