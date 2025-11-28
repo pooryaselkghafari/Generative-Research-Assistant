@@ -220,3 +220,54 @@ def paper_list_api(request):
     
     return JsonResponse(papers_data, safe=False)
 
+
+@login_required
+@require_http_methods(["GET", "POST"])
+@csrf_exempt
+def paper_update_keywords_journals(request, paper_id):
+    """Update keywords and target journals for a paper."""
+    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    
+    if request.method == 'GET':
+        # Return current keywords and journals
+        return JsonResponse({
+            'success': True,
+            'keywords': paper.keywords or [],
+            'target_journals': paper.target_journals or [],
+        })
+    
+    # POST - Update keywords and journals
+    try:
+        data = json.loads(request.body)
+        keywords = data.get('keywords', [])
+        target_journals = data.get('target_journals', [])
+        
+        # Validate that keywords and journals are lists
+        if not isinstance(keywords, list):
+            return JsonResponse({'error': 'Keywords must be a list'}, status=400)
+        if not isinstance(target_journals, list):
+            return JsonResponse({'error': 'Target journals must be a list'}, status=400)
+        
+        # Validate list items are strings
+        if not all(isinstance(k, str) for k in keywords):
+            return JsonResponse({'error': 'All keywords must be strings'}, status=400)
+        if not all(isinstance(j, str) for j in target_journals):
+            return JsonResponse({'error': 'All journal names must be strings'}, status=400)
+        
+        # Update paper
+        paper.keywords = [k.strip() for k in keywords if k.strip()]
+        paper.target_journals = [j.strip() for j in target_journals if j.strip()]
+        paper.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Keywords and journals updated successfully',
+            'keywords': paper.keywords,
+            'target_journals': paper.target_journals,
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+

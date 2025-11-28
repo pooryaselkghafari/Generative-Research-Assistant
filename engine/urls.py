@@ -34,7 +34,8 @@ from engine.views.chatbot import chatbot_endpoint, chatbot_access_check
 from engine.views.n8n_proxy import n8n_proxy
 from engine.views.papers import (
     paper_list, paper_create, paper_edit, paper_delete,
-    paper_add_sessions, paper_remove_session, paper_detail_api, paper_list_api
+    paper_add_sessions, paper_remove_session, paper_detail_api, paper_list_api,
+    paper_update_keywords_journals
 )
 
 urlpatterns = [
@@ -88,6 +89,7 @@ urlpatterns = [
     path('papers/<int:paper_id>/delete/', paper_delete, name='paper_delete'),
     path('papers/<int:paper_id>/add-sessions/', paper_add_sessions, name='paper_add_sessions'),
     path('papers/<int:paper_id>/remove-session/<int:session_id>/', paper_remove_session, name='paper_remove_session'),
+    path('papers/<int:paper_id>/keywords-journals/', paper_update_keywords_journals, name='paper_update_keywords_journals'),
     path('api/papers/<int:paper_id>/', paper_detail_api, name='paper_detail_api'),
     path('api/papers/', paper_list_api, name='paper_list_api'),
     # Agent Templates (Admin)

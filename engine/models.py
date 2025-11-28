@@ -94,6 +94,8 @@ class Paper(models.Model):
     name = models.CharField(max_length=200, help_text="Name of the paper or project")
     description = models.TextField(blank=True, help_text="Optional description of the paper")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='papers', null=True, blank=True)
+    keywords = models.JSONField(default=list, blank=True, help_text="List of keywords for this paper")
+    target_journals = models.JSONField(default=list, blank=True, help_text="List of target journal names")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
