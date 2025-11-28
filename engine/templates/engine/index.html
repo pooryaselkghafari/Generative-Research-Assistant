@@ -2303,18 +2303,27 @@ function togglePaperCollapse(paperId) {
     const isExpanded = sessionsList.style.display !== 'none';
     
     if (isExpanded) {
-      // Collapsing - just collapse
-      sessionsList.style.display = 'none';
-      chevron.style.transform = 'rotate(0deg)';
-    } else {
-      // Expanding - expand and open first session if available
-      sessionsList.style.display = 'block';
-      chevron.style.transform = 'rotate(90deg)';
-      
-      // Find the first session link and navigate to it
+      // If already expanded, navigate to first session immediately
       const firstSessionLink = sessionsList.querySelector('.session-item a.link');
       if (firstSessionLink) {
         window.location.href = firstSessionLink.getAttribute('href');
+        return; // Don't collapse, just navigate
+      }
+      // If no sessions, collapse
+      sessionsList.style.display = 'none';
+      chevron.style.transform = 'rotate(0deg)';
+    } else {
+      // Expanding - expand first, then navigate after a brief delay
+      sessionsList.style.display = 'block';
+      chevron.style.transform = 'rotate(90deg)';
+      
+      // Find the first session link and navigate to it after a brief delay
+      const firstSessionLink = sessionsList.querySelector('.session-item a.link');
+      if (firstSessionLink) {
+        // Small delay to show the expansion before navigating
+        setTimeout(() => {
+          window.location.href = firstSessionLink.getAttribute('href');
+        }, 150);
       }
     }
   }
