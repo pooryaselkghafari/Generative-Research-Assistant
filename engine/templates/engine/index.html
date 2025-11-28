@@ -2300,25 +2300,22 @@ function togglePaperCollapse(paperId) {
   const chevron = document.querySelector(`.paper-chevron[data-paper-id="${paperId}"]`);
   
   if (sessionsList && chevron) {
-    // Check if paper has sessions
-    const firstSessionLink = sessionsList.querySelector('.session-item a.link');
+    const isExpanded = sessionsList.style.display !== 'none';
     
-    if (firstSessionLink) {
-      // Paper has sessions - navigate directly to first session
-      // Don't toggle, just navigate
-      window.location.href = firstSessionLink.getAttribute('href');
-      return;
-    } else {
-      // Paper has no sessions - just toggle expand/collapse
-      const isExpanded = sessionsList.style.display !== 'none';
-      
-      if (isExpanded) {
-        sessionsList.style.display = 'none';
-        chevron.style.transform = 'rotate(0deg)';
-      } else {
-        sessionsList.style.display = 'block';
-        chevron.style.transform = 'rotate(90deg)';
+    if (isExpanded) {
+      // Already expanded - navigate to first session if available
+      const firstSessionLink = sessionsList.querySelector('.session-item a.link');
+      if (firstSessionLink) {
+        window.location.href = firstSessionLink.getAttribute('href');
+        return;
       }
+      // No sessions, just collapse
+      sessionsList.style.display = 'none';
+      chevron.style.transform = 'rotate(0deg)';
+    } else {
+      // Collapsed - expand it
+      sessionsList.style.display = 'block';
+      chevron.style.transform = 'rotate(90deg)';
     }
   }
 }
