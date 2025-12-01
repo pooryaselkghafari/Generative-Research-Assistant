@@ -116,6 +116,38 @@ class Paper(models.Model):
     def get_sessions(self):
         """Get all sessions in this paper, ordered by updated_at."""
         return self.sessions.all().order_by('-updated_at')
+    
+    def get_documents(self):
+        """Get all documents for this paper, ordered by uploaded_at."""
+        return self.documents.all().order_by('-uploaded_at')
+
+
+class PaperDocument(models.Model):
+    """
+    Represents a document/file uploaded for a paper.
+    These files are used for AI knowledge base (RAG) and are only accessible to the paper owner.
+    """
+    paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='documents', help_text="Paper this document belongs to")
+    file = models.FileField(upload_to='papers/%Y/%m/%d/', help_text="Uploaded document file")
+    original_filename = models.CharField(max_length=255, help_text="Original filename when uploaded")
+    file_size = models.BigIntegerField(help_text="File size in bytes")
+    file_type = models.CharField(max_length=100, blank=True, help_text="File MIME type or extension")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, help_text="Optional description of the document")
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+        verbose_name = "Paper Document"
+        verbose_name_plural = "Paper Documents"
+    
+    def __str__(self):
+        return f"{self.original_filename} ({self.paper.name})"
+    
+    @property
+    def file_size_mb(self):
+        """Return file size in MB."""
+        return round(self.file_size / (1024 * 1024), 2)
+
 
 class AnalysisSession(models.Model):
     name = models.CharField(max_length=200)

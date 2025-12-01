@@ -1954,28 +1954,32 @@ function removeSessionFromPaper(sessionId, paperId) {
 }
 
 function showKeywordsJournalsModal(paperId, paperName) {
-  // Fetch current keywords and journals
-  fetch(`/papers/${paperId}/keywords-journals/`, {
-    method: 'GET',
-    headers: {
-      'X-CSRFToken': getCookie('csrftoken')
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      openKeywordsJournalsModal(paperId, paperName, data.keywords || [], data.target_journals || []);
+  // Fetch current keywords, journals, and documents
+  Promise.all([
+    fetch(`/papers/${paperId}/keywords-journals/`, {
+      method: 'GET',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    }).then(r => r.json()),
+    fetch(`/papers/${paperId}/documents/`, {
+      method: 'GET',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    }).then(r => r.json())
+  ])
+  .then(([keywordsData, documentsData]) => {
+    if (keywordsData.success && documentsData.success) {
+      openKeywordsJournalsModal(paperId, paperName, keywordsData.keywords || [], keywordsData.target_journals || [], documentsData.documents || []);
     } else {
-      showNotification('Error loading keywords and journals', 'error');
+      showNotification('Error loading data', 'error');
+      openKeywordsJournalsModal(paperId, paperName, [], [], []);
     }
   })
   .catch(error => {
     console.error('Error:', error);
-    openKeywordsJournalsModal(paperId, paperName, [], []);
+    openKeywordsJournalsModal(paperId, paperName, [], [], []);
   });
 }
 
-function openKeywordsJournalsModal(paperId, paperName, keywords, journals) {
+function openKeywordsJournalsModal(paperId, paperName, keywords, journals, documents = []) {
   // Remove existing modal if any
   const existingModal = document.getElementById('keywordsJournalsModal');
   if (existingModal) {
@@ -2022,6 +2026,40 @@ function openKeywordsJournalsModal(paperId, paperName, keywords, journals) {
         Target Journals <span style="color: #6b7280; font-weight: 400;">(one per line)</span>
       </label>
       <textarea id="journalsInput" rows="6" placeholder="Enter journal names, one per line&#10;Example:&#10;Journal of Applied Statistics&#10;American Statistical Review&#10;Journal of Econometrics" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.875rem; font-family: inherit; resize: vertical; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e5e7eb'">${journals.join('\\n')}</textarea>
+    </div>
+    <div style="margin-bottom: 24px; padding-top: 24px; border-top: 2px solid #e5e7eb;">
+      <label style="display: block; margin-bottom: 12px; color: #374151; font-weight: 600; font-size: 0.875rem;">
+        Upload Documents <span style="color: #6b7280; font-weight: 400;">(for AI knowledge base)</span>
+      </label>
+      <div style="margin-bottom: 16px;">
+        <input type="file" id="documentUpload" multiple accept=".pdf,.doc,.docx,.txt,.md" style="display: none;" onchange="handleFileSelect(this, ${paperId})">
+        <button type="button" onclick="document.getElementById('documentUpload').click()" style="padding: 12px 20px; background: #f3f4f6; border: 2px dashed #d1d5db; border-radius: 8px; color: #374151; font-weight: 600; cursor: pointer; width: 100%; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;"
+                onmouseover="this.style.background='#e5e7eb'; this.style.borderColor='#9ca3af'" onmouseout="this.style.background='#f3f4f6'; this.style.borderColor='#d1d5db'">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          Upload Files (PDF, DOC, DOCX, TXT, MD)
+        </button>
+        <div id="uploadProgress" style="display: none; margin-top: 12px; padding: 12px; background: #f0f9ff; border-radius: 8px; font-size: 0.875rem; color: #0369a1;"></div>
+      </div>
+      <div id="documentsList" style="max-height: 200px; overflow-y: auto;">
+        ${documents.length > 0 ? documents.map(doc => `
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px; border: 1px solid #e5e7eb;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 600; color: #374151; font-size: 0.875rem; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${doc.original_filename}</div>
+              <div style="font-size: 0.75rem; color: #6b7280;">${doc.file_size_mb} MB • ${new Date(doc.uploaded_at).toLocaleDateString()}</div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;">
+              <a href="/papers/${paperId}/documents/${doc.id}/download/" target="_blank" style="padding: 6px 12px; background: #667eea; color: white; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 600; transition: background 0.2s;"
+                 onmouseover="this.style.background='#5568d3'" onmouseout="this.style.background='#667eea'">Download</a>
+              <button onclick="deleteDocument(${paperId}, ${doc.id}, '${doc.original_filename.replace(/'/g, "\\'")}')" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+                      onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Delete</button>
+            </div>
+          </div>
+        `).join('') : '<div style="padding: 12px; text-align: center; color: #6b7280; font-size: 0.875rem;">No documents uploaded yet</div>'}
+      </div>
     </div>
   `;
   
@@ -2105,6 +2143,74 @@ function openKeywordsJournalsModal(paperId, paperName, keywords, journals) {
     };
     document.addEventListener('keydown', escapeHandler);
   }, 10);
+}
+
+function handleFileSelect(input, paperId) {
+  const files = Array.from(input.files);
+  if (files.length === 0) return;
+  
+  const progressDiv = document.getElementById('uploadProgress');
+  progressDiv.style.display = 'block';
+  progressDiv.textContent = `Uploading ${files.length} file(s)...`;
+  
+  const formData = new FormData();
+  files.forEach((file, index) => {
+    formData.append('file', file);
+  });
+  
+  fetch(`/papers/${paperId}/documents/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      progressDiv.style.background = '#d1fae5';
+      progressDiv.style.color = '#065f46';
+      progressDiv.textContent = `Successfully uploaded ${files.length} file(s)!`;
+      setTimeout(() => {
+        location.reload();
+      }, 1000);
+    } else {
+      progressDiv.style.background = '#fee2e2';
+      progressDiv.style.color = '#991b1b';
+      progressDiv.textContent = data.error || 'Upload failed';
+    }
+  })
+  .catch(error => {
+    console.error('Upload error:', error);
+    progressDiv.style.background = '#fee2e2';
+    progressDiv.style.color = '#991b1b';
+    progressDiv.textContent = 'Upload failed. Please try again.';
+  });
+  
+  // Reset input
+  input.value = '';
+}
+
+function deleteDocument(paperId, documentId, filename) {
+  if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+    return;
+  }
+  
+  fetch(`/papers/${paperId}/documents/${documentId}/`, {
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': getCookie('csrftoken') }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showNotification('Document deleted successfully', 'success');
+      setTimeout(() => location.reload(), 500);
+    } else {
+      showNotification(data.error || 'Failed to delete document', 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Delete error:', error);
+    showNotification('Error deleting document', 'error');
+  });
 }
 
 function deletePaper(paperId, paperName) {

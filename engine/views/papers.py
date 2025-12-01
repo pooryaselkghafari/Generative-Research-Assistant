@@ -1,13 +1,15 @@
 """
 Views for paper management (create, edit, delete, add sessions).
 """
+import os
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q
-from engine.models import Paper, AnalysisSession
+from django.conf import settings
+from engine.models import Paper, AnalysisSession, PaperDocument
 import json
 
 
@@ -268,6 +270,123 @@ def paper_update_keywords_journals(request, paper_id):
     
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+@csrf_exempt
+def paper_documents(request, paper_id):
+    """List or upload documents for a paper."""
+    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    
+    if request.method == 'GET':
+        # Return list of documents
+        documents = paper.get_documents()
+        documents_data = [{
+            'id': doc.id,
+            'original_filename': doc.original_filename,
+            'file_size': doc.file_size,
+            'file_size_mb': doc.file_size_mb,
+            'file_type': doc.file_type,
+            'uploaded_at': doc.uploaded_at.isoformat(),
+            'description': doc.description,
+            'url': doc.file.url if doc.file else None,
+        } for doc in documents]
+        
+        return JsonResponse({
+            'success': True,
+            'documents': documents_data,
+        })
+    
+    # POST - Upload new document
+    if 'file' not in request.FILES:
+        return JsonResponse({'error': 'No file provided'}, status=400)
+    
+    try:
+        uploaded_file = request.FILES['file']
+        description = request.POST.get('description', '').strip()
+        
+        # Validate file size (max 50MB for documents)
+        MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+        if uploaded_file.size > MAX_FILE_SIZE:
+            return JsonResponse({
+                'error': f'File size ({uploaded_file.size / (1024*1024):.2f} MB) exceeds maximum allowed size of 50 MB'
+            }, status=400)
+        
+        # Get file type from content type or extension
+        file_type = uploaded_file.content_type or os.path.splitext(uploaded_file.name)[1]
+        
+        # Create document record
+        document = PaperDocument.objects.create(
+            paper=paper,
+            file=uploaded_file,
+            original_filename=uploaded_file.name,
+            file_size=uploaded_file.size,
+            file_type=file_type,
+            description=description,
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Document uploaded successfully',
+            'document': {
+                'id': document.id,
+                'original_filename': document.original_filename,
+                'file_size': document.file_size,
+                'file_size_mb': document.file_size_mb,
+                'file_type': document.file_type,
+                'uploaded_at': document.uploaded_at.isoformat(),
+                'description': document.description,
+            }
+        })
+    
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+@csrf_exempt
+def paper_document_delete(request, paper_id, document_id):
+    """Delete a document from a paper."""
+    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    document = get_object_or_404(PaperDocument, pk=document_id, paper=paper)
+    
+    try:
+        # Delete the file from storage
+        if document.file:
+            file_path = document.file.path
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        
+        # Delete the document record
+        document.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Document deleted successfully'
+        })
+    
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def paper_document_download(request, paper_id, document_id):
+    """Download a document (with security check)."""
+    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    document = get_object_or_404(PaperDocument, pk=document_id, paper=paper)
+    
+    if not document.file:
+        return JsonResponse({'error': 'File not found'}, status=404)
+    
+    try:
+        response = FileResponse(open(document.file.path, 'rb'))
+        response['Content-Disposition'] = f'attachment; filename="{document.original_filename}"'
+        return response
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
