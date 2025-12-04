@@ -171,7 +171,8 @@ class VisualizationService:
         """
         from models.ANOVA import generate_anova_plot
         
-        df, column_types, schema_orders = _read_dataset_file(session.dataset.file_path)
+        user_id = session.dataset.user.id if session.dataset.user else None
+        df, column_types, schema_orders = _read_dataset_file(session.dataset.file_path, user_id=user_id)
         
         return generate_anova_plot(
             df,
