@@ -372,9 +372,6 @@
           <table class="table">
             <thead>
               <tr>
-                {% if results.n_equations > 1 %}
-                <th>Equation</th>
-                {% endif %}
                 <th>Variable</th>
                 <th>Coefficient</th>
                 <th>Std. Error</th>
@@ -386,9 +383,6 @@
             <tbody>
               {% for param in results.params %}
               <tr>
-                {% if results.n_equations > 1 %}
-                <td><strong>{{ param.equation }}</strong></td>
-                {% endif %}
                 <td><strong>{{ param.variable }}</strong></td>
                 <td>{{ param.param|floatformat:4 }}</td>
                 <td>{{ param.std_err|floatformat:4 }}</td>
