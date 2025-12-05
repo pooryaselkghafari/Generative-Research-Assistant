@@ -1,11 +1,18 @@
 import re
 import numpy as np
 import pandas as pd
-from linearmodels.system import SUR, IV3SLS
-from linearmodels.iv import IV2SLS
 from statsmodels.stats.stattools import durbin_watson
 from statsmodels.stats.diagnostic import het_breuschpagan
 from scipy.stats import jarque_bera
+
+# Import linearmodels with error handling
+try:
+    from linearmodels.system import SUR, IV3SLS
+    from linearmodels.iv import IV2SLS
+    LINEARMODELS_AVAILABLE = True
+except ImportError:
+    LINEARMODELS_AVAILABLE = False
+    print("Warning: linearmodels not available. Install with: pip install linearmodels>=5.0.0")
 
 
 # ===================================================================
@@ -137,6 +144,8 @@ def estimate_system(formulas, data, method="SUR"):
     formulas: list of equation strings
     method: "SUR", "2SLS", "3SLS"
     """
+    if not LINEARMODELS_AVAILABLE:
+        raise ImportError("linearmodels package is required for structural model estimation. Install with: pip install linearmodels>=5.0.0")
 
     # 1. Identification Check
     id_results = check_identification(formulas)
@@ -283,6 +292,12 @@ class StructuralModelModule:
         Returns:
         Dictionary with estimation results
         """
+        if not LINEARMODELS_AVAILABLE:
+            return {
+                'error': 'linearmodels package is not installed. Please install it with: pip install linearmodels>=5.0.0',
+                'has_results': False
+            }
+        
         try:
             # Get method from options, default to SUR
             method = options.get('method', 'SUR') if options else 'SUR'
