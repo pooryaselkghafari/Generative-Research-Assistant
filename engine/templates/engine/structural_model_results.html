@@ -362,13 +362,13 @@
     {% endif %}
 
     <!-- Parameter Estimates - Separate tables for each equation -->
-    {% for i in "123456789"|make_list %}
+    {% regroup results.params|dictsort:"equation" by equation as params_by_equation %}
+    {% for equation_group in params_by_equation %}
       {% if forloop.counter <= results.n_equations %}
-        {% with eq_num=forloop.counter %}
     <section class="card">
       <div class="card-head">
-        <h3 class="card-title">Parameter Estimates - eq{{ eq_num }}</h3>
-        <div class="muted small">Coefficient estimates for equation: <code>eq{{ eq_num }}</code></div>
+        <h3 class="card-title">Parameter Estimates - {{ equation_group.grouper }}</h3>
+        <div class="muted small">Coefficient estimates for equation: <code>{{ equation_group.grouper }}</code></div>
       </div>
       <div class="card-body">
         <div class="table-wrap">
@@ -384,8 +384,7 @@
               </tr>
             </thead>
             <tbody>
-              {% for param in results.params %}
-                {% if param.equation == "eq"|add:eq_num|stringformat:"s" %}
+              {% for param in equation_group.list %}
               <tr>
                 <td><strong>{{ param.variable }}</strong></td>
                 <td>{{ param.param|floatformat:4 }}</td>
@@ -404,7 +403,6 @@
                   {% endif %}
                 </td>
               </tr>
-                {% endif %}
               {% endfor %}
             </tbody>
           </table>
@@ -414,7 +412,6 @@
         </div>
       </div>
     </section>
-        {% endwith %}
       {% endif %}
     {% endfor %}
 
