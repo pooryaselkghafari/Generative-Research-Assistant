@@ -41,9 +41,13 @@ def parse_equation(formula):
     instruments = []
     if endog_blocks:
         for block in endog_blocks:
-            left, right = block.split("~")
-            endog_var = left.strip()
-            instr_vars = [v.strip() for v in right.split("+")]
+            # Split by ~ to get endogenous variable and instruments
+            block_parts = block.split("~")
+            if len(block_parts) != 2:
+                raise ValueError(f"Invalid bracket notation: [{block}]. Expected format: [endogenous ~ instrument1 + instrument2]")
+            left, right = block_parts[0].strip(), block_parts[1].strip()
+            endog_var = left
+            instr_vars = [v.strip() for v in right.split("+") if v.strip()]
             endog.append(endog_var)
             instruments += instr_vars
 
@@ -266,7 +270,44 @@ def estimate_system(formulas, data, method="SUR"):
             raise ValueError("2SLS supports only one equation at a time")
 
         formula = formulas[0]
-        model = IV2SLS.from_formula(formula, data=data)
+        parsed = parse_equation(formula)
+        
+        # Convert our format to linearmodels format
+        # linearmodels expects: y ~ [endogenous ~ instruments] + exogenous
+        # or: y ~ exogenous + [endogenous ~ instruments]
+        
+        # Build the formula for linearmodels
+        dependent = parsed["dependent"]
+        exog_vars = parsed["exog"]
+        endog_vars = parsed["endog"]
+        instruments = parsed["instr"]
+        
+        if not endog_vars:
+            raise ValueError("2SLS requires at least one endogenous variable with instruments. Use bracket notation: [endogenous ~ instrument1 + instrument2]")
+        
+        if len(instruments) < len(endog_vars):
+            raise ValueError(f"Insufficient instruments: need at least {len(endog_vars)} instrument(s) for {len(endog_vars)} endogenous variable(s)")
+        
+        # Build formula: y ~ exog + [endog ~ instruments]
+        # If multiple endogenous, group them: y ~ exog + [endog1 + endog2 ~ instr1 + instr2]
+        formula_parts = [dependent, "~"]
+        
+        # Add exogenous variables
+        if exog_vars:
+            formula_parts.append(" + ".join(exog_vars))
+        
+        # Add endogenous variables with instruments
+        if endog_vars:
+            endog_str = " + ".join(endog_vars)
+            instr_str = " + ".join(instruments)
+            if exog_vars:
+                formula_parts.append(f" + [{endog_str} ~ {instr_str}]")
+            else:
+                formula_parts.append(f"[{endog_str} ~ {instr_str}]")
+        
+        linearmodels_formula = " ".join(formula_parts)
+        
+        model = IV2SLS.from_formula(linearmodels_formula, data=data)
         res = model.fit(cov_type="robust")
 
         params = pd.DataFrame({
