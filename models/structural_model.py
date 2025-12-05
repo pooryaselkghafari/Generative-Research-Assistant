@@ -254,7 +254,7 @@ class StructuralModelModule:
             'formula': {
                 'type': 'text',
                 'label': 'Equations',
-                'help': 'Enter equations separated by semicolons. For endogenous variables, use [var ~ instruments]. Example: "y1 ~ x1 + x2; y2 ~ x1 + [x3 ~ z1 + z2]"',
+                'help': 'Enter equations separated by newlines (one per line) or semicolons. For endogenous variables, use [var ~ instruments]. Example: "y1 ~ x1 + x2\ny2 ~ x1 + [x3 ~ z1 + z2]"',
                 'required': True
             },
             'method': {
@@ -287,15 +287,18 @@ class StructuralModelModule:
             # Get method from options, default to SUR
             method = options.get('method', 'SUR') if options else 'SUR'
             
-            # Parse formula - split by semicolon to get multiple equations
-            if ';' in formula:
+            # Parse formula - split by newlines or semicolons to get multiple equations
+            # First try newlines (one equation per line), then semicolons as fallback
+            if '\n' in formula:
+                formulas = [f.strip() for f in formula.split('\n') if f.strip() and '~' in f]
+            elif ';' in formula:
                 formulas = [f.strip() for f in formula.split(';') if f.strip()]
             else:
                 formulas = [formula.strip()]
             
             if not formulas:
                 return {
-                    'error': 'No equations provided. Use semicolons to separate multiple equations.',
+                    'error': 'No equations provided. Use newlines or semicolons to separate multiple equations.',
                     'has_results': False
                 }
             

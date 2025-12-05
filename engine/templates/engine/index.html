@@ -955,13 +955,35 @@ function validateEquationModelMatch(formula, moduleValue) {
   // Check for multi-equation format (multiple lines with ~)
   if (equationCount > 1) {
     console.log('✓ MULTI-EQUATION FORMAT DETECTED:', equationCount, 'equations');
-    // Only regression model supports multi-equation format
-    if (moduleValue !== 'regression') {
+    // Regression and structural models support multi-equation format
+    if (moduleValue !== 'regression' && moduleValue !== 'structural') {
       return {
         valid: false,
         error: 'Multi-equation format not supported',
-        message: `You have ${equationCount} equation(s) (one per line), but ${moduleValue.toUpperCase()} models only support a single equation.\n\nPlease use only one equation, or select Regression model for multiple equations.`
+        message: `You have ${equationCount} equation(s) (one per line), but ${moduleValue.toUpperCase()} models only support a single equation.\n\nPlease use only one equation, or select Regression/Structural model for multiple equations.`
       };
+    }
+    
+    // For structural models with multiple equations, each equation should have exactly 1 DV
+    if (moduleValue === 'structural') {
+      const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0 && line.includes('~'));
+      console.log('Validating each structural equation has exactly 1 DV...');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lhs = line.split('~')[0].trim();
+        const vars = lhs.split('+').map(v => v.trim()).filter(v => v.length > 0);
+        console.log(`  Line ${i + 1}: "${line}" - DVs: ${vars.length} (${vars.join(', ')})`);
+        if (vars.length > 1) {
+          console.log('✗ VALIDATION FAILED: Line', i + 1, 'has', vars.length, 'dependent variables');
+          console.log('=== END VALIDATE EQUATION MODEL MATCH DIAGNOSTICS ===');
+          return {
+            valid: false,
+            error: 'Multiple dependent variables in one equation',
+            message: `Line ${i + 1} has ${vars.length} dependent variable(s). In structural models, each equation must have exactly one dependent variable.\n\nPlease use one dependent variable per line, for example:\ny1 ~ x1 + x2\ny2 ~ x1 + [x3 ~ z1 + z2]`
+          };
+        }
+      }
+      console.log('✓ All structural equations validated: each has exactly 1 DV');
     }
     // For regression with multiple equations, each equation should have exactly 1 DV
     const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0 && line.includes('~'));
@@ -1000,8 +1022,8 @@ function validateEquationModelMatch(formula, moduleValue) {
         message: `Your equation has ${dvCount} dependent variable(s), but VARX/VARMAX requires at least 2 dependent variables.\n\nPlease add more dependent variables before the ~ symbol, for example:\ny1 + y2 ~ x1 + x2`
       };
     }
-  } else if (moduleValue !== 'regression' || equationCount === 1) {
-    // For non-regression models, or single-equation regression, require exactly 1 dependent variable
+  } else if ((moduleValue !== 'regression' && moduleValue !== 'structural') || equationCount === 1) {
+    // For non-regression/structural models, or single-equation regression/structural, require exactly 1 dependent variable
     if (dvCount > 1) {
       return {
         valid: false,
