@@ -1580,6 +1580,8 @@ function updateAnalysisTypeToggle() {
       radio.checked = false;
       radio.disabled = true;
     });
+    // Update equation box example based on selected method
+    updateStructuralEquationExample();
   } else {
     // Enable analysis type toggle for other models
     analysisTypeContainer.style.display = 'block';
@@ -1591,6 +1593,39 @@ function updateAnalysisTypeToggle() {
     if (!document.querySelector('input[name="analysis_type"]:checked')) {
       document.querySelector('input[name="analysis_type"][value="frequentist"]').checked = true;
     }
+  }
+}
+
+// Function to update equation box with example when 2SLS or 3SLS is selected
+function updateStructuralEquationExample() {
+  const equationBox = document.getElementById('equationBox');
+  const structuralMethod = document.querySelector('input[name="structural_method"]:checked')?.value;
+  
+  if (!equationBox) return;
+  
+  // Only update if textarea is empty or has default placeholder text
+  const currentValue = equationBox.value.trim();
+  const hasUserContent = currentValue.length > 0 && 
+                         !currentValue.includes('Example:') && 
+                         !currentValue.includes('y1 ~ x1 + [x2 ~ z1 + z2]');
+  
+  if (hasUserContent) {
+    // Don't overwrite user's input
+    return;
+  }
+  
+  if (structuralMethod === '2SLS') {
+    // 2SLS example (single equation with instruments)
+    equationBox.value = 'y1 ~ x1 + x2 + [x3 ~ z1 + z2 + z3]';
+    equationBox.placeholder = 'Enter equation with instruments in brackets [endogenous ~ instrument1 + instrument2]\n\nExample:\ny1 ~ x1 + x2 + [x3 ~ z1 + z2 + z3]';
+  } else if (structuralMethod === '3SLS') {
+    // 3SLS example (multiple equations with instruments)
+    equationBox.value = 'y1 ~ x1 + [x2 ~ z1 + z2]\ny2 ~ x1 + x2 + [x3 ~ z3 + z4]';
+    equationBox.placeholder = 'Enter equations (one per line) with instruments in brackets [endogenous ~ instrument1 + instrument2]\n\nExample:\ny1 ~ x1 + [x2 ~ z1 + z2]\ny2 ~ x1 + x2 + [x3 ~ z3 + z4]';
+  } else if (structuralMethod === 'SUR') {
+    // SUR example (multiple equations, no instruments needed)
+    equationBox.value = '';
+    equationBox.placeholder = 'Enter equations separated by newlines (one per line)\n\nExample:\ny1 ~ x1 + x2\ny2 ~ x1 + x3';
   }
 }
 
