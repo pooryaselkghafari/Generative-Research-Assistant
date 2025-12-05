@@ -969,6 +969,18 @@ function validateEquationModelMatch(formula, moduleValue) {
     
     // For structural models with multiple equations, each equation should have exactly 1 DV
     if (moduleValue === 'structural') {
+      // Check if 2SLS is selected with multiple equations
+      const structuralMethod = document.querySelector('input[name="structural_method"]:checked')?.value;
+      if (structuralMethod === '2SLS' && equationCount > 1) {
+        console.log('✗ VALIDATION FAILED: 2SLS with multiple equations');
+        console.log('=== END VALIDATE EQUATION MODEL MATCH DIAGNOSTICS ===');
+        return {
+          valid: false,
+          error: '2SLS supports only one equation',
+          message: `You have ${equationCount} equation(s), but 2SLS only supports a single equation.\n\nPlease use only one equation for 2SLS, or select SUR/3SLS method for multiple equations.`
+        };
+      }
+      
       console.log('Validating each structural equation has exactly 1 DV...');
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
