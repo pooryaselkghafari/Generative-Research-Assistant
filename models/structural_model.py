@@ -349,11 +349,32 @@ def estimate_system(formulas, data, method="SUR"):
             "p": res.pvalues.values
         })
 
+        # Get dependent variable data - IVData object has different structure
+        # Try different ways to access the dependent variable
+        if hasattr(res.model.dependent, 'data'):
+            y_data = res.model.dependent.data
+        elif hasattr(res.model.dependent, 'values'):
+            y_data = res.model.dependent.values
+        elif hasattr(res.model, 'dependent'):
+            # Try accessing through the model
+            y_data = res.model.dependent
+        else:
+            # Fallback: use fitted_values + residuals to reconstruct
+            y_data = res.fitted_values + res.resids
+        
+        # Get exogenous data - similar issue with IVData
+        if hasattr(res.model.exog, 'data'):
+            X_data = res.model.exog.data
+        elif hasattr(res.model.exog, 'values'):
+            X_data = res.model.exog.values
+        else:
+            X_data = res.model.exog
+
         diag = diagnostics(
-            res.model.dependent.data,
-            res.fitted_values,
-            res.model.exog,
-            res.resids,
+            y_data,
+            res.fitted_values.values if hasattr(res.fitted_values, 'values') else res.fitted_values,
+            X_data,
+            res.resids.values if hasattr(res.resids, 'values') else res.resids,
             name="2SLS"
         )
 
