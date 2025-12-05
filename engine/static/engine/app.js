@@ -1960,7 +1960,11 @@ Examples:
     
     // Check if this is a multi-line equation (multiple equations, one per line)
     const lines = equation.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    const equationLines = lines.filter(line => line.includes('~'));
+    // Filter lines that have ~ outside of bracket notation
+    const equationLines = lines.filter(line => {
+      const lineWithoutBrackets = line.replace(/\[[^\]]*\]/g, '');
+      return lineWithoutBrackets.includes('~');
+    });
     
     // DIAGNOSTICS: Log equation detection
     console.log('=== PARSE EQUATION DIAGNOSTICS ===');
