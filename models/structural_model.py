@@ -319,8 +319,17 @@ def estimate_system(formulas, data, method="SUR"):
         # Combine: y ~ [endog ~ instruments] + exog1 + exog2
         linearmodels_formula = f"{dependent} ~ {' + '.join(rhs_parts)}"
         
-        model = IV2SLS.from_formula(linearmodels_formula, data=data)
-        res = model.fit(cov_type="robust")
+        # Debug: print the formula being passed to linearmodels
+        print(f"DEBUG: 2SLS formula for linearmodels: {linearmodels_formula}")
+        print(f"DEBUG: Parsed components - dependent: {dependent}, exog: {exog_vars}, endog: {endog_vars}, instruments: {instruments}")
+        
+        try:
+            model = IV2SLS.from_formula(linearmodels_formula, data=data)
+            res = model.fit(cov_type="robust")
+        except Exception as e:
+            print(f"ERROR in IV2SLS.from_formula: {type(e).__name__}: {str(e)}")
+            print(f"ERROR: Formula was: {linearmodels_formula}")
+            raise ValueError(f"Error estimating 2SLS model: {str(e)}. Formula: {linearmodels_formula}")
 
         params = pd.DataFrame({
             "variable": res.params.index,
