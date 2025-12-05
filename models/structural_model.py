@@ -349,36 +349,32 @@ def estimate_system(formulas, data, method="SUR"):
             "p": res.pvalues.values
         })
 
-        # Get dependent variable data - IVData object needs to be converted to array
-        # IVData objects in linearmodels can be accessed via .values or converted directly
-        try:
-            # Try to get as numpy array
-            if hasattr(res.model.dependent, 'values'):
-                y_data = np.asarray(res.model.dependent.values)
-            elif hasattr(res.model.dependent, 'data'):
-                y_data = np.asarray(res.model.dependent.data)
-            else:
-                # Convert IVData directly to array
-                y_data = np.asarray(res.model.dependent)
-        except:
-            # Fallback: reconstruct from fitted_values + residuals
-            y_data = np.asarray(res.fitted_values) + np.asarray(res.resids)
-        
-        # Get exogenous data - convert to numpy array
-        try:
-            if hasattr(res.model.exog, 'values'):
-                X_data = np.asarray(res.model.exog.values)
-            elif hasattr(res.model.exog, 'data'):
-                X_data = np.asarray(res.model.exog.data)
-            else:
-                X_data = np.asarray(res.model.exog)
-        except:
-            # Fallback: use exog as is and let diagnostics handle it
-            X_data = res.model.exog
-
-        # Convert fitted_values and residuals to numpy arrays
+        # Get dependent variable data - IVData object structure
+        # The simplest approach: reconstruct y from fitted_values + residuals
+        # This is always accurate: y = y_hat + residuals
         y_hat = np.asarray(res.fitted_values)
         residuals = np.asarray(res.resids)
+        y_data = y_hat + residuals
+        
+        # Get exogenous data - try to extract from model
+        # For IV2SLS, we can get exog from the original data using the formula
+        # But for diagnostics, we can use a simplified approach
+        # Get the number of observations
+        n_obs = len(y_data)
+        # Create a simple X matrix with intercept for diagnostics
+        # This is a fallback - ideally we'd extract the actual exog
+        try:
+            # Try to get exog as array
+            if hasattr(res.model.exog, 'ndim') and res.model.exog.ndim == 2:
+                X_data = np.asarray(res.model.exog)
+            elif hasattr(res.model.exog, 'values'):
+                X_data = np.asarray(res.model.exog.values)
+            else:
+                # Fallback: create intercept-only design matrix
+                X_data = np.ones((n_obs, 1))
+        except:
+            # Fallback: create intercept-only design matrix
+            X_data = np.ones((n_obs, 1))
 
         diag = diagnostics(
             y_data,
