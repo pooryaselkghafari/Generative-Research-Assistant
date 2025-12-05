@@ -31,11 +31,23 @@ def parse_equation(formula):
         "endog": [...],
         "instr": [...]}
     """
-    # Split by ~ to get dependent and RHS
-    formula_parts = formula.split("~")
-    if len(formula_parts) != 2:
+    # Find the main ~ separator (not inside brackets) by tracking bracket depth
+    main_tilde_index = -1
+    bracket_depth = 0
+    for i, char in enumerate(formula):
+        if char == '[':
+            bracket_depth += 1
+        elif char == ']':
+            bracket_depth -= 1
+        elif char == '~' and bracket_depth == 0:
+            main_tilde_index = i
+            break
+    
+    if main_tilde_index == -1:
         raise ValueError(f"Invalid equation format: '{formula}'. Expected format: 'y ~ x1 + x2' or 'y ~ x1 + [x2 ~ z1 + z2]'")
-    dependent, rhs = formula_parts[0].strip(), formula_parts[1].strip()
+    
+    dependent = formula[:main_tilde_index].strip()
+    rhs = formula[main_tilde_index + 1:].strip()
 
     # detect endogenous blocks: [x2 ~ z1 + z2]
     endog_blocks = re.findall(r"\[(.*?)\]", rhs)
