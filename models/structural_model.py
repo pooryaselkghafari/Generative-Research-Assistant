@@ -292,15 +292,17 @@ def estimate_system(formulas, data, method="SUR"):
             raise ValueError(f"Insufficient instruments: need at least {len(endog_vars)} instrument(s) for {len(endog_vars)} endogenous variable(s)")
         
         # Build formula for linearmodels IV2SLS
-        # Format: y ~ [endog ~ instruments] + exog
-        # or: y ~ exog + [endog ~ instruments]
-        # For single endogenous: y ~ [x ~ z] + exog
-        # For multiple endogenous: y ~ [x1 + x2 ~ z1 + z2] + exog
+        # linearmodels format: y ~ exog1 + exog2 + [endog ~ instruments]
+        # The exogenous variables come first, then the endogenous in brackets
         
-        # Build RHS
+        # Build RHS parts
         rhs_parts = []
         
-        # Add endogenous variables with instruments in brackets
+        # Add exogenous variables first
+        if exog_vars:
+            rhs_parts.extend(exog_vars)
+        
+        # Add endogenous variables with instruments in brackets (must come after exog)
         if len(endog_vars) == 1:
             # Single endogenous variable
             endog_str = endog_vars[0]
@@ -312,11 +314,7 @@ def estimate_system(formulas, data, method="SUR"):
             instr_str = " + ".join(instruments)
             rhs_parts.append(f"[{endog_str} ~ {instr_str}]")
         
-        # Add exogenous variables
-        if exog_vars:
-            rhs_parts.extend(exog_vars)
-        
-        # Combine: y ~ [endog ~ instruments] + exog1 + exog2
+        # Combine: y ~ exog1 + exog2 + [endog ~ instruments]
         linearmodels_formula = f"{dependent} ~ {' + '.join(rhs_parts)}"
         
         # Debug: print the formula being passed to linearmodels
