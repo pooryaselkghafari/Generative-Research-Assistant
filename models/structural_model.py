@@ -349,32 +349,42 @@ def estimate_system(formulas, data, method="SUR"):
             "p": res.pvalues.values
         })
 
-        # Get dependent variable data - IVData object has different structure
-        # Try different ways to access the dependent variable
-        if hasattr(res.model.dependent, 'data'):
-            y_data = res.model.dependent.data
-        elif hasattr(res.model.dependent, 'values'):
-            y_data = res.model.dependent.values
-        elif hasattr(res.model, 'dependent'):
-            # Try accessing through the model
-            y_data = res.model.dependent
-        else:
-            # Fallback: use fitted_values + residuals to reconstruct
-            y_data = res.fitted_values + res.resids
+        # Get dependent variable data - IVData object needs to be converted to array
+        # IVData objects in linearmodels can be accessed via .values or converted directly
+        try:
+            # Try to get as numpy array
+            if hasattr(res.model.dependent, 'values'):
+                y_data = np.asarray(res.model.dependent.values)
+            elif hasattr(res.model.dependent, 'data'):
+                y_data = np.asarray(res.model.dependent.data)
+            else:
+                # Convert IVData directly to array
+                y_data = np.asarray(res.model.dependent)
+        except:
+            # Fallback: reconstruct from fitted_values + residuals
+            y_data = np.asarray(res.fitted_values) + np.asarray(res.resids)
         
-        # Get exogenous data - similar issue with IVData
-        if hasattr(res.model.exog, 'data'):
-            X_data = res.model.exog.data
-        elif hasattr(res.model.exog, 'values'):
-            X_data = res.model.exog.values
-        else:
+        # Get exogenous data - convert to numpy array
+        try:
+            if hasattr(res.model.exog, 'values'):
+                X_data = np.asarray(res.model.exog.values)
+            elif hasattr(res.model.exog, 'data'):
+                X_data = np.asarray(res.model.exog.data)
+            else:
+                X_data = np.asarray(res.model.exog)
+        except:
+            # Fallback: use exog as is and let diagnostics handle it
             X_data = res.model.exog
+
+        # Convert fitted_values and residuals to numpy arrays
+        y_hat = np.asarray(res.fitted_values)
+        residuals = np.asarray(res.resids)
 
         diag = diagnostics(
             y_data,
-            res.fitted_values.values if hasattr(res.fitted_values, 'values') else res.fitted_values,
+            y_hat,
             X_data,
-            res.resids.values if hasattr(res.resids, 'values') else res.resids,
+            residuals,
             name="2SLS"
         )
 
