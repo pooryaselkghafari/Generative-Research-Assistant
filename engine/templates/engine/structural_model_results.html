@@ -26,56 +26,128 @@
     margin: 20px 0;
   }
   
+  .modern-results-header {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .regression-type-badge {
+    display: inline-block;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 16px;
+  }
+  
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+    flex-wrap: wrap;
+  }
+  
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #6b7280;
+  }
+  
+  .meta-icon {
+    width: 16px;
+    height: 16px;
+    color: #9ca3af;
+  }
+  
+  .meta-label {
+    font-weight: 500;
+  }
+  
+  .meta-value {
+    color: #374151;
+  }
+  
+  .meta-divider {
+    width: 1px;
+    height: 16px;
+    background: #e5e7eb;
+  }
+  
   .results-container {
     display: flex;
     flex-direction: column;
     gap: 24px;
-    margin-top: 24px;
   }
   
-  .results-section {
+  .card {
     background: white;
-    border-radius: 8px;
-    padding: 20px;
+    border-radius: 12px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
   }
   
-  .results-section h2 {
-    margin-top: 0;
-    margin-bottom: 16px;
-    color: #1f2937;
-    font-size: 1.25rem;
+  .card-head {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+  }
+  
+  .card-title {
+    margin: 0;
+    font-size: 1.125rem;
     font-weight: 600;
+    color: #1f2937;
   }
   
-  .table-container {
+  .card-body {
+    padding: 24px;
+  }
+  
+  .table-wrap {
     overflow-x: auto;
-    margin-top: 16px;
   }
   
-  table {
+  .table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.875rem;
   }
   
-  table th {
+  .table thead {
     background: #f9fafb;
-    padding: 12px;
+  }
+  
+  .table th {
+    padding: 12px 16px;
     text-align: left;
     font-weight: 600;
     color: #374151;
     border-bottom: 2px solid #e5e7eb;
+    white-space: nowrap;
   }
   
-  table td {
-    padding: 12px;
+  .table td {
+    padding: 12px 16px;
     border-bottom: 1px solid #e5e7eb;
     color: #6b7280;
   }
   
-  table tr:hover {
+  .table tbody tr:hover {
     background: #f9fafb;
+  }
+  
+  .table tbody tr:last-child td {
+    border-bottom: none;
   }
   
   .stars {
@@ -87,21 +159,39 @@
   .star-1 { color: #f59e0b; }
   
   .identification-status {
-    padding: 12px;
-    border-radius: 6px;
-    margin-bottom: 8px;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border-left: 4px solid;
   }
   
   .identification-ok {
     background: #d1fae5;
     color: #065f46;
-    border-left: 4px solid #10b981;
+    border-left-color: #10b981;
   }
   
   .identification-error {
     background: #fee2e2;
     color: #991b1b;
-    border-left: 4px solid #ef4444;
+    border-left-color: #ef4444;
+  }
+  
+  .equation-display {
+    font-family: 'Courier New', monospace;
+    background: #f9fafb;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-top: 8px;
+    color: #374151;
+  }
+  
+  .muted {
+    color: #6b7280;
+  }
+  
+  .small {
+    font-size: 0.75rem;
   }
 </style>
 {% endblock %}
@@ -163,144 +253,227 @@
 {% endblock %}
 
 {% block content %}
-<div class="results-container">
   {% if results.error %}
   <div class="error-message">
     <strong>Error:</strong> {{ results.error }}
   </div>
   {% elif results.has_results %}
   
-  <!-- Model Summary -->
-  <div class="results-section">
-    <h2>Model Summary</h2>
-    <p><strong>Method:</strong> {{ method }}</p>
-    <p><strong>Number of Equations:</strong> {{ results.n_equations }}</p>
-    <p><strong>Number of Observations:</strong> {{ results.n_obs|floatformat:0 }}</p>
-    {% if results.rsquared %}
-    <p><strong>R²:</strong> {{ results.rsquared|floatformat:4 }}</p>
-    {% endif %}
-    {% if results.rsquared_adj %}
-    <p><strong>Adjusted R²:</strong> {{ results.rsquared_adj|floatformat:4 }}</p>
-    {% endif %}
+  <!-- Modern Results Header -->
+  <div class="modern-results-header">
+    <div class="header-main">
+      <div class="regression-type-badge">
+        <span class="regression-type">{{ method }} Model</span>
+      </div>
+      <div class="header-actions">
+        {% if dataset %}
+        <a class="modern-edit-btn" href="{% url 'dataprep_open' dataset.id %}" onclick="event.preventDefault(); window.sbOpenModal(this.href);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+          Edit Dataset
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <span class="meta-label">Dataset:</span>
+        <span class="meta-value">{{ dataset.name }}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="meta-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <span class="meta-label">Equations:</span>
+        <span class="meta-value">{{ results.n_equations }}</span>
+      </div>
+      <div class="meta-divider"></div>
+      <div class="meta-item">
+        <span class="meta-label">Observations:</span>
+        <span class="meta-value">{{ results.n_obs|floatformat:0 }}</span>
+      </div>
+    </div>
   </div>
 
-  <!-- Identification Check -->
-  {% if results.identification %}
-  <div class="results-section">
-    <h2>Identification Check</h2>
-    {% for id_check in results.identification %}
-    <div class="identification-status {% if id_check.identified %}identification-ok{% else %}identification-error{% endif %}">
-      <strong>Equation:</strong> {{ id_check.equation }}<br>
-      <strong>Status:</strong> {% if id_check.identified %}✓ Identified{% else %}✗ Not Identified{% endif %}<br>
-      <strong>Reason:</strong> {{ id_check.reason }}
-    </div>
+  <div class="results-container">
+    <!-- Model Summary -->
+    <section class="card">
+      <div class="card-head">
+        <h3 class="card-title">Model Summary</h3>
+      </div>
+      <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+          <div>
+            <div class="muted small" style="margin-bottom: 4px;">Method</div>
+            <div style="font-weight: 600; color: #1f2937;">{{ method }}</div>
+          </div>
+          <div>
+            <div class="muted small" style="margin-bottom: 4px;">Number of Equations</div>
+            <div style="font-weight: 600; color: #1f2937;">{{ results.n_equations }}</div>
+          </div>
+          <div>
+            <div class="muted small" style="margin-bottom: 4px;">Number of Observations</div>
+            <div style="font-weight: 600; color: #1f2937;">{{ results.n_obs|floatformat:0 }}</div>
+          </div>
+          {% if results.rsquared %}
+          <div>
+            <div class="muted small" style="margin-bottom: 4px;">R²</div>
+            <div style="font-weight: 600; color: #1f2937;">{{ results.rsquared|floatformat:4 }}</div>
+          </div>
+          {% endif %}
+          {% if results.rsquared_adj %}
+          <div>
+            <div class="muted small" style="margin-bottom: 4px;">Adjusted R²</div>
+            <div style="font-weight: 600; color: #1f2937;">{{ results.rsquared_adj|floatformat:4 }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- Identification Check -->
+    {% if results.identification %}
+    <section class="card">
+      <div class="card-head">
+        <h3 class="card-title">Identification Check</h3>
+        <div class="muted small">Verification of identification conditions for each equation</div>
+      </div>
+      <div class="card-body">
+        {% for id_check in results.identification %}
+        <div class="identification-status {% if id_check.identified %}identification-ok{% else %}identification-error{% endif %}">
+          <div style="margin-bottom: 8px;">
+            <strong>Equation:</strong> <code style="background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px;">{{ id_check.equation }}</code>
+          </div>
+          <div style="margin-bottom: 4px;">
+            <strong>Status:</strong> {% if id_check.identified %}✓ Identified{% else %}✗ Not Identified{% endif %}
+          </div>
+          <div>
+            <strong>Reason:</strong> {{ id_check.reason }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Parameter Estimates - Separate tables for each equation -->
+    {% regroup results.params by equation as params_by_equation %}
+    {% for equation_group in params_by_equation %}
+    <section class="card">
+      <div class="card-head">
+        <h3 class="card-title">Parameter Estimates - {{ equation_group.grouper }}</h3>
+        <div class="muted small">Coefficient estimates for equation: <code>{{ equation_group.grouper }}</code></div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>Coefficient</th>
+                <th>Std. Error</th>
+                <th>t-statistic</th>
+                <th>p-value</th>
+                <th>Significance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for param in equation_group.list %}
+              <tr>
+                <td><strong>{{ param.variable }}</strong></td>
+                <td>{{ param.param|floatformat:4 }}</td>
+                <td>{{ param.std_err|floatformat:4 }}</td>
+                <td>{{ param.t|floatformat:4 }}</td>
+                <td>{{ param.p|floatformat:4 }}</td>
+                <td class="stars">
+                  {% if param.p < 0.001 %}
+                    <span class="star-3">***</span>
+                  {% elif param.p < 0.01 %}
+                    <span class="star-2">**</span>
+                  {% elif param.p < 0.05 %}
+                    <span class="star-1">*</span>
+                  {% else %}
+                    <span style="color: #9ca3af;">-</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top: 12px; font-size: 0.75rem; color: #6b7280;">
+          <p><strong>Significance levels:</strong> *** p&lt;0.001, ** p&lt;0.01, * p&lt;0.05</p>
+        </div>
+      </div>
+    </section>
     {% endfor %}
-  </div>
-  {% endif %}
 
-  <!-- Parameter Estimates -->
-  <div class="results-section">
-    <h2>Parameter Estimates</h2>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            {% if results.n_equations > 1 %}
-            <th>Equation</th>
-            {% endif %}
-            <th>Variable</th>
-            <th>Coefficient</th>
-            <th>Std. Error</th>
-            <th>t-statistic</th>
-            <th>p-value</th>
-            <th>Significance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for param in results.params %}
-          <tr>
-            {% if results.n_equations > 1 %}
-            <td>{{ param.equation }}</td>
-            {% endif %}
-            <td><strong>{{ param.variable }}</strong></td>
-            <td>{{ param.param|floatformat:4 }}</td>
-            <td>{{ param.std_err|floatformat:4 }}</td>
-            <td>{{ param.t|floatformat:4 }}</td>
-            <td>{{ param.p|floatformat:4 }}</td>
-            <td class="stars">
-              {% if param.p < 0.001 %}
-                <span class="star-3">***</span>
-              {% elif param.p < 0.01 %}
-                <span class="star-2">**</span>
-              {% elif param.p < 0.05 %}
-                <span class="star-1">*</span>
-              {% else %}
-                <span style="color: #9ca3af;">-</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div style="margin-top: 12px; font-size: 0.75rem; color: #6b7280;">
-      <p><strong>Significance levels:</strong> *** p&lt;0.001, ** p&lt;0.01, * p&lt;0.05</p>
-    </div>
-  </div>
+    <!-- Model Diagnostics -->
+    {% if results.diagnostics %}
+    <section class="card">
+      <div class="card-head">
+        <h3 class="card-title">Model Diagnostics</h3>
+        <div class="muted small">Diagnostic tests for each equation</div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Equation</th>
+                <th>R²</th>
+                <th>Durbin-Watson</th>
+                <th>Jarque-Bera Stat</th>
+                <th>Jarque-Bera p-value</th>
+                <th>Breusch-Pagan Stat</th>
+                <th>Breusch-Pagan p-value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for diag in results.diagnostics %}
+              <tr>
+                <td><strong>{{ diag.equation }}</strong></td>
+                <td>{{ diag.R2|floatformat:4 }}</td>
+                <td>{{ diag.DW|floatformat:4 }}</td>
+                <td>{{ diag.JB_stat|floatformat:4 }}</td>
+                <td>{{ diag.JB_p|floatformat:4 }}</td>
+                <td>{{ diag.BP_stat|floatformat:4 }}</td>
+                <td>{{ diag.BP_p|floatformat:4 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top: 16px; padding: 16px; background: #f9fafb; border-radius: 8px;">
+          <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151; font-size: 0.875rem;">Diagnostic Test Explanations:</p>
+          <ul style="margin: 0; padding-left: 20px; color: #6b7280; font-size: 0.875rem; line-height: 1.8;">
+            <li><strong>R²:</strong> Proportion of variance in the dependent variable explained by the model</li>
+            <li><strong>Durbin-Watson:</strong> Test for autocorrelation in residuals (values near 2 indicate no autocorrelation)</li>
+            <li><strong>Jarque-Bera:</strong> Test for normality of residuals (null hypothesis: residuals are normally distributed)</li>
+            <li><strong>Breusch-Pagan:</strong> Test for heteroskedasticity (null hypothesis: residuals are homoskedastic)</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+    {% endif %}
 
-  <!-- Diagnostics -->
-  {% if results.diagnostics %}
-  <div class="results-section">
-    <h2>Model Diagnostics</h2>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>Equation</th>
-            <th>R²</th>
-            <th>Durbin-Watson</th>
-            <th>Jarque-Bera Stat</th>
-            <th>Jarque-Bera p-value</th>
-            <th>Breusch-Pagan Stat</th>
-            <th>Breusch-Pagan p-value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for diag in results.diagnostics %}
-          <tr>
-            <td><strong>{{ diag.equation }}</strong></td>
-            <td>{{ diag.R2|floatformat:4 }}</td>
-            <td>{{ diag.DW|floatformat:4 }}</td>
-            <td>{{ diag.JB_stat|floatformat:4 }}</td>
-            <td>{{ diag.JB_p|floatformat:4 }}</td>
-            <td>{{ diag.BP_stat|floatformat:4 }}</td>
-            <td>{{ diag.BP_p|floatformat:4 }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div style="margin-top: 12px; font-size: 0.75rem; color: #6b7280;">
-      <p><strong>Diagnostics:</strong></p>
-      <ul style="margin: 8px 0; padding-left: 20px;">
-        <li><strong>R²:</strong> Proportion of variance explained</li>
-        <li><strong>Durbin-Watson:</strong> Test for autocorrelation (values near 2 indicate no autocorrelation)</li>
-        <li><strong>Jarque-Bera:</strong> Test for normality of residuals (null: residuals are normally distributed)</li>
-        <li><strong>Breusch-Pagan:</strong> Test for heteroskedasticity (null: homoskedastic residuals)</li>
-      </ul>
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- Equations -->
-  <div class="results-section">
-    <h2>Estimated Equations</h2>
-    <div style="font-family: 'Courier New', monospace; background: #f9fafb; padding: 16px; border-radius: 6px; margin-top: 12px;">
-      {% for formula in results.formulas %}
-      <div style="margin-bottom: 8px;">{{ formula }}</div>
-      {% endfor %}
-    </div>
-  </div>
+    <!-- Estimated Equations -->
+    <section class="card">
+      <div class="card-head">
+        <h3 class="card-title">Estimated Equations</h3>
+        <div class="muted small">System of equations estimated</div>
+      </div>
+      <div class="card-body">
+        {% for formula in results.formulas %}
+        <div class="equation-display">{{ formula }}</div>
+        {% endfor %}
+      </div>
+    </section>
 
   {% else %}
   <div class="error-message">
@@ -309,4 +482,3 @@
   {% endif %}
 </div>
 {% endblock %}
-
