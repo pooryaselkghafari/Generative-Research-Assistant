@@ -75,22 +75,34 @@ def check_identification(system):
     """
     system = list of formula strings
     Returns: list of dicts: {"equation": eq, "identified": True/False, "reason": "..."}
+    
+    Detects endogenous variables that appear as:
+    1. Explicitly marked with brackets: [x ~ z1 + z2]
+    2. Dependent variable in one equation and regressor in another
     """
 
     results = []
-
-    # Collect all regressors in system (union of RHS variables including exog and possible instruments)
-    all_rhs_vars = set()
-    all_instr = set()
-
     parsed_all = [parse_equation(eq) for eq in system]
-
+    
+    # Collect all dependent variables (these are endogenous by definition)
+    all_dependent_vars = {parsed["dependent"] for parsed in parsed_all}
+    
+    # Collect all instruments in the system
+    all_instr = set()
     for entry in parsed_all:
-        all_rhs_vars |= set(entry["exog"]) | set(entry["endog"])
         all_instr |= set(entry["instr"])
 
     for eq, parsed in zip(system, parsed_all):
-        endog_vars = parsed["endog"]
+        # Get explicitly marked endogenous variables from brackets
+        explicit_endog = set(parsed["endog"])
+        
+        # Find variables that are regressors in this equation but are dependent variables in other equations
+        # These are implicitly endogenous
+        rhs_vars = set(parsed["exog"]) | set(parsed["endog"])
+        implicit_endog = rhs_vars & all_dependent_vars
+        
+        # Combine explicit and implicit endogenous variables
+        endog_vars = explicit_endog | implicit_endog
         instr = parsed["instr"]
         exog = parsed["exog"]
 
@@ -98,16 +110,32 @@ def check_identification(system):
             results.append({"equation": eq, "identified": True, "reason": "No endogenous regressors"})
             continue
 
-        # Order condition: excluded instruments >= number of endogenous variables
-        excluded_instruments = list(all_instr - set(instr))
+        # Build reason message
+        endog_list = sorted(list(endog_vars))
+        if implicit_endog:
+            reason_parts = []
+            if implicit_endog:
+                reason_parts.append(f"Endogenous: {', '.join(sorted(implicit_endog))} (appears as DV in other equations)")
+            if explicit_endog:
+                reason_parts.append(f"Endogenous: {', '.join(sorted(explicit_endog))} (explicitly marked)")
+            reason_base = "; ".join(reason_parts)
+        else:
+            reason_base = f"Endogenous variables: {', '.join(endog_list)}"
+
+        # Order condition: number of instruments >= number of endogenous variables
+        # For each endogenous variable, we need at least one instrument
         if len(instr) < len(endog_vars):
             results.append({
                 "equation": eq,
                 "identified": False,
-                "reason": f"Insufficient instruments: needs >= {len(endog_vars)}, has {len(instr)}"
+                "reason": f"{reason_base}. Insufficient instruments: needs >= {len(endog_vars)}, has {len(instr)}"
             })
         else:
-            results.append({"equation": eq, "identified": True, "reason": "Identification satisfied"})
+            results.append({
+                "equation": eq,
+                "identified": True,
+                "reason": f"{reason_base}. Identification satisfied ({len(instr)} instruments for {len(endog_vars)} endogenous variables)"
+            })
 
     return results
 
