@@ -994,7 +994,12 @@ function validateEquationModelMatch(formula, moduleValue) {
       console.log('Validating each structural equation has exactly 1 DV...');
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        const lhs = line.split('~')[0].trim();
+        // Remove bracket notation before splitting by ~
+        const lineWithoutBrackets = line.replace(/\[[^\]]*\]/g, '');
+        if (!lineWithoutBrackets.includes('~')) {
+          continue; // Skip lines without ~ (after removing brackets)
+        }
+        const lhs = lineWithoutBrackets.split('~')[0].trim();
         const vars = lhs.split('+').map(v => v.trim()).filter(v => v.length > 0);
         console.log(`  Line ${i + 1}: "${line}" - DVs: ${vars.length} (${vars.join(', ')})`);
         if (vars.length > 1) {
