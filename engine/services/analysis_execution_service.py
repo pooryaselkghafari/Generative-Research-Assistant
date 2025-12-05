@@ -262,6 +262,67 @@ class AnalysisExecutionService:
         })
     
     @staticmethod
+    def execute_structural_analysis(request, action, session_id, dataset_id, formula, structural_method):
+        """
+        Execute structural model (SUR/2SLS/3SLS) analysis.
+        
+        Args:
+            request: Django request object
+            action: 'new' or 'update'
+            session_id: Session ID if updating
+            dataset_id: Dataset ID
+            formula: Analysis formula (equations separated by semicolons)
+            structural_method: 'SUR', '2SLS', or '3SLS'
+            
+        Returns:
+            Rendered template response or error response
+        """
+        if not dataset_id:
+            return HttpResponse('Please select a dataset', status=400)
+        
+        if not formula:
+            return HttpResponse('Please enter equation(s)', status=400)
+        
+        # Get dataset
+        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        
+        # Import structural model module
+        from models.structural_model import StructuralModelModule
+        
+        # Create structural model module instance
+        structural_module = StructuralModelModule()
+        
+        # Prepare options
+        options = {
+            'method': structural_method
+        }
+        
+        # Run structural analysis
+        result = structural_module.run(df, formula, options=options)
+        
+        if not result.get('has_results', False):
+            return render(request, 'engine/index.html', {
+                **_list_context(user=request.user),
+                'error_message': result.get('error', 'Structural model analysis failed')
+            })
+        
+        # Create or update session
+        session_name = request.POST.get('session_name') or f"Structural Model ({structural_method}) {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        sess = AnalysisExecutionService._create_or_update_session(
+            action, session_id, session_name, 'structural', formula, 'frequentist', options, dataset, request.user
+        )
+        
+        # Render results
+        return render(request, 'engine/structural_model_results.html', {
+            'session': sess,
+            'dataset': dataset,
+            'results': result,
+            'formula': formula,
+            'method': structural_method
+        })
+    
+    @staticmethod
     def _create_or_update_session(action, session_id, session_name, module_name, formula, 
                                   analysis_type, options, dataset, user):
         """Create or update analysis session."""

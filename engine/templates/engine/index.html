@@ -475,6 +475,7 @@
                   {% if k == 'regression' %}Regression
                   {% elif k == 'anova' %}ANOVA
                   {% elif k == 'varx' %}VARX
+                  {% elif k == 'structural' %}SUR/2SLS/3SLS
                   {% else %}{{k|upper}}{% endif %}
                 </option>
               {% endif %}
@@ -506,7 +507,7 @@
   </div>
 
   <!-- Analysis Type Selection -->
-  <div class="grid-1" style="margin-bottom: 20px;">
+  <div class="grid-1" id="analysisTypeContainer" style="margin-bottom: 20px;">
     <div>
       <label class="field-label">Analysis Type</label>
       <div class="segment">
@@ -517,6 +518,27 @@
         <label>
           <input type="radio" name="analysis_type" value="bayesian" {% if current and current.analysis_type == 'bayesian' %}checked{% endif %}>
           <span>Bayesian</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Structural Method Selection (shown only for structural model) -->
+  <div class="grid-1" id="structuralMethodContainer" style="margin-bottom: 20px; display: none;">
+    <div>
+      <label class="field-label">Method</label>
+      <div class="segment">
+        <label>
+          <input type="radio" name="structural_method" value="SUR" {% if not current or not current.options.method or current.options.method == 'SUR' %}checked{% endif %}>
+          <span>SUR</span>
+        </label>
+        <label>
+          <input type="radio" name="structural_method" value="2SLS" {% if current and current.options.method == '2SLS' %}checked{% endif %}>
+          <span>2SLS</span>
+        </label>
+        <label>
+          <input type="radio" name="structural_method" value="3SLS" {% if current and current.options.method == '3SLS' %}checked{% endif %}>
+          <span>3SLS</span>
         </label>
       </div>
     </div>
@@ -1493,7 +1515,8 @@ document.addEventListener('DOMContentLoaded', function() {
 function updateAnalysisTypeToggle() {
   const moduleSelect = document.getElementById('moduleSelect');
   const analysisTypeRadios = document.querySelectorAll('input[name="analysis_type"]');
-  const analysisTypeContainer = document.querySelector('.grid-1');
+  const analysisTypeContainer = document.getElementById('analysisTypeContainer');
+  const structuralMethodContainer = document.getElementById('structuralMethodContainer');
   
   if (!moduleSelect || !analysisTypeContainer) return;
   
@@ -1502,7 +1525,17 @@ function updateAnalysisTypeToggle() {
   if (selectedModule === 'bma' || selectedModule === 'anova' || selectedModule === 'varx') {
     // Disable analysis type toggle for BMA, ANOVA, and VARX
     analysisTypeContainer.style.display = 'none';
+    structuralMethodContainer.style.display = 'none';
     // Uncheck all radio buttons
+    analysisTypeRadios.forEach(radio => {
+      radio.checked = false;
+      radio.disabled = true;
+    });
+  } else if (selectedModule === 'structural') {
+    // Hide analysis type toggle, show structural method toggle
+    analysisTypeContainer.style.display = 'none';
+    structuralMethodContainer.style.display = 'block';
+    // Uncheck all analysis type radio buttons
     analysisTypeRadios.forEach(radio => {
       radio.checked = false;
       radio.disabled = true;
@@ -1510,6 +1543,7 @@ function updateAnalysisTypeToggle() {
   } else {
     // Enable analysis type toggle for other models
     analysisTypeContainer.style.display = 'block';
+    structuralMethodContainer.style.display = 'none';
     analysisTypeRadios.forEach(radio => {
       radio.disabled = false;
     });

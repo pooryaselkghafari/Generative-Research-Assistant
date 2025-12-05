@@ -12,3 +12,4 @@ class EngineConfig(AppConfig):
         register('bma', 'models.BMA:BMAModule')
         register('anova', 'models.ANOVA:ANOVAModule')
         register('varx', 'models.VARX:VARXModule')
+        register('structural', 'models.structural_model:StructuralModelModule')

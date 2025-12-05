@@ -110,6 +110,10 @@ def run_analysis(request):
     if module_name == 'varx':
         return run_varx_analysis(request)
     
+    # Special handling for structural analysis
+    if module_name == 'structural':
+        return run_structural_analysis(request)
+    
     # Execute analysis
     job_id = str(uuid.uuid4())[:8]
     outdir = os.path.join(settings.MEDIA_ROOT, job_id)
@@ -303,6 +307,38 @@ def run_varx_analysis(request):
         import traceback
         error_msg = f'Error running VARX analysis: {str(e)}'
         print(f"VARX ERROR: {error_msg}")
+        print(traceback.format_exc())
+        return render(request, 'engine/index.html', {
+            **_list_context(user=request.user),
+            'error_message': error_msg
+        })
+
+
+def run_structural_analysis(request):
+    """Handle structural model (SUR/2SLS/3SLS) analysis requests"""
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
+    if request.method != 'POST':
+        return HttpResponse('POST only', status=405)
+    
+    try:
+        # Get parameters from request
+        action = request.POST.get('action', 'new')
+        session_id = request.POST.get('session_id')
+        dataset_id = request.POST.get('dataset_id')
+        formula = request.POST.get('formula', '')
+        structural_method = request.POST.get('structural_method', 'SUR')
+        
+        # Execute structural analysis using service
+        return AnalysisExecutionService.execute_structural_analysis(
+            request, action, session_id, dataset_id, formula, structural_method
+        )
+        
+    except Exception as e:
+        import traceback
+        error_msg = f'Error running structural analysis: {str(e)}'
+        print(f"STRUCTURAL ERROR: {error_msg}")
         print(traceback.format_exc())
         return render(request, 'engine/index.html', {
             **_list_context(user=request.user),

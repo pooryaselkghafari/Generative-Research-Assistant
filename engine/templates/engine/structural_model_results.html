@@ -1,0 +1,312 @@
+{% extends "engine/base.html" %}
+{% load engine_extras %}
+{% block title %}Structural Model Results — Analysis Assistant{% endblock %}
+
+{% block extra_head %}
+<script>
+  // Set AI chat context when page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof aiChatContext !== 'undefined') {
+      aiChatContext = {
+        session_name: '{% if session %}{{ session.name|escapejs }}{% endif %}',
+        formula: '{{ formula|escapejs }}',
+        module: 'structural',
+        dataset_name: '{{ dataset.name|escapejs }}'
+      };
+    }
+  });
+</script>
+<style>
+  .error-message {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 20px 0;
+  }
+  
+  .results-container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin-top: 24px;
+  }
+  
+  .results-section {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .results-section h2 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: #1f2937;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  
+  .table-container {
+    overflow-x: auto;
+    margin-top: 16px;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  
+  table th {
+    background: #f9fafb;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+  }
+  
+  table td {
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    color: #6b7280;
+  }
+  
+  table tr:hover {
+    background: #f9fafb;
+  }
+  
+  .stars {
+    font-weight: 600;
+  }
+  
+  .star-3 { color: #059669; }
+  .star-2 { color: #3b82f6; }
+  .star-1 { color: #f59e0b; }
+  
+  .identification-status {
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  
+  .identification-ok {
+    background: #d1fae5;
+    color: #065f46;
+    border-left: 4px solid #10b981;
+  }
+  
+  .identification-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border-left: 4px solid #ef4444;
+  }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  {% if session %}
+  <a href="/session/{{session.id}}/" class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none;">Modify</a>
+  {% else %}
+  <a class="btn btn-ghost" href="/app/">Back to Analysis</a>
+  {% endif %}
+  {% if session %}
+  <a href="{% url 'download_session_history' session.id %}?format=text" class="btn btn-ghost" style="margin-left: 8px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+    </svg>
+    Download History
+  </a>
+  {% endif %}
+  <button class="btn" type="button" onclick="showGRAComingSoonPopup()" 
+          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
+          title="Talk to your GRA">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    Talk to your GRA
+  </button>
+{% endblock %}
+
+{% block sidebar %}
+  <!-- Model Info Card -->
+  {% if session and results.has_results %}
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+      <h3 class="card-title">Model Information</h3>
+    </div>
+    <div class="card-body">
+      <div style="margin-bottom: 12px;">
+        <strong>Method:</strong> {{ method }}
+      </div>
+      <div style="margin-bottom: 12px;">
+        <strong>Equations:</strong> {{ results.n_equations }}
+      </div>
+      <div style="margin-bottom: 12px;">
+        <strong>Observations:</strong> {{ results.n_obs|floatformat:0 }}
+      </div>
+      {% if results.rsquared %}
+      <div style="margin-bottom: 12px;">
+        <strong>R²:</strong> {{ results.rsquared|floatformat:4 }}
+      </div>
+      {% endif %}
+      {% if results.rsquared_adj %}
+      <div style="margin-bottom: 12px;">
+        <strong>Adjusted R²:</strong> {{ results.rsquared_adj|floatformat:4 }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="results-container">
+  {% if results.error %}
+  <div class="error-message">
+    <strong>Error:</strong> {{ results.error }}
+  </div>
+  {% elif results.has_results %}
+  
+  <!-- Model Summary -->
+  <div class="results-section">
+    <h2>Model Summary</h2>
+    <p><strong>Method:</strong> {{ method }}</p>
+    <p><strong>Number of Equations:</strong> {{ results.n_equations }}</p>
+    <p><strong>Number of Observations:</strong> {{ results.n_obs|floatformat:0 }}</p>
+    {% if results.rsquared %}
+    <p><strong>R²:</strong> {{ results.rsquared|floatformat:4 }}</p>
+    {% endif %}
+    {% if results.rsquared_adj %}
+    <p><strong>Adjusted R²:</strong> {{ results.rsquared_adj|floatformat:4 }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Identification Check -->
+  {% if results.identification %}
+  <div class="results-section">
+    <h2>Identification Check</h2>
+    {% for id_check in results.identification %}
+    <div class="identification-status {% if id_check.identified %}identification-ok{% else %}identification-error{% endif %}">
+      <strong>Equation:</strong> {{ id_check.equation }}<br>
+      <strong>Status:</strong> {% if id_check.identified %}✓ Identified{% else %}✗ Not Identified{% endif %}<br>
+      <strong>Reason:</strong> {{ id_check.reason }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Parameter Estimates -->
+  <div class="results-section">
+    <h2>Parameter Estimates</h2>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            {% if results.n_equations > 1 %}
+            <th>Equation</th>
+            {% endif %}
+            <th>Variable</th>
+            <th>Coefficient</th>
+            <th>Std. Error</th>
+            <th>t-statistic</th>
+            <th>p-value</th>
+            <th>Significance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for param in results.params %}
+          <tr>
+            {% if results.n_equations > 1 %}
+            <td>{{ param.equation }}</td>
+            {% endif %}
+            <td><strong>{{ param.variable }}</strong></td>
+            <td>{{ param.param|floatformat:4 }}</td>
+            <td>{{ param.std_err|floatformat:4 }}</td>
+            <td>{{ param.t|floatformat:4 }}</td>
+            <td>{{ param.p|floatformat:4 }}</td>
+            <td class="stars">
+              {% if param.p < 0.001 %}
+                <span class="star-3">***</span>
+              {% elif param.p < 0.01 %}
+                <span class="star-2">**</span>
+              {% elif param.p < 0.05 %}
+                <span class="star-1">*</span>
+              {% else %}
+                <span style="color: #9ca3af;">-</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top: 12px; font-size: 0.75rem; color: #6b7280;">
+      <p><strong>Significance levels:</strong> *** p&lt;0.001, ** p&lt;0.01, * p&lt;0.05</p>
+    </div>
+  </div>
+
+  <!-- Diagnostics -->
+  {% if results.diagnostics %}
+  <div class="results-section">
+    <h2>Model Diagnostics</h2>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Equation</th>
+            <th>R²</th>
+            <th>Durbin-Watson</th>
+            <th>Jarque-Bera Stat</th>
+            <th>Jarque-Bera p-value</th>
+            <th>Breusch-Pagan Stat</th>
+            <th>Breusch-Pagan p-value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for diag in results.diagnostics %}
+          <tr>
+            <td><strong>{{ diag.equation }}</strong></td>
+            <td>{{ diag.R2|floatformat:4 }}</td>
+            <td>{{ diag.DW|floatformat:4 }}</td>
+            <td>{{ diag.JB_stat|floatformat:4 }}</td>
+            <td>{{ diag.JB_p|floatformat:4 }}</td>
+            <td>{{ diag.BP_stat|floatformat:4 }}</td>
+            <td>{{ diag.BP_p|floatformat:4 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top: 12px; font-size: 0.75rem; color: #6b7280;">
+      <p><strong>Diagnostics:</strong></p>
+      <ul style="margin: 8px 0; padding-left: 20px;">
+        <li><strong>R²:</strong> Proportion of variance explained</li>
+        <li><strong>Durbin-Watson:</strong> Test for autocorrelation (values near 2 indicate no autocorrelation)</li>
+        <li><strong>Jarque-Bera:</strong> Test for normality of residuals (null: residuals are normally distributed)</li>
+        <li><strong>Breusch-Pagan:</strong> Test for heteroskedasticity (null: homoskedastic residuals)</li>
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Equations -->
+  <div class="results-section">
+    <h2>Estimated Equations</h2>
+    <div style="font-family: 'Courier New', monospace; background: #f9fafb; padding: 16px; border-radius: 6px; margin-top: 12px;">
+      {% for formula in results.formulas %}
+      <div style="margin-bottom: 8px;">{{ formula }}</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% else %}
+  <div class="error-message">
+    <strong>No results available.</strong> Please check your equation specification and try again.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
