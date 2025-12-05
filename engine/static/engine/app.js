@@ -2230,8 +2230,30 @@ Examples:
       fixedEquation: rhs
     };
     
-    // Split by + to get main terms
-    const mainTerms = rhs.split('+').map(term => term.trim()).filter(term => term);
+    // Extract bracket notation blocks first to handle them separately
+    const bracketBlocks = [];
+    const bracketRegex = /\[([^\]]+)\]/g;
+    let bracketMatch;
+    let bracketIndex = 0;
+    const bracketMap = new Map();
+    
+    while ((bracketMatch = bracketRegex.exec(rhs)) !== null) {
+      const fullMatch = bracketMatch[0]; // e.g., "[Production_Year ~ Genre_Condensed]"
+      const content = bracketMatch[1]; // e.g., "Production_Year ~ Genre_Condensed"
+      const placeholder = `__BRACKET_${bracketIndex}__`;
+      bracketMap.set(placeholder, fullMatch);
+      bracketBlocks.push({ placeholder, content });
+      bracketIndex++;
+    }
+    
+    // Replace bracket blocks with placeholders temporarily
+    let rhsWithoutBrackets = rhs;
+    bracketMap.forEach((original, placeholder) => {
+      rhsWithoutBrackets = rhsWithoutBrackets.replace(original, placeholder);
+    });
+    
+    // Split by + to get main terms (now with placeholders)
+    const mainTerms = rhsWithoutBrackets.split('+').map(term => term.trim()).filter(term => term);
     
     const validTerms = [];
     const errors = [];
@@ -2241,7 +2263,50 @@ Examples:
     for (let i = 0; i < mainTerms.length; i++) {
       const term = mainTerms[i];
       
-      // Check if term contains * (interaction)
+      // Check if this is a bracket placeholder
+      if (term.startsWith('__BRACKET_') && term.endsWith('__')) {
+        // This is a bracket notation block - parse it separately
+        const bracketBlock = bracketBlocks.find(b => b.placeholder === term);
+        if (bracketBlock) {
+          // Parse bracket content: "endogenous ~ instrument1 + instrument2"
+          const bracketContent = bracketBlock.content;
+          const bracketParts = bracketContent.split('~');
+          if (bracketParts.length === 2) {
+            const endogVar = bracketParts[0].trim();
+            const instruments = bracketParts[1].split('+').map(v => v.trim()).filter(v => v);
+            
+            // Validate endogenous variable
+            const endogResult = parseSimpleTerm(endogVar);
+            if (endogResult.unknownVars && endogResult.unknownVars.length > 0) {
+              unknownVars.push(...endogResult.unknownVars);
+            }
+            if (endogResult.invalidElements && endogResult.invalidElements.length > 0) {
+              invalidElements.push(...endogResult.invalidElements);
+            }
+            
+            // Validate instruments
+            for (const instr of instruments) {
+              const instrResult = parseSimpleTerm(instr);
+              if (instrResult.unknownVars && instrResult.unknownVars.length > 0) {
+                unknownVars.push(...instrResult.unknownVars);
+              }
+              if (instrResult.invalidElements && instrResult.invalidElements.length > 0) {
+                invalidElements.push(...instrResult.invalidElements);
+              }
+            }
+            
+            // Keep the bracket notation in the output
+            validTerms.push(bracketMap.get(term));
+          } else {
+            // Invalid bracket syntax
+            errors.push(`Invalid bracket notation: ${bracketMap.get(term)}`);
+            invalidElements.push(bracketMap.get(term));
+          }
+        }
+        continue;
+      }
+      
+      // Regular term (not a bracket placeholder) - check if term contains * (interaction)
       if (term.includes('*')) {
         const interactionResult = parseInteractionTerm(term);
         
