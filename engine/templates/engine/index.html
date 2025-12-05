@@ -964,9 +964,11 @@ function validateEquationModelMatch(formula, moduleValue) {
       };
     }
     
+    // Parse lines once for all multi-equation validations
+    const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0 && line.includes('~'));
+    
     // For structural models with multiple equations, each equation should have exactly 1 DV
     if (moduleValue === 'structural') {
-      const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0 && line.includes('~'));
       console.log('Validating each structural equation has exactly 1 DV...');
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -984,9 +986,13 @@ function validateEquationModelMatch(formula, moduleValue) {
         }
       }
       console.log('✓ All structural equations validated: each has exactly 1 DV');
+      // Return early for structural models - validation passed
+      console.log('✓ VALIDATION PASSED');
+      console.log('=== END VALIDATE EQUATION MODEL MATCH DIAGNOSTICS ===');
+      return { valid: true };
     }
+    
     // For regression with multiple equations, each equation should have exactly 1 DV
-    const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0 && line.includes('~'));
     console.log('Validating each equation has exactly 1 DV...');
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];

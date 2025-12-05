@@ -57,14 +57,34 @@ def _validate_equation(request, formula, module_name, df, _list_context_func):
     # Check for multi-equation format (multiple lines with ~)
     if equation_count > 1:
         print(f"✓ MULTI-EQUATION FORMAT DETECTED: {equation_count} equations")
-        # Only regression model supports multi-equation format
-        if module_name != 'regression':
+        # Regression and structural models support multi-equation format
+        if module_name != 'regression' and module_name != 'structural':
             return render(request, 'engine/index.html', {
                 **_list_context_func(user=request.user),
-                'error_message': f'You have {equation_count} equation(s) (one per line), but {module_name.upper()} models only support a single equation. Please use only one equation, or select Regression model for multiple equations.'
+                'error_message': f'You have {equation_count} equation(s) (one per line), but {module_name.upper()} models only support a single equation. Please use only one equation, or select Regression/Structural model for multiple equations.'
             })
-        # For regression with multiple equations, each equation should have exactly 1 DV
+        # Parse lines once for all multi-equation validations
         lines = [line.strip() for line in formula.split('\n') if line.strip() and '~' in line]
+        
+        # For structural models with multiple equations, each equation should have exactly 1 DV
+        if module_name == 'structural':
+            print(f"Validating each structural equation has exactly 1 DV...")
+            for i, line in enumerate(lines):
+                lhs = line.split('~')[0].strip()
+                vars_list = [v.strip() for v in lhs.split('+') if v.strip()]
+                print(f"  Line {i + 1}: '{line}' - DVs: {len(vars_list)} ({', '.join(vars_list)})")
+                if len(vars_list) > 1:
+                    print(f"✗ VALIDATION FAILED: Line {i + 1} has {len(vars_list)} dependent variables")
+                    print(f"=== END BACKEND VALIDATION DIAGNOSTICS ===")
+                    return render(request, 'engine/index.html', {
+                        **_list_context_func(user=request.user),
+                        'error_message': f'Line {i + 1} has {len(vars_list)} dependent variable(s). In structural models, each equation must have exactly one dependent variable. Please use one dependent variable per line, for example: y1 ~ x1 + x2\\ny2 ~ x1 + [x3 ~ z1 + z2]'
+                    })
+            print(f"✓ All structural equations validated: each has exactly 1 DV")
+            print(f"=== END BACKEND VALIDATION DIAGNOSTICS ===")
+            return None  # Validation passed for structural models
+        
+        # For regression with multiple equations, each equation should have exactly 1 DV
         print(f"Validating each equation has exactly 1 DV...")
         for i, line in enumerate(lines):
             lhs = line.split('~')[0].strip()
