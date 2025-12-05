@@ -194,17 +194,27 @@ def estimate_system(formulas, data, method="SUR"):
         params["t"] = res.tstats.values
         params["p"] = res.pvalues.values
 
-        # diagnostics
+        # diagnostics - SUR results don't have equation_results, need to compute manually
         diag_list = []
-        for name, eq_res in res.equation_results.items():
-            diag = diagnostics(
-                eq_res.model.dependent.data,
-                eq_res.fitted_values,
-                eq_res.model.exog,
-                eq_res.resids,
-                name=name
-            )
-            diag_list.append(diag)
+        for i, (eq_name, eq_dict) in enumerate(sur_eqs.items()):
+            # Get equation data
+            y = eq_dict["dependent"]
+            X = eq_dict["exog"]
+            
+            # Get equation-specific parameters
+            eq_params = params[params["equation"] == eq_name]
+            if len(eq_params) > 0:
+                # Compute fitted values: y_hat = X @ beta
+                beta = eq_params.set_index("variable")["param"]
+                # Align beta with X columns
+                X_aligned = X[[col for col in X.columns if col in beta.index]]
+                beta_aligned = beta[[col for col in beta.index if col in X.columns]]
+                if len(beta_aligned) > 0 and len(X_aligned.columns) > 0:
+                    y_hat = X_aligned @ beta_aligned
+                    residuals = y - y_hat
+                    
+                    diag = diagnostics(y.values, y_hat.values, X.values, residuals.values, name=eq_name)
+                    diag_list.append(diag)
 
         return res, params, pd.DataFrame(diag_list)
 
@@ -269,17 +279,31 @@ def estimate_system(formulas, data, method="SUR"):
         params["t"] = res.tstats.values
         params["p"] = res.pvalues.values
 
-        # diagnostics
+        # diagnostics - 3SLS results may not have equation_results, compute manually
         diag_list = []
-        for name, eq_res in res.equation_results.items():
-            diag = diagnostics(
-                eq_res.model.dependent.data,
-                eq_res.fitted_values,
-                eq_res.model.exog,
-                eq_res.resids,
-                name=name
-            )
-            diag_list.append(diag)
+        for i, (eq_name, formula) in enumerate(eq_dict.items()):
+            # Parse the equation to get dependent and regressors
+            parsed = parse_equation(formula)
+            y = data[parsed["dependent"]]
+            
+            # Build X matrix
+            exog_vars = ["const"] + parsed["exog"] + parsed["endog"]
+            X = data[[col for col in exog_vars if col in data.columns]]
+            
+            # Get equation-specific parameters
+            eq_params = params[params["equation"] == eq_name]
+            if len(eq_params) > 0:
+                # Compute fitted values: y_hat = X @ beta
+                beta = eq_params.set_index("variable")["param"]
+                # Align beta with X columns
+                X_aligned = X[[col for col in X.columns if col in beta.index]]
+                beta_aligned = beta[[col for col in beta.index if col in X.columns]]
+                if len(beta_aligned) > 0 and len(X_aligned.columns) > 0:
+                    y_hat = X_aligned @ beta_aligned
+                    residuals = y - y_hat
+                    
+                    diag = diagnostics(y.values, y_hat.values, X.values, residuals.values, name=eq_name)
+                    diag_list.append(diag)
 
         return res, params, pd.DataFrame(diag_list)
 
