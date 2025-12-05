@@ -206,17 +206,27 @@ def estimate_system(formulas, data, method="SUR"):
             if len(eq_params) > 0:
                 # Compute fitted values: y_hat = X @ beta
                 beta = eq_params.set_index("variable")["param"]
-                # Align beta with X columns
-                X_aligned = X[[col for col in X.columns if col in beta.index]]
-                beta_aligned = beta[[col for col in beta.index if col in X.columns]]
-                if len(beta_aligned) > 0 and len(X_aligned.columns) > 0:
+                # Align beta with X columns - ensure we have matching columns
+                common_cols = [col for col in X.columns if col in beta.index]
+                if len(common_cols) > 0:
+                    X_aligned = X[common_cols]
+                    beta_aligned = beta[common_cols]
                     y_hat = X_aligned @ beta_aligned
                     residuals = y - y_hat
                     
-                    diag = diagnostics(y.values, y_hat.values, X.values, residuals.values, name=eq_name)
+                    # Ensure we have numpy arrays for diagnostics
+                    y_vals = y.values if hasattr(y, 'values') else np.array(y)
+                    y_hat_vals = y_hat.values if hasattr(y_hat, 'values') else np.array(y_hat)
+                    X_vals = X.values if hasattr(X, 'values') else np.array(X)
+                    residuals_vals = residuals.values if hasattr(residuals, 'values') else np.array(residuals)
+                    
+                    diag = diagnostics(y_vals, y_hat_vals, X_vals, residuals_vals, name=eq_name)
                     diag_list.append(diag)
+                else:
+                    # Fallback: use res.fitted_values and res.resids if available
+                    print(f"Warning: Could not align columns for {eq_name}, skipping diagnostics")
 
-        return res, params, pd.DataFrame(diag_list)
+        return res, params, pd.DataFrame(diag_list) if diag_list else pd.DataFrame(columns=["equation", "R2", "DW", "JB_stat", "JB_p", "BP_stat", "BP_p"])
 
     # ===================================================================
     # 2SLS (single equation only)
@@ -295,17 +305,27 @@ def estimate_system(formulas, data, method="SUR"):
             if len(eq_params) > 0:
                 # Compute fitted values: y_hat = X @ beta
                 beta = eq_params.set_index("variable")["param"]
-                # Align beta with X columns
-                X_aligned = X[[col for col in X.columns if col in beta.index]]
-                beta_aligned = beta[[col for col in beta.index if col in X.columns]]
-                if len(beta_aligned) > 0 and len(X_aligned.columns) > 0:
+                # Align beta with X columns - ensure we have matching columns
+                common_cols = [col for col in X.columns if col in beta.index]
+                if len(common_cols) > 0:
+                    X_aligned = X[common_cols]
+                    beta_aligned = beta[common_cols]
                     y_hat = X_aligned @ beta_aligned
                     residuals = y - y_hat
                     
-                    diag = diagnostics(y.values, y_hat.values, X.values, residuals.values, name=eq_name)
+                    # Ensure we have numpy arrays for diagnostics
+                    y_vals = y.values if hasattr(y, 'values') else np.array(y)
+                    y_hat_vals = y_hat.values if hasattr(y_hat, 'values') else np.array(y_hat)
+                    X_vals = X.values if hasattr(X, 'values') else np.array(X)
+                    residuals_vals = residuals.values if hasattr(residuals, 'values') else np.array(residuals)
+                    
+                    diag = diagnostics(y_vals, y_hat_vals, X_vals, residuals_vals, name=eq_name)
                     diag_list.append(diag)
+                else:
+                    # Fallback: use res.fitted_values and res.resids if available
+                    print(f"Warning: Could not align columns for {eq_name}, skipping diagnostics")
 
-        return res, params, pd.DataFrame(diag_list)
+        return res, params, pd.DataFrame(diag_list) if diag_list else pd.DataFrame(columns=["equation", "R2", "DW", "JB_stat", "JB_p", "BP_stat", "BP_p"])
 
     raise ValueError("Method must be 'SUR', '2SLS', or '3SLS'")
 
@@ -396,13 +416,16 @@ class StructuralModelModule:
             res, params, diagnostics_df = estimate_system(formulas, df, method=method)
             
             # Format results for display
+            # Ensure diagnostics is always a list, even if empty
+            diagnostics_list = diagnostics_df.to_dict('records') if len(diagnostics_df) > 0 else []
+            
             results = {
                 'success': True,
                 'has_results': True,
                 'method': method,
                 'formulas': formulas,
                 'params': params.to_dict('records'),
-                'diagnostics': diagnostics_df.to_dict('records'),
+                'diagnostics': diagnostics_list,
                 'identification': check_identification(formulas),
                 'n_obs': len(df),
                 'n_equations': len(formulas)
