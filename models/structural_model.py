@@ -267,27 +267,18 @@ def estimate_system(formulas, data, method="SUR"):
         res = model.fit()
 
         # param table - handle MultiIndex properly
-        params_df = res.params.reset_index()
-        # Check the structure and build params DataFrame correctly
-        if isinstance(res.params.index, pd.MultiIndex):
-            # MultiIndex case: reset_index gives us index levels + values
-            if len(params_df.columns) == 3:
-                params_df.columns = ["equation", "variable", "param"]
-            else:
-                # Fallback: build manually
-                params_data = []
-                for (eq, var), val in res.params.items():
-                    params_data.append({"equation": eq, "variable": var, "param": val})
-                params_df = pd.DataFrame(params_data)
-        else:
-            # Single index case
-            params_df.columns = ["variable", "param"]
-            params_df.insert(0, "equation", [f"eq{i+1}" for i in range(len(params_df))])
-        
-        params = params_df.copy()
-        params["std_err"] = res.std_errors.values
-        params["t"] = res.tstats.values
-        params["p"] = res.pvalues.values
+        # Build params DataFrame manually to ensure correct alignment
+        params_data = []
+        for (eq, var), val in res.params.items():
+            params_data.append({
+                "equation": eq,
+                "variable": var,
+                "param": val,
+                "std_err": res.std_errors.loc[(eq, var)],
+                "t": res.tstats.loc[(eq, var)],
+                "p": res.pvalues.loc[(eq, var)]
+            })
+        params = pd.DataFrame(params_data)
 
         # diagnostics - 3SLS results may not have equation_results, compute manually
         diag_list = []

@@ -377,28 +377,26 @@
                 <th>Std. Error</th>
                 <th>t-statistic</th>
                 <th>p-value</th>
-                <th>Significance</th>
               </tr>
             </thead>
             <tbody>
               {% for param in results.params %}
               <tr>
                 <td><strong>{{ param.variable }}</strong></td>
-                <td>{{ param.param|floatformat:4 }}</td>
+                <td>
+                  {% if param.p < 0.001 %}
+                    {{ param.param|floatformat:4 }}<span class="star-3">***</span>
+                  {% elif param.p < 0.01 %}
+                    {{ param.param|floatformat:4 }}<span class="star-2">**</span>
+                  {% elif param.p < 0.05 %}
+                    {{ param.param|floatformat:4 }}<span class="star-1">*</span>
+                  {% else %}
+                    {{ param.param|floatformat:4 }}
+                  {% endif %}
+                </td>
                 <td>{{ param.std_err|floatformat:4 }}</td>
                 <td>{{ param.t|floatformat:4 }}</td>
                 <td>{{ param.p|floatformat:4 }}</td>
-                <td class="stars">
-                  {% if param.p < 0.001 %}
-                    <span class="star-3">***</span>
-                  {% elif param.p < 0.01 %}
-                    <span class="star-2">**</span>
-                  {% elif param.p < 0.05 %}
-                    <span class="star-1">*</span>
-                  {% else %}
-                    <span style="color: #9ca3af;">-</span>
-                  {% endif %}
-                </td>
               </tr>
               {% endfor %}
             </tbody>
