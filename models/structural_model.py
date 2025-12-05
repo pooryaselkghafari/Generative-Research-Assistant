@@ -31,8 +31,11 @@ def parse_equation(formula):
         "endog": [...],
         "instr": [...]}
     """
-    dependent, rhs = formula.split("~")
-    dependent = dependent.strip()
+    # Split by ~ to get dependent and RHS
+    formula_parts = formula.split("~")
+    if len(formula_parts) != 2:
+        raise ValueError(f"Invalid equation format: '{formula}'. Expected format: 'y ~ x1 + x2' or 'y ~ x1 + [x2 ~ z1 + z2]'")
+    dependent, rhs = formula_parts[0].strip(), formula_parts[1].strip()
 
     # detect endogenous blocks: [x2 ~ z1 + z2]
     endog_blocks = re.findall(r"\[(.*?)\]", rhs)
@@ -288,24 +291,33 @@ def estimate_system(formulas, data, method="SUR"):
         if len(instruments) < len(endog_vars):
             raise ValueError(f"Insufficient instruments: need at least {len(endog_vars)} instrument(s) for {len(endog_vars)} endogenous variable(s)")
         
-        # Build formula: y ~ exog + [endog ~ instruments]
-        # If multiple endogenous, group them: y ~ exog + [endog1 + endog2 ~ instr1 + instr2]
-        formula_parts = [dependent, "~"]
+        # Build formula for linearmodels IV2SLS
+        # Format: y ~ [endog ~ instruments] + exog
+        # or: y ~ exog + [endog ~ instruments]
+        # For single endogenous: y ~ [x ~ z] + exog
+        # For multiple endogenous: y ~ [x1 + x2 ~ z1 + z2] + exog
+        
+        # Build RHS
+        rhs_parts = []
+        
+        # Add endogenous variables with instruments in brackets
+        if len(endog_vars) == 1:
+            # Single endogenous variable
+            endog_str = endog_vars[0]
+            instr_str = " + ".join(instruments)
+            rhs_parts.append(f"[{endog_str} ~ {instr_str}]")
+        else:
+            # Multiple endogenous variables
+            endog_str = " + ".join(endog_vars)
+            instr_str = " + ".join(instruments)
+            rhs_parts.append(f"[{endog_str} ~ {instr_str}]")
         
         # Add exogenous variables
         if exog_vars:
-            formula_parts.append(" + ".join(exog_vars))
+            rhs_parts.extend(exog_vars)
         
-        # Add endogenous variables with instruments
-        if endog_vars:
-            endog_str = " + ".join(endog_vars)
-            instr_str = " + ".join(instruments)
-            if exog_vars:
-                formula_parts.append(f" + [{endog_str} ~ {instr_str}]")
-            else:
-                formula_parts.append(f"[{endog_str} ~ {instr_str}]")
-        
-        linearmodels_formula = " ".join(formula_parts)
+        # Combine: y ~ [endog ~ instruments] + exog1 + exog2
+        linearmodels_formula = f"{dependent} ~ {' + '.join(rhs_parts)}"
         
         model = IV2SLS.from_formula(linearmodels_formula, data=data)
         res = model.fit(cov_type="robust")
