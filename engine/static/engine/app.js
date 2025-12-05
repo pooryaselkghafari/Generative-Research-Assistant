@@ -2048,20 +2048,7 @@ Examples:
       return result;
     }
     
-    // Remove bracket notation blocks [x ~ z] before counting ~
-    // This allows ~ inside brackets for instrument specification
-    const equationWithoutBrackets = equation.replace(/\[[^\]]*\]/g, '');
-    
-    // Split equation by ~ to separate LHS and RHS (ignoring ~ inside brackets)
-    const parts = equationWithoutBrackets.split('~');
-    if (parts.length !== 2) {
-      result.hasErrors = true;
-      result.hasSyntaxErrors = true;
-      result.syntaxErrors.push('Your equation should contain exactly one ~ (outside of bracket notation)');
-      return result;
-    }
-    
-    // Validate bracket syntax: check for unmatched brackets
+    // Validate bracket syntax: check for unmatched brackets first
     const openBrackets = (equation.match(/\[/g) || []).length;
     const closeBrackets = (equation.match(/\]/g) || []).length;
     if (openBrackets !== closeBrackets) {
@@ -2071,18 +2058,34 @@ Examples:
       return result;
     }
     
-    // Get original equation parts (with brackets) for parsing
-    const originalParts = equation.split('~');
-    // Find the main ~ separator (not inside brackets)
+    // Find the main ~ separator (not inside brackets) by tracking bracket depth
     let mainTildeIndex = -1;
+    let tildeCount = 0;
     let bracketDepth = 0;
     for (let i = 0; i < equation.length; i++) {
       if (equation[i] === '[') bracketDepth++;
       else if (equation[i] === ']') bracketDepth--;
       else if (equation[i] === '~' && bracketDepth === 0) {
-        mainTildeIndex = i;
-        break;
+        if (mainTildeIndex === -1) {
+          mainTildeIndex = i;
+        }
+        tildeCount++;
       }
+    }
+    
+    // Check if we have exactly one ~ outside of brackets
+    if (tildeCount === 0) {
+      result.hasErrors = true;
+      result.hasSyntaxErrors = true;
+      result.syntaxErrors.push('Your equation should contain exactly one ~ (outside of bracket notation)');
+      return result;
+    }
+    
+    if (tildeCount > 1) {
+      result.hasErrors = true;
+      result.hasSyntaxErrors = true;
+      result.syntaxErrors.push('Your equation should contain exactly one ~ (outside of bracket notation)');
+      return result;
     }
     
     if (mainTildeIndex === -1) {
