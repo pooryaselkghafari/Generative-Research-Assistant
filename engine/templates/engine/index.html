@@ -1549,6 +1549,12 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Initialize analysis type toggle state
   updateAnalysisTypeToggle();
+  
+  // Initialize equation example if structural model is already selected
+  const moduleSelect = document.getElementById('moduleSelect');
+  if (moduleSelect && moduleSelect.value === 'structural') {
+    updateStructuralEquationExample();
+  }
 });
 
 // Function to update analysis type toggle based on model selection
