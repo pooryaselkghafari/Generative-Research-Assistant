@@ -68,6 +68,16 @@ def _validate_equation(request, formula, module_name, df, _list_context_func):
         
         # For structural models with multiple equations, each equation should have exactly 1 DV
         if module_name == 'structural':
+            # Check if 2SLS is selected with multiple equations
+            structural_method = request.POST.get('structural_method', 'SUR')
+            if structural_method == '2SLS' and equation_count > 1:
+                print(f"✗ VALIDATION FAILED: 2SLS with {equation_count} equations")
+                print(f"=== END BACKEND VALIDATION DIAGNOSTICS ===")
+                return render(request, 'engine/index.html', {
+                    **_list_context_func(user=request.user),
+                    'error_message': f'You have {equation_count} equation(s), but 2SLS only supports a single equation. Please use only one equation for 2SLS, or select SUR/3SLS method for multiple equations.'
+                })
+            
             print(f"Validating each structural equation has exactly 1 DV...")
             for i, line in enumerate(lines):
                 lhs = line.split('~')[0].strip()
