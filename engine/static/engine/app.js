@@ -2044,17 +2044,52 @@ Examples:
       return result;
     }
     
-    // Split equation by ~ to separate LHS and RHS
-    const parts = equation.split('~');
+    // Remove bracket notation blocks [x ~ z] before counting ~
+    // This allows ~ inside brackets for instrument specification
+    const equationWithoutBrackets = equation.replace(/\[[^\]]*\]/g, '');
+    
+    // Split equation by ~ to separate LHS and RHS (ignoring ~ inside brackets)
+    const parts = equationWithoutBrackets.split('~');
     if (parts.length !== 2) {
       result.hasErrors = true;
       result.hasSyntaxErrors = true;
-      result.syntaxErrors.push('Your equation should contain exactly one ~');
+      result.syntaxErrors.push('Your equation should contain exactly one ~ (outside of bracket notation)');
       return result;
     }
     
-    const lhs = parts[0].trim();
-    const rhs = parts[1].trim();
+    // Validate bracket syntax: check for unmatched brackets
+    const openBrackets = (equation.match(/\[/g) || []).length;
+    const closeBrackets = (equation.match(/\]/g) || []).length;
+    if (openBrackets !== closeBrackets) {
+      result.hasErrors = true;
+      result.hasSyntaxErrors = true;
+      result.syntaxErrors.push('Unmatched brackets: make sure every [ has a matching ]');
+      return result;
+    }
+    
+    // Get original equation parts (with brackets) for parsing
+    const originalParts = equation.split('~');
+    // Find the main ~ separator (not inside brackets)
+    let mainTildeIndex = -1;
+    let bracketDepth = 0;
+    for (let i = 0; i < equation.length; i++) {
+      if (equation[i] === '[') bracketDepth++;
+      else if (equation[i] === ']') bracketDepth--;
+      else if (equation[i] === '~' && bracketDepth === 0) {
+        mainTildeIndex = i;
+        break;
+      }
+    }
+    
+    if (mainTildeIndex === -1) {
+      result.hasErrors = true;
+      result.hasSyntaxErrors = true;
+      result.syntaxErrors.push('Your equation should contain exactly one ~ (outside of bracket notation)');
+      return result;
+    }
+    
+    const lhs = equation.substring(0, mainTildeIndex).trim();
+    const rhs = equation.substring(mainTildeIndex + 1).trim();
     
     // Parse LHS (dependent variable(s)) - support VARX format with multiple variables
     // Check if LHS contains + (multiple variables like VARX: "y1 + y2 ~ x1 + x2")

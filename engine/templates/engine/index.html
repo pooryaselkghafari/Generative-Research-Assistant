@@ -931,11 +931,21 @@ function countDependentVariables(formula) {
   return totalDVs;
 }
 
-// Function to count number of equations (lines with ~)
+// Function to count number of equations (lines with ~, ignoring ~ inside brackets)
 function countEquations(formula) {
   if (!formula || !formula.trim()) return 0;
   const lines = formula.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-  return lines.filter(line => line.includes('~')).length;
+  
+  // Count lines that have ~ outside of bracket notation
+  let count = 0;
+  for (const line of lines) {
+    // Remove bracket notation blocks [x ~ z] before checking for ~
+    const lineWithoutBrackets = line.replace(/\[[^\]]*\]/g, '');
+    if (lineWithoutBrackets.includes('~')) {
+      count++;
+    }
+  }
+  return count;
 }
 
 // Function to validate equation format matches selected model
@@ -1004,12 +1014,14 @@ function validateEquationModelMatch(formula, moduleValue) {
       return { valid: true };
     }
     
-    // For regression with multiple equations, each equation should have exactly 1 DV
-    console.log('Validating each equation has exactly 1 DV...');
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const lhs = line.split('~')[0].trim();
-      const vars = lhs.split('+').map(v => v.trim()).filter(v => v.length > 0);
+        // For regression with multiple equations, each equation should have exactly 1 DV
+        console.log('Validating each equation has exactly 1 DV...');
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          // Remove bracket notation before splitting by ~
+          const lineWithoutBrackets = line.replace(/\[[^\]]*\]/g, '');
+          const lhs = lineWithoutBrackets.split('~')[0].trim();
+          const vars = lhs.split('+').map(v => v.trim()).filter(v => v.length > 0);
       console.log(`  Line ${i + 1}: "${line}" - DVs: ${vars.length} (${vars.join(', ')})`);
       if (vars.length > 1) {
         console.log('✗ VALIDATION FAILED: Line', i + 1, 'has', vars.length, 'dependent variables');
