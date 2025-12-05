@@ -1635,6 +1635,12 @@ document.addEventListener('DOMContentLoaded', function() {
   if (moduleSelect) {
     moduleSelect.addEventListener('change', updateAnalysisTypeToggle);
   }
+  
+  // Add event listeners for structural method radio buttons
+  const structuralMethodRadios = document.querySelectorAll('input[name="structural_method"]');
+  structuralMethodRadios.forEach(radio => {
+    radio.addEventListener('change', updateStructuralEquationExample);
+  });
 });
 
 function clearSearch() {
