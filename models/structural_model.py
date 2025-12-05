@@ -175,11 +175,13 @@ def estimate_system(formulas, data, method="SUR"):
     if not LINEARMODELS_AVAILABLE:
         raise ImportError("linearmodels package is required for structural model estimation. Install with: pip install linearmodels>=5.0.0")
 
-    # 1. Identification Check
-    id_results = check_identification(formulas)
-    for r in id_results:
-        if not r["identified"] and method in ["2SLS", "3SLS"]:
-            raise ValueError(f"System not identifiable for equation: {r['equation']}. Reason: {r['reason']}")
+    # 1. Identification Check (only for 2SLS and 3SLS, not SUR)
+    # SUR doesn't require identification since it doesn't deal with endogeneity
+    if method.upper() in ["2SLS", "3SLS"]:
+        id_results = check_identification(formulas)
+        for r in id_results:
+            if not r["identified"]:
+                raise ValueError(f"System not identifiable for equation: {r['equation']}. Reason: {r['reason']}")
 
     parsed = [parse_equation(eq) for eq in formulas]
 
@@ -438,6 +440,11 @@ class StructuralModelModule:
             # Ensure diagnostics is always a list, even if empty
             diagnostics_list = diagnostics_df.to_dict('records') if len(diagnostics_df) > 0 else []
             
+            # Only include identification check for 2SLS and 3SLS, not SUR
+            identification_results = None
+            if method.upper() in ["2SLS", "3SLS"]:
+                identification_results = check_identification(formulas)
+            
             results = {
                 'success': True,
                 'has_results': True,
@@ -445,7 +452,7 @@ class StructuralModelModule:
                 'formulas': formulas,
                 'params': params.to_dict('records'),
                 'diagnostics': diagnostics_list,
-                'identification': check_identification(formulas),
+                'identification': identification_results,
                 'n_obs': len(df),
                 'n_equations': len(formulas)
             }
