@@ -1603,14 +1603,15 @@ function updateStructuralEquationExample() {
   
   if (!equationBox) return;
   
-  // Only update if textarea is empty or has default placeholder text
+  // Only update if textarea is empty or contains example text
   const currentValue = equationBox.value.trim();
-  const hasUserContent = currentValue.length > 0 && 
-                         !currentValue.includes('Example:') && 
-                         !currentValue.includes('y1 ~ x1 + [x2 ~ z1 + z2]');
+  const isEmpty = currentValue.length === 0;
+  const isExampleText = currentValue === 'y1 ~ x1 + x2 + [x3 ~ z1 + z2 + z3]' || 
+                        currentValue === 'y1 ~ x1 + [x2 ~ z1 + z2]\ny2 ~ x1 + x2 + [x3 ~ z3 + z4]' ||
+                        currentValue.includes('y1 ~ x1 + [x2 ~ z1 + z2]');
   
-  if (hasUserContent) {
-    // Don't overwrite user's input
+  // Don't overwrite user's actual input
+  if (!isEmpty && !isExampleText) {
     return;
   }
   
@@ -1624,7 +1625,9 @@ function updateStructuralEquationExample() {
     equationBox.placeholder = 'Enter equations (one per line) with instruments in brackets [endogenous ~ instrument1 + instrument2]\n\nExample:\ny1 ~ x1 + [x2 ~ z1 + z2]\ny2 ~ x1 + x2 + [x3 ~ z3 + z4]';
   } else if (structuralMethod === 'SUR') {
     // SUR example (multiple equations, no instruments needed)
-    equationBox.value = '';
+    if (isEmpty || isExampleText) {
+      equationBox.value = '';
+    }
     equationBox.placeholder = 'Enter equations separated by newlines (one per line)\n\nExample:\ny1 ~ x1 + x2\ny2 ~ x1 + x3';
   }
 }
