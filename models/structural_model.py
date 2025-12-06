@@ -203,7 +203,7 @@ def estimate_system(formulas, data, method="SUR"):
     method: "SUR", "2SLS", "3SLS"
     """
     if not LINEARMODELS_AVAILABLE:
-        raise ImportError("linearmodels package is required for structural model estimation. Install with: pip install linearmodels>=5.0.0")
+        raise ValueError("PACKAGE_ERROR: linearmodels package is not installed. Please install it with: pip install linearmodels>=5.0.0")
 
     # 1. Identification Check (only for 2SLS and 3SLS, not SUR)
     # SUR doesn't require identification since it doesn't deal with endogeneity
@@ -563,7 +563,7 @@ class StructuralModelModule:
         """
         if not LINEARMODELS_AVAILABLE:
             return {
-                'error': 'linearmodels package is not installed. Please install it with: pip install linearmodels>=5.0.0',
+                'error': 'PACKAGE_ERROR: linearmodels package is not installed. Please install it with: pip install linearmodels>=5.0.0',
                 'has_results': False
             }
         
