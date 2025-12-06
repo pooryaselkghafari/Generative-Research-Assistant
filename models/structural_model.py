@@ -570,10 +570,23 @@ class StructuralModelModule:
                 }
             
             # Validate that all variables exist in dataset
+            # Need to extract individual variable names, not interaction terms
             all_vars = set()
             for eq in formulas:
                 parsed = parse_equation(eq)
-                all_vars.update([parsed['dependent']] + parsed['exog'] + parsed['endog'] + parsed['instr'])
+                # Add dependent variable
+                all_vars.add(parsed['dependent'])
+                
+                # Process exog, endog, and instruments - split interaction terms
+                for var_list in [parsed['exog'], parsed['endog'], parsed['instr']]:
+                    for var in var_list:
+                        # Check if this is an interaction term (contains *)
+                        if '*' in var:
+                            # Split by * and add individual variables
+                            interaction_vars = [v.strip() for v in var.split('*')]
+                            all_vars.update(interaction_vars)
+                        else:
+                            all_vars.add(var)
             
             missing_vars = [v for v in all_vars if v not in df.columns]
             if missing_vars:
