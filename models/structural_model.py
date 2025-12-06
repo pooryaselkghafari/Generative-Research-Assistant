@@ -568,8 +568,15 @@ class StructuralModelModule:
             }
         
         try:
-            # Get method from options, default to SUR
-            method = options.get('method', 'SUR') if options else 'SUR'
+            # Get method from options, default to SUR, and normalize to uppercase
+            method = (options.get('method', 'SUR') if options else 'SUR').upper()
+            
+            # Validate method
+            if method not in ['SUR', '2SLS', '3SLS']:
+                return {
+                    'error': f'Invalid method: {method}. Method must be SUR, 2SLS, or 3SLS.',
+                    'has_results': False
+                }
             
             # Parse formula - split by newlines or semicolons to get multiple equations
             # First try newlines (one equation per line), then semicolons as fallback

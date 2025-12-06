@@ -293,9 +293,17 @@ class AnalysisExecutionService:
         # Create structural model module instance
         structural_module = StructuralModelModule()
         
+        # Normalize method to uppercase (handle case variations like '3ls' -> '3SLS')
+        method_upper = structural_method.upper() if structural_method else 'SUR'
+        if method_upper not in ['SUR', '2SLS', '3SLS']:
+            return render(request, 'engine/index.html', {
+                **_list_context(user=request.user),
+                'error_message': f'Invalid method: {structural_method}. Method must be SUR, 2SLS, or 3SLS.'
+            })
+        
         # Prepare options
         options = {
-            'method': structural_method
+            'method': method_upper
         }
         
         # Run structural analysis
