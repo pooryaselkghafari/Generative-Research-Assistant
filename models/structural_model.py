@@ -459,7 +459,7 @@ def estimate_system(formulas, data, method="SUR"):
     # ===================================================================
     # 3SLS
     # ===================================================================
-        if method == "3SLS":
+    if method == "3SLS":
             eq_dict = {f"eq{i+1}": f for i, f in enumerate(formulas)}
 
             try:
