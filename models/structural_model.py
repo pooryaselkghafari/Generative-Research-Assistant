@@ -659,7 +659,7 @@ class StructuralModelModule:
             
             # Only include identification check for 2SLS and 3SLS, not SUR
             identification_results = None
-            if method.upper() in ["2SLS", "3SLS"]:
+            if method in ["2SLS", "3SLS"]:
                 identification_results = check_identification(formulas)
             
             # Convert params DataFrame to dict, ensuring all values are Python native types
