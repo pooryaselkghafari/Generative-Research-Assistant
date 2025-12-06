@@ -634,6 +634,8 @@ class StructuralModelModule:
             # linearmodels can handle * in formulas, but we need to ensure the base variables exist
             # For SUR, we might need to create interaction terms explicitly
             df = df.copy()
+            # Track interaction term replacements for formula updates
+            interaction_replacements = {}
             for eq in formulas:
                 parsed = parse_equation(eq)
                 # Check for interaction terms in exog
@@ -646,8 +648,15 @@ class StructuralModelModule:
                             interaction_value = df[parts[0]].copy()
                             for part in parts[1:]:
                                 interaction_value = interaction_value * df[part]
-                            df[term] = interaction_value
-                            print(f"DEBUG: Created interaction term in dataframe: {term} = {' * '.join(parts)}")
+                            # Use a safe column name (replace * with _x_ to avoid parsing issues)
+                            safe_name = term.replace(' * ', '_x_').replace('*', '_x_')
+                            df[safe_name] = interaction_value
+                            interaction_replacements[term] = safe_name
+                            print(f"DEBUG: Created interaction term in dataframe: {safe_name} = {' * '.join(parts)}")
+            
+            # Update formulas to use safe interaction term names
+            if interaction_replacements:
+                formulas = [eq.replace(old, new) for eq in formulas for old, new in interaction_replacements.items()]
             
             # Add constant term to dataframe if not present
             if 'const' not in df.columns:
