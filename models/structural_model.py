@@ -168,8 +168,19 @@ def diagnostics(y, y_hat, X, residuals, name="eq"):
     ss_tot = np.sum((y - np.mean(y)) ** 2)
     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else np.nan
 
-    jb_stat, jb_p, _, _ = jarque_bera(residuals)
-    bp_stat, bp_p, _, _ = het_breuschpagan(residuals, X)
+    # jarque_bera returns (statistic, pvalue) or (statistic, pvalue, skewness, kurtosis)
+    jb_result = jarque_bera(residuals)
+    if len(jb_result) >= 2:
+        jb_stat, jb_p = jb_result[0], jb_result[1]
+    else:
+        jb_stat, jb_p = jb_result[0] if len(jb_result) > 0 else np.nan, np.nan
+    
+    # het_breuschpagan returns (statistic, pvalue) or (statistic, pvalue, fvalue, f_pvalue)
+    bp_result = het_breuschpagan(residuals, X)
+    if len(bp_result) >= 2:
+        bp_stat, bp_p = bp_result[0], bp_result[1]
+    else:
+        bp_stat, bp_p = bp_result[0] if len(bp_result) > 0 else np.nan, np.nan
 
     return {
         "equation": name,
