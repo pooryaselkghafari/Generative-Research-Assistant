@@ -656,7 +656,13 @@ class StructuralModelModule:
             
             # Update formulas to use safe interaction term names
             if interaction_replacements:
-                formulas = [eq.replace(old, new) for eq in formulas for old, new in interaction_replacements.items()]
+                updated_formulas = []
+                for eq in formulas:
+                    updated_eq = eq
+                    for old, new in interaction_replacements.items():
+                        updated_eq = updated_eq.replace(old, new)
+                    updated_formulas.append(updated_eq)
+                formulas = updated_formulas
             
             # Add constant term to dataframe if not present
             if 'const' not in df.columns:
