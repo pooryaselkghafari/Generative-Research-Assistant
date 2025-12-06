@@ -299,7 +299,7 @@ def estimate_system(formulas, data, method="SUR"):
     # ===================================================================
     # 2SLS (single equation only)
     # ===================================================================
-    if method.upper() == "2SLS":
+    if method == "2SLS":
         if len(formulas) > 1:
             raise ValueError("2SLS supports only one equation at a time")
 
