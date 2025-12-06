@@ -205,9 +205,16 @@ def estimate_system(formulas, data, method="SUR"):
     if not LINEARMODELS_AVAILABLE:
         raise ValueError("PACKAGE_ERROR: linearmodels package is not installed. Please install it with: pip install linearmodels>=5.0.0")
 
+    # Normalize method to uppercase
+    method = method.upper() if method else "SUR"
+    
+    # Validate method
+    if method not in ["SUR", "2SLS", "3SLS"]:
+        raise ValueError(f"Method must be 'SUR', '2SLS', or '3SLS'. Got: {method}")
+
     # 1. Identification Check (only for 2SLS and 3SLS, not SUR)
     # SUR doesn't require identification since it doesn't deal with endogeneity
-    if method.upper() in ["2SLS", "3SLS"]:
+    if method in ["2SLS", "3SLS"]:
         id_results = check_identification(formulas)
         for r in id_results:
             if not r["identified"]:
@@ -218,7 +225,7 @@ def estimate_system(formulas, data, method="SUR"):
     # ===================================================================
     # SUR
     # ===================================================================
-    if method.upper() == "SUR":
+    if method == "SUR":
         sur_eqs = {}
         for i, entry in enumerate(parsed):
             eq_name = f"eq{i+1}"
@@ -451,7 +458,7 @@ def estimate_system(formulas, data, method="SUR"):
     # ===================================================================
     # 3SLS
     # ===================================================================
-        if method.upper() == "3SLS":
+        if method == "3SLS":
             eq_dict = {f"eq{i+1}": f for i, f in enumerate(formulas)}
 
             try:
@@ -519,7 +526,8 @@ def estimate_system(formulas, data, method="SUR"):
 
         return res, params, pd.DataFrame(diag_list) if diag_list else pd.DataFrame(columns=["equation", "R2", "DW", "JB_stat", "JB_p", "BP_stat", "BP_p"])
 
-    raise ValueError("Method must be 'SUR', '2SLS', or '3SLS'")
+    # This should never be reached due to validation above, but keep as safety
+    raise ValueError(f"Method must be 'SUR', '2SLS', or '3SLS'. Got: {method}")
 
 
 class StructuralModelModule:
