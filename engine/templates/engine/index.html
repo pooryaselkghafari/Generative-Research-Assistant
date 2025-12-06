@@ -429,7 +429,7 @@
 <script>
   // Show collinearity error as popup on page load
   document.addEventListener('DOMContentLoaded', function() {
-    const errorMsg = {{ error_message|safe|tojson }};
+    const errorMsg = "{{ error_message|escapejs }}";
     const cleanMsg = errorMsg.replace('COLLINEARITY_ERROR: ', '');
     showEquationModelErrorModal('Collinearity Detected', cleanMsg);
   });
