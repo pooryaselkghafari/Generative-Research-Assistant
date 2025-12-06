@@ -373,20 +373,34 @@ def estimate_system(formulas, data, method="SUR"):
         # But for diagnostics, we can use a simplified approach
         # Get the number of observations
         n_obs = len(y_data)
-        # Create a simple X matrix with intercept for diagnostics
-        # This is a fallback - ideally we'd extract the actual exog
+        
+        # Try to extract actual exog data, but ensure it's a proper numpy array
+        X_data = None
         try:
-            # Try to get exog as array
-            if hasattr(res.model.exog, 'ndim') and res.model.exog.ndim == 2:
-                X_data = np.asarray(res.model.exog)
-            elif hasattr(res.model.exog, 'values'):
-                X_data = np.asarray(res.model.exog.values)
+            # Try multiple ways to get exog as a numpy array
+            exog_obj = res.model.exog
+            if hasattr(exog_obj, 'ndim') and exog_obj.ndim == 2:
+                X_data = np.asarray(exog_obj, dtype=np.float64)
+            elif hasattr(exog_obj, 'values'):
+                X_data = np.asarray(exog_obj.values, dtype=np.float64)
+            elif hasattr(exog_obj, 'data'):
+                X_data = np.asarray(exog_obj.data, dtype=np.float64)
             else:
-                # Fallback: create intercept-only design matrix
-                X_data = np.ones((n_obs, 1))
-        except:
-            # Fallback: create intercept-only design matrix
-            X_data = np.ones((n_obs, 1))
+                # Try direct conversion
+                X_data = np.asarray(exog_obj, dtype=np.float64)
+        except (TypeError, ValueError, AttributeError) as e:
+            # If conversion fails (e.g., IVData object), use fallback
+            print(f"Warning: Could not extract exog data for diagnostics: {e}")
+            X_data = None
+        
+        # Fallback: create intercept-only design matrix if we couldn't extract exog
+        if X_data is None or not isinstance(X_data, np.ndarray):
+            X_data = np.ones((n_obs, 1), dtype=np.float64)
+        else:
+            # Ensure it's 2D and float64
+            if X_data.ndim == 1:
+                X_data = X_data.reshape(-1, 1)
+            X_data = X_data.astype(np.float64)
 
         diag = diagnostics(
             y_data,
