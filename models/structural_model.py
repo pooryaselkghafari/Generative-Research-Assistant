@@ -595,9 +595,27 @@ class StructuralModelModule:
                     'has_results': False
                 }
             
+            # Create interaction terms in the dataframe if needed
+            # linearmodels can handle * in formulas, but we need to ensure the base variables exist
+            # For SUR, we might need to create interaction terms explicitly
+            df = df.copy()
+            for eq in formulas:
+                parsed = parse_equation(eq)
+                # Check for interaction terms in exog
+                for term in parsed['exog']:
+                    if '*' in term:
+                        # This is an interaction term - create it in the dataframe
+                        parts = [v.strip() for v in term.split('*')]
+                        if all(part in df.columns for part in parts):
+                            # All parts exist, create interaction
+                            interaction_value = df[parts[0]].copy()
+                            for part in parts[1:]:
+                                interaction_value = interaction_value * df[part]
+                            df[term] = interaction_value
+                            print(f"DEBUG: Created interaction term in dataframe: {term} = {' * '.join(parts)}")
+            
             # Add constant term to dataframe if not present
             if 'const' not in df.columns:
-                df = df.copy()
                 df['const'] = 1.0
             
             # Estimate the system
