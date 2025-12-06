@@ -368,39 +368,68 @@ def estimate_system(formulas, data, method="SUR"):
         residuals = np.asarray(res.resids)
         y_data = y_hat + residuals
         
-        # Get exogenous data - try to extract from model
-        # For IV2SLS, we can get exog from the original data using the formula
-        # But for diagnostics, we can use a simplified approach
-        # Get the number of observations
+        # Get exogenous data for diagnostics
+        # Reconstruct X from original data using parsed variables
+        # This ensures we have proper regressors for Breusch-Pagan test
         n_obs = len(y_data)
-        
-        # Try to extract actual exog data, but ensure it's a proper numpy array
         X_data = None
-        try:
-            # Try multiple ways to get exog as a numpy array
-            exog_obj = res.model.exog
-            if hasattr(exog_obj, 'ndim') and exog_obj.ndim == 2:
-                X_data = np.asarray(exog_obj, dtype=np.float64)
-            elif hasattr(exog_obj, 'values'):
-                X_data = np.asarray(exog_obj.values, dtype=np.float64)
-            elif hasattr(exog_obj, 'data'):
-                X_data = np.asarray(exog_obj.data, dtype=np.float64)
-            else:
-                # Try direct conversion
-                X_data = np.asarray(exog_obj, dtype=np.float64)
-        except (TypeError, ValueError, AttributeError) as e:
-            # If conversion fails (e.g., IVData object), use fallback
-            print(f"Warning: Could not extract exog data for diagnostics: {e}")
-            X_data = None
         
-        # Fallback: create intercept-only design matrix if we couldn't extract exog
-        if X_data is None or not isinstance(X_data, np.ndarray):
+        try:
+            # Reconstruct X from original data using the parsed variables
+            # We need: constant + exogenous variables + endogenous variables
+            X_cols = ['const']  # Start with constant
+            
+            # Add exogenous variables
+            for var in exog_vars:
+                if var in data.columns:
+                    X_cols.append(var)
+            
+            # Add endogenous variables (they're still in the model)
+            for var in endog_vars:
+                if var in data.columns:
+                    X_cols.append(var)
+            
+            # Build X matrix from data
+            if len(X_cols) > 1:  # Need at least constant + one regressor
+                X_data = data[X_cols].values.astype(np.float64)
+            else:
+                # Fallback: constant + first available variable
+                X_data = np.ones((n_obs, 1), dtype=np.float64)
+                if len(data.columns) > 0:
+                    first_col = data.columns[0]
+                    if first_col != dependent:
+                        X_data = np.column_stack([np.ones(n_obs, dtype=np.float64), 
+                                                  data[first_col].values.astype(np.float64)])
+        except Exception as e:
+            # If reconstruction fails, create constant + first variable
+            print(f"Warning: Could not reconstruct X_data for diagnostics: {e}")
             X_data = np.ones((n_obs, 1), dtype=np.float64)
-        else:
-            # Ensure it's 2D and float64
-            if X_data.ndim == 1:
-                X_data = X_data.reshape(-1, 1)
-            X_data = X_data.astype(np.float64)
+            if len(data.columns) > 0:
+                try:
+                    first_col = [c for c in data.columns if c != dependent][0] if len(data.columns) > 1 else data.columns[0]
+                    X_data = np.column_stack([np.ones(n_obs, dtype=np.float64), 
+                                              data[first_col].values.astype(np.float64)])
+                except:
+                    pass
+        
+        # Ensure X_data has at least constant + one regressor for Breusch-Pagan
+        if X_data is None or X_data.shape[1] < 2:
+            # Create constant + first available variable
+            X_data = np.ones((n_obs, 1), dtype=np.float64)
+            if len(data.columns) > 0:
+                try:
+                    first_col = [c for c in data.columns if c != dependent][0] if len(data.columns) > 1 else data.columns[0]
+                    X_data = np.column_stack([np.ones(n_obs, dtype=np.float64), 
+                                              data[first_col].values.astype(np.float64)])
+                except:
+                    # Last resort: constant + zeros (will fail BP test but won't crash)
+                    X_data = np.column_stack([np.ones(n_obs, dtype=np.float64), 
+                                              np.zeros(n_obs, dtype=np.float64)])
+        
+        # Ensure it's 2D and float64
+        if X_data.ndim == 1:
+            X_data = X_data.reshape(-1, 1)
+        X_data = X_data.astype(np.float64)
 
         diag = diagnostics(
             y_data,
