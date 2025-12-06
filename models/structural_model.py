@@ -460,6 +460,10 @@ def estimate_system(formulas, data, method="SUR"):
     # 3SLS
     # ===================================================================
     if method == "3SLS":
+        # 3SLS requires multiple equations (system of equations)
+        if len(formulas) < 2:
+            raise ValueError(f"EQUATION_COUNT_ERROR: 3SLS (Three-Stage Least Squares) requires at least 2 equations, but you provided {len(formulas)} equation(s).\n\n3SLS is designed for systems of simultaneous equations with endogeneity.\n\nTo fix this:\n1. Add more equations (one per line) to create a system\n2. Or use 2SLS if you only have one equation with endogeneity\n3. Or use SUR if you have multiple equations without endogeneity\n\nExample for 3SLS:\ny1 ~ x1 + [x2 ~ z1 + z2]\ny2 ~ x1 + x2 + [x3 ~ z3 + z4]")
+        
         eq_dict = {f"eq{i+1}": f for i, f in enumerate(formulas)}
 
         try:

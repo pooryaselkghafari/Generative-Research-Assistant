@@ -443,6 +443,15 @@
     showEquationModelErrorModal('Package Not Installed', cleanMsg);
   });
 </script>
+{% elif "EQUATION_COUNT_ERROR:" in error_message %}
+<script>
+  // Show equation count error as popup on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    const errorMsg = "{{ error_message|escapejs }}";
+    const cleanMsg = errorMsg.replace('EQUATION_COUNT_ERROR: ', '');
+    showEquationModelErrorModal('Insufficient Equations', cleanMsg);
+  });
+</script>
 {% else %}
 <div class="card" style="background-color: #fef2f2; border-left: 4px solid #dc2626; margin-bottom: 20px; padding: 16px;">
   <div style="display: flex; align-items: center; gap: 12px;">
@@ -1476,18 +1485,21 @@ function showEquationModelErrorModal(errorTitle, errorMessage) {
   // Check if this is a package error
   const isPackageError = errorTitle.includes('Package') || errorMessage.includes('not installed') || errorMessage.includes('pip install');
   
+  // Check if this is an equation count error
+  const isEquationCountError = errorTitle.includes('Insufficient Equations') || errorMessage.includes('requires at least') || errorMessage.includes('equation(s)');
+  
   messageDiv.innerHTML = `
     <div style="margin-bottom: 16px;">
-      <div style="display: flex; align-items: center; margin-bottom: 12px; padding: 12px; background-color: ${isCollinearityError ? '#fff7ed' : isPackageError ? '#eff6ff' : '#fef2f2'}; border-radius: 8px; border-left: 4px solid ${isCollinearityError ? '#f59e0b' : isPackageError ? '#3b82f6' : '#dc2626'};">
+      <div style="display: flex; align-items: center; margin-bottom: 12px; padding: 12px; background-color: ${isCollinearityError ? '#fff7ed' : isPackageError ? '#eff6ff' : isEquationCountError ? '#f0f9ff' : '#fef2f2'}; border-radius: 8px; border-left: 4px solid ${isCollinearityError ? '#f59e0b' : isPackageError ? '#3b82f6' : isEquationCountError ? '#0ea5e9' : '#dc2626'};">
         <div style="margin-right: 12px;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${isCollinearityError ? '#f59e0b' : isPackageError ? '#3b82f6' : '#dc2626'}" stroke-width="2">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${isCollinearityError ? '#f59e0b' : isPackageError ? '#3b82f6' : isEquationCountError ? '#0ea5e9' : '#dc2626'}" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
-            ${isCollinearityError ? '<path d="M12 8v4M12 16h.01"/>' : isPackageError ? '<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>' : '<line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>'}
+            ${isCollinearityError ? '<path d="M12 8v4M12 16h.01"/>' : isPackageError ? '<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>' : isEquationCountError ? '<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>' : '<line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>'}
           </svg>
         </div>
         <div>
-          <p style="margin: 0; font-weight: 600; color: ${isCollinearityError ? '#f59e0b' : isPackageError ? '#3b82f6' : '#dc2626'};">
-            ${isCollinearityError ? 'Collinearity Detected' : isPackageError ? 'Package Not Installed' : 'Model-Equation Mismatch'}
+          <p style="margin: 0; font-weight: 600; color: ${isCollinearityError ? '#f59e0b' : isPackageError ? '#3b82f6' : isEquationCountError ? '#0ea5e9' : '#dc2626'};">
+            ${isCollinearityError ? 'Collinearity Detected' : isPackageError ? 'Package Not Installed' : isEquationCountError ? 'Insufficient Equations' : 'Model-Equation Mismatch'}
           </p>
         </div>
       </div>
@@ -1514,6 +1526,16 @@ function showEquationModelErrorModal(errorTitle, errorMessage) {
         <p style="margin: 8px 0 0 0; color: #1e3a8a; font-size: 0.875rem; line-height: 1.6;">
           After installation, restart your web server and try again.
         </p>
+      </div>
+      ` : ''}
+      ${isEquationCountError ? `
+      <div style="margin-top: 16px; padding: 12px; background-color: #e0f2fe; border-radius: 6px; border-left: 3px solid #0ea5e9;">
+        <p style="margin: 0 0 8px 0; font-weight: 600; color: #0369a1; font-size: 0.875rem;">💡 Quick Fix:</p>
+        <ul style="margin: 0; padding-left: 20px; color: #0c4a6e; font-size: 0.875rem; line-height: 1.6;">
+          <li><strong>For 3SLS:</strong> Add at least one more equation (one per line) to create a system of equations</li>
+          <li><strong>For single equation:</strong> Use 2SLS if you have endogeneity, or SUR if you have multiple equations without endogeneity</li>
+          <li><strong>Example:</strong> Enter equations separated by newlines, e.g.,<br><code style="background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px;">y1 ~ x1 + [x2 ~ z1]<ny2 ~ x1 + x2 + [x3 ~ z2]</code></li>
+        </ul>
       </div>
       ` : ''}
     </div>
