@@ -425,6 +425,16 @@
 
 {% block content %}
 {% if error_message %}
+{% if "COLLINEARITY_ERROR:" in error_message %}
+<script>
+  // Show collinearity error as popup on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    const errorMsg = {{ error_message|safe|tojson }};
+    const cleanMsg = errorMsg.replace('COLLINEARITY_ERROR: ', '');
+    showEquationModelErrorModal('Collinearity Detected', cleanMsg);
+  });
+</script>
+{% else %}
 <div class="card" style="background-color: #fef2f2; border-left: 4px solid #dc2626; margin-bottom: 20px; padding: 16px;">
   <div style="display: flex; align-items: center; gap: 12px;">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
@@ -438,6 +448,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 {% endif %}
 
 <form action="/run/" method="post" class="card form" id="analysisForm" onsubmit="event.preventDefault(); return handleFormSubmission(event);">

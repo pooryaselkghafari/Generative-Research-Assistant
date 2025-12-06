@@ -348,8 +348,15 @@ def estimate_system(formulas, data, method="SUR"):
             model = IV2SLS.from_formula(linearmodels_formula, data=data)
             res = model.fit(cov_type="robust")
         except Exception as e:
-            print(f"ERROR in IV2SLS.from_formula: {type(e).__name__}: {str(e)}")
+            error_str = str(e)
+            print(f"ERROR in IV2SLS.from_formula: {type(e).__name__}: {error_str}")
             print(f"ERROR: Formula was: {linearmodels_formula}")
+            
+            # Check for collinearity/rank issues
+            if "do not have full column rank" in error_str.lower() or "rank" in error_str.lower() and ("collinear" in error_str.lower() or "singular" in error_str.lower() or "instruments" in error_str.lower()):
+                # Extract variable names from error if possible
+                raise ValueError(f"COLLINEARITY_ERROR: The instruments or variables in your equation are collinear (linearly dependent). This means some variables are perfectly correlated or redundant.\n\nTo fix this:\n1. Check if any instruments are the same as your exogenous variables\n2. Remove one of the collinear variables\n3. Ensure you have enough unique instruments (at least as many as endogenous variables)\n\nFormula: {linearmodels_formula}")
+            
             raise ValueError(f"Error estimating 2SLS model: {str(e)}. Formula: {linearmodels_formula}")
 
         # Convert all to numpy arrays to ensure proper types
@@ -444,11 +451,21 @@ def estimate_system(formulas, data, method="SUR"):
     # ===================================================================
     # 3SLS
     # ===================================================================
-    if method.upper() == "3SLS":
-        eq_dict = {f"eq{i+1}": f for i, f in enumerate(formulas)}
+        if method.upper() == "3SLS":
+            eq_dict = {f"eq{i+1}": f for i, f in enumerate(formulas)}
 
-        model = IV3SLS.from_formula(eq_dict, data=data)
-        res = model.fit()
+            try:
+                model = IV3SLS.from_formula(eq_dict, data=data)
+                res = model.fit()
+            except Exception as e:
+                error_str = str(e)
+                print(f"ERROR in IV3SLS.from_formula: {type(e).__name__}: {error_str}")
+                
+                # Check for collinearity/rank issues
+                if "do not have full column rank" in error_str.lower() or "rank" in error_str.lower() and ("collinear" in error_str.lower() or "singular" in error_str.lower() or "instruments" in error_str.lower()):
+                    raise ValueError(f"COLLINEARITY_ERROR: The instruments or variables in your equations are collinear (linearly dependent). This means some variables are perfectly correlated or redundant.\n\nTo fix this:\n1. Check if any instruments are the same as your exogenous variables\n2. Remove one of the collinear variables from your equations\n3. Ensure you have enough unique instruments (at least as many as endogenous variables in each equation)\n\nEquations: {formulas}")
+                
+                raise
 
         # param table - handle MultiIndex properly
         # Build params DataFrame manually to ensure correct alignment
