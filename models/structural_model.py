@@ -556,12 +556,25 @@ class StructuralModelModule:
             if method.upper() in ["2SLS", "3SLS"]:
                 identification_results = check_identification(formulas)
             
+            # Convert params DataFrame to dict, ensuring all values are Python native types
+            params_dict = params.to_dict('records')
+            # Convert any numpy types to Python native types
+            for param in params_dict:
+                for key, value in param.items():
+                    if hasattr(value, 'item'):  # numpy scalar
+                        param[key] = value.item()
+                    elif hasattr(value, '__float__'):  # can be converted to float
+                        try:
+                            param[key] = float(value)
+                        except (ValueError, TypeError):
+                            param[key] = str(value)
+            
             results = {
                 'success': True,
                 'has_results': True,
                 'method': method,
                 'formulas': formulas,
-                'params': params.to_dict('records'),
+                'params': params_dict,
                 'diagnostics': diagnostics_list,
                 'identification': identification_results,
                 'n_obs': len(df),
