@@ -352,12 +352,13 @@ def estimate_system(formulas, data, method="SUR"):
             print(f"ERROR: Formula was: {linearmodels_formula}")
             raise ValueError(f"Error estimating 2SLS model: {str(e)}. Formula: {linearmodels_formula}")
 
+        # Convert all to numpy arrays to ensure proper types
         params = pd.DataFrame({
             "variable": res.params.index,
-            "param": res.params.values,
-            "std_err": res.std_errors.values,
-            "t": res.tstats.values,
-            "p": res.pvalues.values
+            "param": np.asarray(res.params.values),
+            "std_err": np.asarray(res.std_errors.values),
+            "t": np.asarray(res.tstats.values),
+            "p": np.asarray(res.pvalues.values)
         })
 
         # Get dependent variable data - IVData object structure
