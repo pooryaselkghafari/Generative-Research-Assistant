@@ -528,7 +528,7 @@ def estimate_system(formulas, data, method="SUR"):
         return res, params, pd.DataFrame(diag_list) if diag_list else pd.DataFrame(columns=["equation", "R2", "DW", "JB_stat", "JB_p", "BP_stat", "BP_p"])
 
     # This should never be reached due to validation above, but keep as safety
-    raise ValueError(f"Method must be 'SUR', '2SLS', or '3SLS'. Got: {method}")
+    #raise ValueError(f"Method must be 'SUR', '2SLS', or '3SLS'. Got: {method}")
 
 
 class StructuralModelModule:
