@@ -1234,7 +1234,7 @@
         "sendHeaders": true,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"sessionId\": \"{{ $('Edit Fields').item.json.sessionId }}\",\n  \"messages\": {{ JSON.stringify($json.output || $json) }},\n  \"metadata\": {{ JSON.stringify($json.metadata || {}) }}\n}",
+        "jsonBody": "={\n  \"sessionId\": \"{{ $('Edit Fields').item.json.sessionId }}\",\n  \"messages\": {{ JSON.stringify($json.output || $json) }},\n  \"metadata\": {{ JSON.stringify($json.metadata || '{}') }}\n}",
         "headerParameters": {
           "parameters": [
             {
@@ -1727,7 +1727,7 @@
           }
         ]
       ]
-    },
+    }
   },
   "active": false,
   "settings": {
