@@ -1215,7 +1215,7 @@
         -3472,
         256
       ],
-      "id": "19cadc0c-c52b-4339-8a11-0119eddffbaf",
+      "id": "load-chat-history-http",
       "name": "Load Chat History",
       "alwaysOutputData": true,
       "credentials": {
@@ -1234,7 +1234,7 @@
         "sendHeaders": true,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"sessionId\": \"{{ $('Edit Fields').item.json.sessionId }}\",\n  \"messages\": {{ $json.output ? JSON.stringify($json.output) : JSON.stringify($json) }},\n  \"metadata\": {{ $json.metadata ? JSON.stringify($json.metadata) : '{}' }}\n}",
+        "jsonBody": "={{ {\n  \"sessionId\": $('Edit Fields').item.json.sessionId,\n  \"messages\": $json.output || $json,\n  \"metadata\": $json.metadata || {}\n} }}",
         "headerParameters": {
           "parameters": [
             {
