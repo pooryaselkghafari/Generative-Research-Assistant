@@ -98,6 +98,12 @@ N8N_API_BASE_URL = os.environ.get('N8N_API_BASE_URL', 'http://127.0.0.1:5678')
 N8N_API_KEY = os.environ.get('N8N_API_KEY')
 N8N_WEBHOOK_URL = os.environ.get('N8N_WEBHOOK_URL', os.environ.get('WEBHOOK_URL', 'http://127.0.0.1:5678/'))
 
+# Supabase integration settings
+# Internal URL for proxy (used by supabase_proxy view)
+SUPABASE_STUDIO_URL = os.environ.get('SUPABASE_STUDIO_URL', 'http://127.0.0.1:54323')
+# Public URL for redirects (used by admin view)
+SUPABASE_STUDIO_PUBLIC_URL = os.environ.get('SUPABASE_STUDIO_PUBLIC_URL', 'https://studio.generativera.com')
+
 # Email settings
 # Supports Resend API (recommended) or SMTP
 # Option 1: Resend API (more reliable, no SMTP ports needed)
@@ -372,7 +378,8 @@ MIDDLEWARE = [
     # Admin security middleware (must be after AuthenticationMiddleware)
     'statbox.middleware.AdminSecurityMiddleware',
     # n8n auth middleware (must be after AuthenticationMiddleware)
-    'engine.middleware.n8n_auth.N8nAuthMiddleware',
+    # Temporarily commented out - causing import issues
+    # 'engine.middleware.n8n_auth.N8nAuthMiddleware',
 ]
 
 ROOT_URLCONF = 'statbox.urls'
