@@ -355,6 +355,17 @@ def estimate_system(formulas, data, method="SUR"):
         try:
             model = IV2SLS.from_formula(linearmodels_formula, data=data)
             res = model.fit(cov_type="robust")
+            
+            # Debug: Print first_stage info immediately after fitting
+            if hasattr(res, 'first_stage'):
+                print(f"DEBUG: res.first_stage exists, type: {type(res.first_stage)}")
+                if res.first_stage is not None:
+                    print(f"DEBUG: first_stage attributes: {[x for x in dir(res.first_stage) if not x.startswith('_')]}")
+                    try:
+                        print(f"DEBUG: first_stage summary type: {type(res.first_stage.summary())}")
+                        print(f"DEBUG: first_stage summary:\n{res.first_stage.summary()}")
+                    except Exception as e:
+                        print(f"DEBUG: Could not get summary: {e}")
         except Exception as e:
             error_str = str(e)
             print(f"ERROR in IV2SLS.from_formula: {type(e).__name__}: {error_str}")
