@@ -294,7 +294,7 @@ def estimate_system(formulas, data, method="SUR"):
                     # Fallback: use res.fitted_values and res.resids if available
                     print(f"Warning: Could not align columns for {eq_name}, skipping diagnostics")
 
-        return res, params, pd.DataFrame(diag_list) if diag_list else pd.DataFrame(columns=["equation", "R2", "DW", "JB_stat", "JB_p", "BP_stat", "BP_p"])
+        return res, params, pd.DataFrame(diag_list) if diag_list else pd.DataFrame(columns=["equation", "R2", "DW", "JB_stat", "JB_p", "BP_stat", "BP_p"]), None
 
     # ===================================================================
     # 2SLS (single equation only)
@@ -367,6 +367,101 @@ def estimate_system(formulas, data, method="SUR"):
             
             raise ValueError(f"Error estimating 2SLS model: {str(e)}. Formula: {linearmodels_formula}")
 
+        # ===================================================================
+        # Extract instrument diagnostics for 2SLS
+        # ===================================================================
+        instrument_diagnostics = {}
+        
+        try:
+            # 1. First-stage diagnostics
+            first_stage_results = []
+            if hasattr(res, 'first_stage') and res.first_stage:
+                for name, stage in res.first_stage.items():
+                    try:
+                        fs_fstat = stage.f_statistic.stat if hasattr(stage.f_statistic, 'stat') else None
+                        fs_pval = stage.f_statistic.pval if hasattr(stage.f_statistic, 'pval') else None
+                        partial_r2 = stage.partial_r2 if hasattr(stage, 'partial_r2') else None
+                        
+                        first_stage_results.append({
+                            'endogenous_var': str(name),
+                            'f_statistic': float(fs_fstat) if fs_fstat is not None else None,
+                            'f_pvalue': float(fs_pval) if fs_pval is not None else None,
+                            'partial_r2': float(partial_r2) if partial_r2 is not None else None,
+                        })
+                    except Exception as e:
+                        print(f"Warning: Could not extract first-stage diagnostics for {name}: {e}")
+                        first_stage_results.append({
+                            'endogenous_var': str(name),
+                            'f_statistic': None,
+                            'f_pvalue': None,
+                            'partial_r2': None,
+                        })
+            
+            instrument_diagnostics['first_stage'] = first_stage_results
+            
+            # 2. Weak instrument test (Sanderson-Windmeijer F-test)
+            try:
+                weak_instrument = res.weak_instrument_test
+                if weak_instrument is not None:
+                    if hasattr(weak_instrument, 'stat'):
+                        instrument_diagnostics['weak_instrument'] = {
+                            'statistic': float(weak_instrument.stat) if weak_instrument.stat is not None else None,
+                            'pvalue': float(weak_instrument.pval) if hasattr(weak_instrument, 'pval') and weak_instrument.pval is not None else None,
+                        }
+                    else:
+                        instrument_diagnostics['weak_instrument'] = None
+                else:
+                    instrument_diagnostics['weak_instrument'] = None
+            except Exception as e:
+                instrument_diagnostics['weak_instrument'] = None
+                print(f"Warning: Weak instrument test not available: {e}")
+            
+            # 3. Overidentification test (Hansen J or Sargan)
+            # Only available when #instruments > #endogenous variables
+            try:
+                overid_test = res.overidentification_test
+                if overid_test is not None:
+                    if hasattr(overid_test, 'stat'):
+                        test_name = 'Hansen J'
+                        if hasattr(overid_test, 'test_name'):
+                            test_name = str(overid_test.test_name)
+                        elif hasattr(overid_test, 'name'):
+                            test_name = str(overid_test.name)
+                        
+                        instrument_diagnostics['overidentification'] = {
+                            'statistic': float(overid_test.stat) if overid_test.stat is not None else None,
+                            'pvalue': float(overid_test.pval) if hasattr(overid_test, 'pval') and overid_test.pval is not None else None,
+                            'test_name': test_name,
+                        }
+                    else:
+                        instrument_diagnostics['overidentification'] = None
+                else:
+                    instrument_diagnostics['overidentification'] = None
+            except Exception as e:
+                instrument_diagnostics['overidentification'] = None
+                print(f"Info: Overidentification test not available (model may be exactly identified): {e}")
+            
+            # 4. Endogeneity test (Durbin-Wu-Hausman)
+            try:
+                wu_hausman = res.wu_hausman
+                if wu_hausman is not None:
+                    if hasattr(wu_hausman, 'stat'):
+                        instrument_diagnostics['endogeneity_test'] = {
+                            'statistic': float(wu_hausman.stat) if wu_hausman.stat is not None else None,
+                            'pvalue': float(wu_hausman.pval) if hasattr(wu_hausman, 'pval') and wu_hausman.pval is not None else None,
+                        }
+                    else:
+                        instrument_diagnostics['endogeneity_test'] = None
+                else:
+                    instrument_diagnostics['endogeneity_test'] = None
+            except Exception as e:
+                instrument_diagnostics['endogeneity_test'] = None
+                print(f"Warning: Endogeneity test not available: {e}")
+                
+        except Exception as e:
+            print(f"Warning: Could not extract all instrument diagnostics: {e}")
+            instrument_diagnostics['error'] = str(e)
+
         # Convert all to numpy arrays to ensure proper types
         params = pd.DataFrame({
             "variable": res.params.index,
@@ -375,6 +470,9 @@ def estimate_system(formulas, data, method="SUR"):
             "t": np.asarray(res.tstats.values),
             "p": np.asarray(res.pvalues.values)
         })
+        
+        # Add instrument diagnostics to params or return separately
+        # We'll add it to the results dictionary later
 
         # Get dependent variable data - IVData object structure
         # The simplest approach: reconstruct y from fitted_values + residuals
@@ -454,7 +552,8 @@ def estimate_system(formulas, data, method="SUR"):
             name="2SLS"
         )
 
-        return res, params, pd.DataFrame([diag])
+        # Return results with instrument diagnostics
+        return res, params, pd.DataFrame([diag]), instrument_diagnostics
 
     # ===================================================================
     # 3SLS
@@ -529,7 +628,7 @@ def estimate_system(formulas, data, method="SUR"):
                     # Fallback: use res.fitted_values and res.resids if available
                     print(f"Warning: Could not align columns for {eq_name}, skipping diagnostics")
 
-        return res, params, pd.DataFrame(diag_list) if diag_list else pd.DataFrame(columns=["equation", "R2", "DW", "JB_stat", "JB_p", "BP_stat", "BP_p"])
+        return res, params, pd.DataFrame(diag_list) if diag_list else pd.DataFrame(columns=["equation", "R2", "DW", "JB_stat", "JB_p", "BP_stat", "BP_p"]), None
 
     # This should never be reached due to validation above, but keep as safety
     #raise ValueError(f"Method must be 'SUR', '2SLS', or '3SLS'. Got: {method}")
@@ -673,7 +772,7 @@ class StructuralModelModule:
                 df['const'] = 1.0
             
             # Estimate the system
-            res, params, diagnostics_df = estimate_system(formulas, df, method=method)
+            res, params, diagnostics_df, instrument_diagnostics = estimate_system(formulas, df, method=method)
             
             # Format results for display
             # Ensure diagnostics is always a list, even if empty
@@ -705,6 +804,7 @@ class StructuralModelModule:
                 'params': params_dict,
                 'diagnostics': diagnostics_list,
                 'identification': identification_results,
+                'instrument_diagnostics': instrument_diagnostics,  # Add instrument diagnostics for 2SLS
                 'n_obs': len(df),
                 'n_equations': len(formulas)
             }
