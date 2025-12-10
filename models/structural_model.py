@@ -379,17 +379,60 @@ def estimate_system(formulas, data, method="SUR"):
                 # Get endogenous variable names from parsed equation
                 endog_names = endog_vars if endog_vars else []
                 
-                # FirstStageResults object - try different access methods
+                # Debug: Print first_stage type and available attributes
+                print(f"DEBUG: first_stage type: {type(res.first_stage)}")
+                print(f"DEBUG: first_stage dir: {[x for x in dir(res.first_stage) if not x.startswith('_')][:20]}")
+                
+                # FirstStageResults object - try accessing via summary or DataFrame
                 for endog_name in endog_names:
                     fs_fstat = None
                     fs_pval = None
                     partial_r2 = None
                     
                     try:
-                        # Method 1: Try dictionary-like access with variable name
-                        if hasattr(res.first_stage, '__getitem__'):
+                        # Method 1: Try to get summary as DataFrame or string
+                        if hasattr(res.first_stage, 'summary'):
+                            try:
+                                summary = res.first_stage.summary()
+                                # If it's a DataFrame, extract values
+                                if isinstance(summary, pd.DataFrame):
+                                    if endog_name in summary.index:
+                                        row = summary.loc[endog_name]
+                                        # Look for F-statistic and partial R² columns
+                                        for col in summary.columns:
+                                            col_lower = str(col).lower()
+                                            if 'f' in col_lower and 'stat' in col_lower and fs_fstat is None:
+                                                fs_fstat = row[col]
+                                            if 'partial' in col_lower and 'r' in col_lower and '2' in col_lower and partial_r2 is None:
+                                                partial_r2 = row[col]
+                                # If it's a string, try to parse (fallback)
+                                elif isinstance(summary, str):
+                                    # Could parse string, but let's try other methods first
+                                    pass
+                            except Exception as e:
+                                print(f"DEBUG: Error accessing summary: {e}")
+                        
+                        # Method 2: Try accessing as DataFrame directly
+                        if fs_fstat is None and hasattr(res.first_stage, 'to_frame'):
+                            try:
+                                df = res.first_stage.to_frame()
+                                if endog_name in df.index:
+                                    row = df.loc[endog_name]
+                                    # Look for relevant columns
+                                    for col in df.columns:
+                                        col_lower = str(col).lower()
+                                        if 'f' in col_lower and 'stat' in col_lower:
+                                            fs_fstat = row[col]
+                                        if 'partial' in col_lower and 'r' in col_lower:
+                                            partial_r2 = row[col]
+                            except Exception as e:
+                                print(f"DEBUG: Error converting to DataFrame: {e}")
+                        
+                        # Method 3: Try dictionary-like access with variable name
+                        if fs_fstat is None and hasattr(res.first_stage, '__getitem__'):
                             try:
                                 stage = res.first_stage[endog_name]
+                                # Check if stage has the attributes directly
                                 if hasattr(stage, 'f_statistic'):
                                     fs_obj = stage.f_statistic
                                     if hasattr(fs_obj, 'stat'):
@@ -398,37 +441,63 @@ def estimate_system(formulas, data, method="SUR"):
                                         fs_pval = fs_obj.pval
                                 if hasattr(stage, 'partial_r2'):
                                     partial_r2 = stage.partial_r2
-                            except (KeyError, TypeError, IndexError):
-                                pass
-                        
-                        # Method 2: Try accessing as attribute
-                        if fs_fstat is None and hasattr(res.first_stage, endog_name):
-                            try:
-                                stage = getattr(res.first_stage, endog_name)
-                                if hasattr(stage, 'f_statistic'):
-                                    fs_obj = stage.f_statistic
+                                # Also try accessing as attributes directly on stage
+                                if hasattr(stage, 'partial_f_stat'):
+                                    fs_obj = stage.partial_f_stat
                                     if hasattr(fs_obj, 'stat'):
                                         fs_fstat = fs_obj.stat
                                     if hasattr(fs_obj, 'pval'):
                                         fs_pval = fs_obj.pval
-                                if hasattr(stage, 'partial_r2'):
-                                    partial_r2 = stage.partial_r2
-                            except (AttributeError, TypeError):
-                                pass
+                            except (KeyError, TypeError, IndexError) as e:
+                                print(f"DEBUG: Error with __getitem__ access: {e}")
                         
-                        # Method 3: If only one endogenous variable, try direct access
+                        # Method 4: Try accessing attributes directly on first_stage
+                        if fs_fstat is None:
+                            # Try common attribute names
+                            for attr_name in ['partial_f_stat', 'f_statistic', 'f_stat', 'partial_f']:
+                                if hasattr(res.first_stage, attr_name):
+                                    try:
+                                        fs_obj = getattr(res.first_stage, attr_name)
+                                        if hasattr(fs_obj, 'stat'):
+                                            fs_fstat = fs_obj.stat
+                                        if hasattr(fs_obj, 'pval'):
+                                            fs_pval = fs_obj.pval
+                                        break
+                                    except:
+                                        pass
+                            
+                            # Try partial_r2
+                            for attr_name in ['partial_r2', 'partial_rsquared', 'partial_r_squared']:
+                                if hasattr(res.first_stage, attr_name):
+                                    try:
+                                        partial_r2 = getattr(res.first_stage, attr_name)
+                                        break
+                                    except:
+                                        pass
+                        
+                        # Method 5: If only one endogenous variable, try accessing by index
                         if fs_fstat is None and len(endog_names) == 1:
-                            if hasattr(res.first_stage, 'f_statistic'):
-                                fs_obj = res.first_stage.f_statistic
-                                if hasattr(fs_obj, 'stat'):
-                                    fs_fstat = fs_obj.stat
-                                if hasattr(fs_obj, 'pval'):
-                                    fs_pval = fs_obj.pval
-                            if hasattr(res.first_stage, 'partial_r2'):
-                                partial_r2 = res.first_stage.partial_r2
+                            try:
+                                # Try accessing first element if it's iterable
+                                if hasattr(res.first_stage, '__iter__') and not isinstance(res.first_stage, str):
+                                    items = list(res.first_stage)
+                                    if len(items) > 0:
+                                        stage = items[0]
+                                        if hasattr(stage, 'f_statistic'):
+                                            fs_obj = stage.f_statistic
+                                            if hasattr(fs_obj, 'stat'):
+                                                fs_fstat = fs_obj.stat
+                                            if hasattr(fs_obj, 'pval'):
+                                                fs_pval = fs_obj.pval
+                                        if hasattr(stage, 'partial_r2'):
+                                            partial_r2 = stage.partial_r2
+                            except Exception as e:
+                                print(f"DEBUG: Error with iteration access: {e}")
                         
                     except Exception as inner_e:
                         print(f"Warning: Error accessing first-stage for {endog_name}: {inner_e}")
+                        import traceback
+                        traceback.print_exc()
                     
                     first_stage_results.append({
                         'endogenous_var': str(endog_name),
