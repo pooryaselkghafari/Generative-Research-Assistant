@@ -375,27 +375,67 @@ def estimate_system(formulas, data, method="SUR"):
         try:
             # 1. First-stage diagnostics
             first_stage_results = []
-            if hasattr(res, 'first_stage') and res.first_stage:
-                for name, stage in res.first_stage.items():
+            if hasattr(res, 'first_stage') and res.first_stage is not None:
+                # Get endogenous variable names from parsed equation
+                endog_names = endog_vars if endog_vars else []
+                
+                # FirstStageResults object - try different access methods
+                for endog_name in endog_names:
+                    fs_fstat = None
+                    fs_pval = None
+                    partial_r2 = None
+                    
                     try:
-                        fs_fstat = stage.f_statistic.stat if hasattr(stage.f_statistic, 'stat') else None
-                        fs_pval = stage.f_statistic.pval if hasattr(stage.f_statistic, 'pval') else None
-                        partial_r2 = stage.partial_r2 if hasattr(stage, 'partial_r2') else None
+                        # Method 1: Try dictionary-like access with variable name
+                        if hasattr(res.first_stage, '__getitem__'):
+                            try:
+                                stage = res.first_stage[endog_name]
+                                if hasattr(stage, 'f_statistic'):
+                                    fs_obj = stage.f_statistic
+                                    if hasattr(fs_obj, 'stat'):
+                                        fs_fstat = fs_obj.stat
+                                    if hasattr(fs_obj, 'pval'):
+                                        fs_pval = fs_obj.pval
+                                if hasattr(stage, 'partial_r2'):
+                                    partial_r2 = stage.partial_r2
+                            except (KeyError, TypeError, IndexError):
+                                pass
                         
-                        first_stage_results.append({
-                            'endogenous_var': str(name),
-                            'f_statistic': float(fs_fstat) if fs_fstat is not None else None,
-                            'f_pvalue': float(fs_pval) if fs_pval is not None else None,
-                            'partial_r2': float(partial_r2) if partial_r2 is not None else None,
-                        })
-                    except Exception as e:
-                        print(f"Warning: Could not extract first-stage diagnostics for {name}: {e}")
-                        first_stage_results.append({
-                            'endogenous_var': str(name),
-                            'f_statistic': None,
-                            'f_pvalue': None,
-                            'partial_r2': None,
-                        })
+                        # Method 2: Try accessing as attribute
+                        if fs_fstat is None and hasattr(res.first_stage, endog_name):
+                            try:
+                                stage = getattr(res.first_stage, endog_name)
+                                if hasattr(stage, 'f_statistic'):
+                                    fs_obj = stage.f_statistic
+                                    if hasattr(fs_obj, 'stat'):
+                                        fs_fstat = fs_obj.stat
+                                    if hasattr(fs_obj, 'pval'):
+                                        fs_pval = fs_obj.pval
+                                if hasattr(stage, 'partial_r2'):
+                                    partial_r2 = stage.partial_r2
+                            except (AttributeError, TypeError):
+                                pass
+                        
+                        # Method 3: If only one endogenous variable, try direct access
+                        if fs_fstat is None and len(endog_names) == 1:
+                            if hasattr(res.first_stage, 'f_statistic'):
+                                fs_obj = res.first_stage.f_statistic
+                                if hasattr(fs_obj, 'stat'):
+                                    fs_fstat = fs_obj.stat
+                                if hasattr(fs_obj, 'pval'):
+                                    fs_pval = fs_obj.pval
+                            if hasattr(res.first_stage, 'partial_r2'):
+                                partial_r2 = res.first_stage.partial_r2
+                        
+                    except Exception as inner_e:
+                        print(f"Warning: Error accessing first-stage for {endog_name}: {inner_e}")
+                    
+                    first_stage_results.append({
+                        'endogenous_var': str(endog_name),
+                        'f_statistic': float(fs_fstat) if fs_fstat is not None else None,
+                        'f_pvalue': float(fs_pval) if fs_pval is not None else None,
+                        'partial_r2': float(partial_r2) if partial_r2 is not None else None,
+                    })
             
             instrument_diagnostics['first_stage'] = first_stage_results
             
