@@ -362,10 +362,23 @@ def estimate_system(formulas, data, method="SUR"):
                 if res.first_stage is not None:
                     print(f"DEBUG: first_stage attributes: {[x for x in dir(res.first_stage) if not x.startswith('_')]}")
                     try:
-                        print(f"DEBUG: first_stage summary type: {type(res.first_stage.summary())}")
-                        print(f"DEBUG: first_stage summary:\n{res.first_stage.summary()}")
+                        # summary is a property, not a method
+                        summary = res.first_stage.summary
+                        print(f"DEBUG: first_stage summary type: {type(summary)}")
+                        if hasattr(summary, '__str__'):
+                            print(f"DEBUG: first_stage summary:\n{summary}")
                     except Exception as e:
                         print(f"DEBUG: Could not get summary: {e}")
+                    # Check individual attribute
+                    if hasattr(res.first_stage, 'individual'):
+                        print(f"DEBUG: first_stage.individual type: {type(res.first_stage.individual)}")
+                        if res.first_stage.individual is not None:
+                            print(f"DEBUG: first_stage.individual: {res.first_stage.individual}")
+                    # Check diagnostics attribute
+                    if hasattr(res.first_stage, 'diagnostics'):
+                        print(f"DEBUG: first_stage.diagnostics type: {type(res.first_stage.diagnostics)}")
+                        if res.first_stage.diagnostics is not None:
+                            print(f"DEBUG: first_stage.diagnostics: {res.first_stage.diagnostics}")
         except Exception as e:
             error_str = str(e)
             print(f"ERROR in IV2SLS.from_formula: {type(e).__name__}: {error_str}")
@@ -401,10 +414,70 @@ def estimate_system(formulas, data, method="SUR"):
                     partial_r2 = None
                     
                     try:
-                        # Method 1: Try to get summary as DataFrame or string
-                        if hasattr(res.first_stage, 'summary'):
+                        # Method 1: Access via 'individual' attribute (per-variable results)
+                        if hasattr(res.first_stage, 'individual') and res.first_stage.individual is not None:
                             try:
-                                summary = res.first_stage.summary()
+                                individual = res.first_stage.individual
+                                # individual might be a dict or have __getitem__
+                                if hasattr(individual, '__getitem__'):
+                                    try:
+                                        stage_info = individual[endog_name]
+                                        # Check for f_statistic and partial_r2
+                                        if hasattr(stage_info, 'f_statistic'):
+                                            fs_obj = stage_info.f_statistic
+                                            if hasattr(fs_obj, 'stat'):
+                                                fs_fstat = fs_obj.stat
+                                            if hasattr(fs_obj, 'pval'):
+                                                fs_pval = fs_obj.pval
+                                        if hasattr(stage_info, 'partial_r2'):
+                                            partial_r2 = stage_info.partial_r2
+                                        # Also try partial_f_stat
+                                        if hasattr(stage_info, 'partial_f_stat'):
+                                            fs_obj = stage_info.partial_f_stat
+                                            if hasattr(fs_obj, 'stat'):
+                                                fs_fstat = fs_obj.stat
+                                            if hasattr(fs_obj, 'pval'):
+                                                fs_pval = fs_obj.pval
+                                    except (KeyError, TypeError, IndexError):
+                                        pass
+                            except Exception as e:
+                                print(f"DEBUG: Error accessing individual: {e}")
+                        
+                        # Method 2: Access via 'diagnostics' attribute
+                        if fs_fstat is None and hasattr(res.first_stage, 'diagnostics') and res.first_stage.diagnostics is not None:
+                            try:
+                                diagnostics = res.first_stage.diagnostics
+                                # diagnostics might be a dict or DataFrame
+                                if isinstance(diagnostics, pd.DataFrame):
+                                    if endog_name in diagnostics.index:
+                                        row = diagnostics.loc[endog_name]
+                                        # Look for F-statistic and partial R²
+                                        for col in diagnostics.columns:
+                                            col_lower = str(col).lower()
+                                            if 'f' in col_lower and 'stat' in col_lower:
+                                                fs_fstat = row[col]
+                                            if 'partial' in col_lower and 'r' in col_lower:
+                                                partial_r2 = row[col]
+                                elif hasattr(diagnostics, '__getitem__'):
+                                    try:
+                                        diag_info = diagnostics[endog_name]
+                                        if hasattr(diag_info, 'f_statistic'):
+                                            fs_obj = diag_info.f_statistic
+                                            if hasattr(fs_obj, 'stat'):
+                                                fs_fstat = fs_obj.stat
+                                            if hasattr(fs_obj, 'pval'):
+                                                fs_pval = fs_obj.pval
+                                        if hasattr(diag_info, 'partial_r2'):
+                                            partial_r2 = diag_info.partial_r2
+                                    except (KeyError, TypeError):
+                                        pass
+                            except Exception as e:
+                                print(f"DEBUG: Error accessing diagnostics: {e}")
+                        
+                        # Method 3: Try to get summary as DataFrame or access its properties
+                        if fs_fstat is None and hasattr(res.first_stage, 'summary'):
+                            try:
+                                summary = res.first_stage.summary  # Property, not method
                                 # If it's a DataFrame, extract values
                                 if isinstance(summary, pd.DataFrame):
                                     if endog_name in summary.index:
@@ -416,10 +489,6 @@ def estimate_system(formulas, data, method="SUR"):
                                                 fs_fstat = row[col]
                                             if 'partial' in col_lower and 'r' in col_lower and '2' in col_lower and partial_r2 is None:
                                                 partial_r2 = row[col]
-                                # If it's a string, try to parse (fallback)
-                                elif isinstance(summary, str):
-                                    # Could parse string, but let's try other methods first
-                                    pass
                             except Exception as e:
                                 print(f"DEBUG: Error accessing summary: {e}")
                         
@@ -520,8 +589,21 @@ def estimate_system(formulas, data, method="SUR"):
             instrument_diagnostics['first_stage'] = first_stage_results
             
             # 2. Weak instrument test (Sanderson-Windmeijer F-test)
+            # Note: This might be in first_stage.diagnostics or accessed differently
             try:
-                weak_instrument = res.weak_instrument_test
+                # Try accessing from first_stage diagnostics
+                weak_instrument = None
+                if hasattr(res, 'first_stage') and res.first_stage is not None:
+                    if hasattr(res.first_stage, 'diagnostics'):
+                        diag = res.first_stage.diagnostics
+                        # Check if diagnostics has weak instrument info
+                        if hasattr(diag, 'weak_instrument') or (isinstance(diag, dict) and 'weak_instrument' in diag):
+                            weak_instrument = diag.get('weak_instrument') if isinstance(diag, dict) else getattr(diag, 'weak_instrument', None)
+                
+                # Also try direct access on res (for some versions)
+                if weak_instrument is None and hasattr(res, 'weak_instrument_test'):
+                    weak_instrument = res.weak_instrument_test
+                
                 if weak_instrument is not None:
                     if hasattr(weak_instrument, 'stat'):
                         instrument_diagnostics['weak_instrument'] = {
@@ -539,7 +621,13 @@ def estimate_system(formulas, data, method="SUR"):
             # 3. Overidentification test (Hansen J or Sargan)
             # Only available when #instruments > #endogenous variables
             try:
-                overid_test = res.overidentification_test
+                overid_test = None
+                # Try different attribute names
+                for attr_name in ['overidentification_test', 'overid_test', 'j_stat', 'sargan_stat']:
+                    if hasattr(res, attr_name):
+                        overid_test = getattr(res, attr_name)
+                        break
+                
                 if overid_test is not None:
                     if hasattr(overid_test, 'stat'):
                         test_name = 'Hansen J'
