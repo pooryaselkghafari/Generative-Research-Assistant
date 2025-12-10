@@ -84,6 +84,19 @@
     transition: opacity 0.3s ease-in-out;
   }
   
+  /* Equation box placeholder styling */
+  #equationBox::placeholder {
+    color: #9ca3af;
+    opacity: 0.8;
+    font-style: italic;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  
+  #equationBox:focus::placeholder {
+    opacity: 0.3;
+  }
+  
   /* Artistic Visualize Button Animation */
   .visualize-btn-animated {
     position: relative;
@@ -579,11 +592,34 @@
     <div class="modern-search">
       <div class="search-container equation-container" style="position: relative;">
         <textarea name="formula" id="equationBox" rows="4"
-          placeholder="Select a dataset first, then type your equation(s)…
+          placeholder="Tutorial: How to write equations for different models
 
-Examples:
-  Regression (with interaction): y ~ x1 + x2 + x1:x2
-  VARX: y1 + y2 ~ x1 + x2" {% if not current %}disabled{% endif %}>{% if current %}{{current.formula}}{% endif %}</textarea>
+Regression: y ~ x1 + x2 + x1:x2
+  - Simple: y ~ x1
+  - With interaction: y ~ x1 + x2 + x1:x2
+  - Multiple equations (one per line):
+    y1 ~ x1 + x2
+    y2 ~ x1 + x3
+
+VARX: y1 + y2 ~ x1 + x2
+  - Place exogenous variables (x1, x2) after the ~
+  - Multiple dependent variables before ~: y1 + y2 + y3 ~ x1 + x2
+
+SUR: Multiple equations, one per line
+  y1 ~ x1 + x2
+  y2 ~ x1 + x3
+
+2SLS: y ~ x1 + x2 + [x3 ~ z1 + z2]
+  - Add instruments in brackets: [endogenous_var ~ instrument1 + instrument2]
+  - Example: y1 ~ x1 + x2 + [x3 ~ z1 + z2 + z3]
+
+3SLS: Multiple equations with instruments (requires 2+ equations)
+  y1 ~ x1 + [x2 ~ z1 + z2]
+  y2 ~ x1 + x2 + [x3 ~ z3 + z4]
+  - Each equation can have instruments in brackets
+  - Minimum 2 equations required" 
+          style="color: #111827;"
+          {% if not current %}disabled{% endif %}>{% if current %}{{current.formula}}{% endif %}</textarea>
         <div id="autocompleteDropdown" class="autocomplete-dropdown" style="display: none;"></div>
       </div>
     </div>
@@ -1695,39 +1731,24 @@ function updateAnalysisTypeToggle() {
   }
 }
 
-// Function to update equation box with example when 2SLS or 3SLS is selected
+// Function to clear any pre-filled example text when structural method changes
 function updateStructuralEquationExample() {
   const equationBox = document.getElementById('equationBox');
-  const structuralMethod = document.querySelector('input[name="structural_method"]:checked')?.value;
   
   if (!equationBox) return;
   
-  // Only update if textarea is empty or contains example text
+  // Only clear if textarea contains old example text
   const currentValue = equationBox.value.trim();
-  const isEmpty = currentValue.length === 0;
   const isExampleText = currentValue === 'y1 ~ x1 + x2 + [x3 ~ z1 + z2 + z3]' || 
                         currentValue === 'y1 ~ x1 + [x2 ~ z1 + z2]\ny2 ~ x1 + x2 + [x3 ~ z3 + z4]' ||
-                        currentValue.includes('y1 ~ x1 + [x2 ~ z1 + z2]');
+                        (currentValue.includes('y1 ~ x1 + [x2 ~ z1 + z2]') && currentValue.includes('y2 ~'));
   
-  // Don't overwrite user's actual input
-  if (!isEmpty && !isExampleText) {
-    return;
+  // Clear example text but keep user's actual input
+  if (isExampleText) {
+    equationBox.value = '';
   }
   
-  if (structuralMethod === '2SLS') {
-    // 2SLS example (single equation with instruments)
-    equationBox.placeholder = 'Enter equation with instruments in brackets [endogenous ~ instrument1 + instrument2]\n\nExample:\ny1 ~ x1 + x2 + [x3 ~ z1 + z2 + z3]';
-  } else if (structuralMethod === '3SLS') {
-    // 3SLS example (multiple equations with instruments)
-    equationBox.value = 'y1 ~ x1 + [x2 ~ z1 + z2]\ny2 ~ x1 + x2 + [x3 ~ z3 + z4]';
-    equationBox.placeholder = 'Enter equations (one per line) with instruments in brackets [endogenous ~ instrument1 + instrument2]\n\nExample:\ny1 ~ x1 + [x2 ~ z1 + z2]\ny2 ~ x1 + x2 + [x3 ~ z3 + z4]';
-  } else if (structuralMethod === 'SUR') {
-    // SUR example (multiple equations, no instruments needed)
-    if (isEmpty || isExampleText) {
-      equationBox.value = '';
-    }
-    equationBox.placeholder = 'Enter equations separated by newlines (one per line)\n\nExample:\ny1 ~ x1 + x2\ny2 ~ x1 + x3';
-  }
+  // The unified placeholder tutorial is already set in the HTML and will show automatically
 }
 
 // Add event listener to module select
@@ -1742,6 +1763,36 @@ document.addEventListener('DOMContentLoaded', function() {
   structuralMethodRadios.forEach(radio => {
     radio.addEventListener('change', updateStructuralEquationExample);
   });
+  
+  // Handle equation box - placeholder disappears when user starts typing
+  const equationBox = document.getElementById('equationBox');
+  if (equationBox) {
+    // Store the original placeholder
+    const originalPlaceholder = equationBox.placeholder;
+    
+    // Clear placeholder on focus (when user clicks)
+    equationBox.addEventListener('focus', function() {
+      if (!this.value.trim()) {
+        this.placeholder = '';
+      }
+    });
+    
+    // Restore placeholder on blur if empty
+    equationBox.addEventListener('blur', function() {
+      if (!this.value.trim()) {
+        this.placeholder = originalPlaceholder;
+      }
+    });
+    
+    // Clear placeholder when user starts typing
+    equationBox.addEventListener('input', function() {
+      if (this.value.trim()) {
+        this.placeholder = '';
+      } else {
+        this.placeholder = originalPlaceholder;
+      }
+    });
+  }
 });
 
 function clearSearch() {
