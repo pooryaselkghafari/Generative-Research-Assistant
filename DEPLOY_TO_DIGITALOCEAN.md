@@ -79,7 +79,7 @@ cd ~
 
 # Clone your repository
 git clone https://github.com/pooryaselkghafari/GRA2.git statbox
-cd statbox
+cd GRA
 ```
 
 **Note**: If your repository is private, you'll need to set up authentication:
@@ -183,13 +183,23 @@ apt install -y certbot python3-certbot-nginx
 # Stop nginx temporarily
 docker-compose stop nginx
 
+# Check if port 80 is free (if not, see troubleshooting below)
+sudo lsof -i :80
+# Or: sudo ss -tulpn | grep :80
+
+# If port 80 is in use, stop the conflicting service:
+# - Apache: sudo systemctl stop apache2 && sudo systemctl disable apache2
+# - Nginx (host): sudo systemctl stop nginx && sudo systemctl disable nginx
+# - Docker container: docker ps then docker stop <container-name>
+# Or use the fix script: ./fix-port-80.sh
+
 # Generate SSL certificates
-sudo certbot certonly --standalone -d your-domain.com -d www.your-domain.com
+sudo certbot certonly --standalone -d generativera.com -d www.generativera.com
 
 # Copy certificates
 mkdir -p ssl
-sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ssl/cert.pem
-sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem ssl/key.pem
+sudo cp /etc/letsencrypt/live/generativera.com/fullchain.pem ssl/cert.pem
+sudo cp /etc/letsencrypt/live/generativera.com/privkey.pem ssl/key.pem
 sudo chown -R $USER:$USER ssl/
 chmod 600 ssl/key.pem
 chmod 644 ssl/cert.pem
@@ -260,6 +270,80 @@ docker-compose up -d
 
 ## Troubleshooting
 
+### Port 80 Already in Use (Certbot Error)
+
+**Error**: `Could not bind TCP port 80 because it is already in use`
+
+**Quick Fix**:
+
+```bash
+# Option 1: Use the fix script (recommended)
+chmod +x fix-port-80.sh
+./fix-port-80.sh
+
+# Option 2: Manual fix - identify what's using port 80
+sudo lsof -i :80
+# Or: sudo ss -tulpn | grep :80
+# Or: sudo netstat -tulpn | grep :80
+
+# Stop common services:
+# Apache
+sudo systemctl stop apache2
+sudo systemctl disable apache2
+
+# Nginx (host service, not Docker)
+sudo systemctl stop nginx
+sudo systemctl disable nginx
+
+# Docker nginx container
+docker-compose stop nginx
+# Or: docker stop nginx
+
+# Verify port is free
+sudo lsof -i :80
+# Should show nothing
+
+# Now run certbot
+sudo certbot certonly --standalone -d generativera.com -d www.generativera.com
+```
+
+### 502 Bad Gateway Error
+
+**Error**: `502 Bad Gateway` from nginx
+
+This means nginx is running but can't connect to your Django application.
+
+**Quick Fix**:
+
+```bash
+# Option 1: Use the fix script (recommended)
+chmod +x fix-502-error.sh
+./fix-502-error.sh
+
+# Option 2: Manual diagnosis
+# 1. Check if web container is running
+docker-compose ps web
+
+# 2. If not running, check logs for errors
+docker-compose logs --tail=50 web
+
+# 3. Common fixes:
+# Fix logs directory permissions
+mkdir -p logs && chmod 755 logs && touch logs/django.log && chmod 644 logs/django.log
+
+# Restart all services
+docker-compose restart
+
+# Test Django directly
+curl http://localhost:8000/health/
+```
+
+**Common Causes**:
+- Web container crashed (check: `docker-compose logs web`)
+- Logs directory permission issues (run: `./fix-logs-permission.sh`)
+- Database not ready (wait 10-15 seconds after starting)
+- Missing environment variables in `.env` file
+
 ### Can't Access Application
 1. Check firewall: `ufw status`
 2. Check containers: `docker-compose ps`
@@ -270,14 +354,41 @@ docker-compose up -d
 2. Verify `.env` file has correct DB credentials
 3. Check database logs: `docker-compose logs db`
 
-### Port Already in Use
-```bash
-# Check what's using port 80
-sudo lsof -i :80
+### Port 80 Already in Use (Certbot Error)
 
-# Stop conflicting service
-sudo systemctl stop apache2  # if Apache
-sudo systemctl stop nginx   # if nginx on host
+**Error**: `Could not bind TCP port 80 because it is already in use`
+
+**Quick Fix**:
+
+```bash
+# Option 1: Use the fix script (recommended)
+chmod +x fix-port-80.sh
+./fix-port-80.sh
+
+# Option 2: Manual fix - identify what's using port 80
+sudo lsof -i :80
+# Or: sudo ss -tulpn | grep :80
+# Or: sudo netstat -tulpn | grep :80
+
+# Stop common services:
+# Apache
+sudo systemctl stop apache2
+sudo systemctl disable apache2
+
+# Nginx (host service, not Docker)
+sudo systemctl stop nginx
+sudo systemctl disable nginx
+
+# Docker nginx container
+docker-compose stop nginx
+# Or: docker stop nginx
+
+# Verify port is free
+sudo lsof -i :80
+# Should show nothing
+
+# Now run certbot
+sudo certbot certonly --standalone -d generativera.com -d www.generativera.com
 ```
 
 ## Security Checklist

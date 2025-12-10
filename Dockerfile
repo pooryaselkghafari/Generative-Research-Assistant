@@ -29,7 +29,7 @@ RUN pip install --no-cache-dir -r requirements-prod.txt
 COPY . /app/
 
 # Create directories
-RUN mkdir -p /app/staticfiles /app/media
+RUN mkdir -p /app/staticfiles /app/media /app/logs
 
 # Set a dummy SECRET_KEY for collectstatic (required by Django)
 # This will be overridden by environment variables at runtime

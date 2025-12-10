@@ -3,6 +3,54 @@
 from django.db import migrations, models
 
 
+def add_updated_at_if_not_exists(apps, schema_editor):
+    """Add updated_at field only if it doesn't already exist"""
+    db_alias = schema_editor.connection.alias
+    with schema_editor.connection.cursor() as cursor:
+        # Check if column already exists
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public'
+                AND table_name = 'engine_subscriptionplan' 
+                AND column_name = 'updated_at'
+            )
+        """)
+        column_exists = cursor.fetchone()[0]
+        
+        if not column_exists:
+            # Column doesn't exist, add it
+            cursor.execute("""
+                ALTER TABLE engine_subscriptionplan 
+                ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            """)
+            # Make it auto-update
+            cursor.execute("""
+                CREATE OR REPLACE FUNCTION update_updated_at_column()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    NEW.updated_at = NOW();
+                    RETURN NEW;
+                END;
+                $$ language 'plpgsql';
+            """)
+            cursor.execute("""
+                CREATE TRIGGER update_engine_subscriptionplan_updated_at 
+                BEFORE UPDATE ON engine_subscriptionplan 
+                FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+            """)
+
+
+def reverse_add_updated_at(apps, schema_editor):
+    """Remove updated_at field"""
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("""
+            DROP TRIGGER IF EXISTS update_engine_subscriptionplan_updated_at ON engine_subscriptionplan;
+            ALTER TABLE engine_subscriptionplan DROP COLUMN IF EXISTS updated_at;
+        """)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,9 +58,14 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(
+            add_updated_at_if_not_exists,
+            reverse_add_updated_at,
+        ),
+        # Add field to Django's state (for model definition)
         migrations.AddField(
             model_name='subscriptionplan',
             name='updated_at',
-            field=models.DateTimeField(auto_now=True),
+            field=models.DateTimeField(auto_now=True, null=True),
         ),
     ]

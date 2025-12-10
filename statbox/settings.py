@@ -308,7 +308,27 @@ CKEDITOR_CONFIGS = {
     },
 }
 
-# Logging Configuration
+# Ensure logs directory exists and check permissions BEFORE configuring logging
+import os
+logs_dir = BASE_DIR / 'logs'
+logs_file = logs_dir / 'django.log'
+can_write_logs = False
+
+try:
+    os.makedirs(logs_dir, exist_ok=True)
+    # Test if we can write to the logs directory by trying to create a test file
+    test_file = logs_dir / '.test_write'
+    try:
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        can_write_logs = True
+    except (PermissionError, OSError):
+        can_write_logs = False
+except (PermissionError, OSError):
+    can_write_logs = False
+
+# Logging Configuration (conditional based on write permissions)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -323,12 +343,6 @@ LOGGING = {
         },
     },
     'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'django.log'),  # Convert Path to string
-            'formatter': 'verbose',
-        },
         'console': {
             'level': 'DEBUG' if DEBUG else 'INFO',
             'class': 'logging.StreamHandler',
@@ -336,32 +350,41 @@ LOGGING = {
         },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
         'engine': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
         'accounts': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
     },
 }
 
-# Ensure logs directory exists
-import os
-logs_dir = BASE_DIR / 'logs'
-os.makedirs(logs_dir, exist_ok=True)
+# Only add file handler if we can write to logs directory
+if can_write_logs:
+    LOGGING['handlers']['file'] = {
+        'level': 'INFO',
+        'class': 'logging.FileHandler',
+        'filename': str(logs_file),
+        'formatter': 'verbose',
+    }
+    # Add file handler to root and loggers
+    LOGGING['root']['handlers'].append('file')
+    for logger_name in ['django', 'engine', 'accounts']:
+        if logger_name in LOGGING['loggers']:
+            LOGGING['loggers'][logger_name]['handlers'].append('file')
 
 # CKEditor is now included in INSTALLED_APPS above
 # No need to add it dynamically since it's already in the list

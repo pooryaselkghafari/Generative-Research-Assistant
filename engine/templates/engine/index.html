@@ -1716,7 +1716,6 @@ function updateStructuralEquationExample() {
   
   if (structuralMethod === '2SLS') {
     // 2SLS example (single equation with instruments)
-    equationBox.value = 'y1 ~ x1 + x2 + [x3 ~ z1 + z2 + z3]';
     equationBox.placeholder = 'Enter equation with instruments in brackets [endogenous ~ instrument1 + instrument2]\n\nExample:\ny1 ~ x1 + x2 + [x3 ~ z1 + z2 + z3]';
   } else if (structuralMethod === '3SLS') {
     // 3SLS example (multiple equations with instruments)

@@ -7,10 +7,9 @@ services:
       POSTGRES_DB: statbox
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    # Ports removed - only accessible within Docker network
-    # If you need external access, bind to localhost only:
-    # ports:
-    #   - "127.0.0.1:5432:5432"
+    # Expose port to host so web container (using host network) can access it
+    ports:
+      - "127.0.0.1:5432:5432"
 
   redis:
     image: redis:7-alpine
@@ -37,7 +36,7 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
       - USE_SSL=${USE_SSL:-False}
-      - DB_NAME=${DB_NAME:-gra}
+      - DB_NAME=${DB_NAME:-statbox}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=${DB_HOST:-localhost}  # Use localhost since web is on host network
