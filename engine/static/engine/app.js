@@ -60,6 +60,11 @@
     const selectAllBtn = document.getElementById('selectAllBtn');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     
+    // Return early if buttons don't exist (e.g., on results pages)
+    if (!selectAllBtn || !bulkDeleteBtn) {
+      return;
+    }
+    
     if (checkboxes.length === 0) {
       selectAllBtn.style.display = 'none';
       bulkDeleteBtn.style.display = 'none';

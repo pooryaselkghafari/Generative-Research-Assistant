@@ -39,8 +39,8 @@ class AnalysisExecutionService:
             return HttpResponse('Please enter a formula', status=400)
         
         # Get dataset
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         # Import BMA module
         from models.BMA import BMAModule
@@ -58,14 +58,14 @@ class AnalysisExecutionService:
         
         if not result['success']:
             return render(request, 'engine/index.html', {
-                **_list_context(user=request.user),
+                **_list_context(),
                 'error_message': result.get('error', 'BMA analysis failed')
             })
         
         # Create or update session
         session_name = request.POST.get('session_name') or f"BMA Analysis {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
         sess = AnalysisExecutionService._create_or_update_session(
-            action, session_id, session_name, 'bma', formula, 'bayesian', options, dataset, request.user
+            action, session_id, session_name, 'bma', formula, 'bayesian', options, dataset, None
         )
         
         # Render results
@@ -97,8 +97,8 @@ class AnalysisExecutionService:
             return HttpResponse('Please enter a formula', status=400)
         
         # Get dataset
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         # Import ANOVA module
         from models.ANOVA import ANOVAModule
@@ -111,14 +111,14 @@ class AnalysisExecutionService:
         
         if not result.get('has_results', False):
             return render(request, 'engine/index.html', {
-                **_list_context(user=request.user),
+                **_list_context(),
                 'error_message': result.get('error', 'ANOVA analysis failed')
             })
         
         # Create or update session
         session_name = request.POST.get('session_name') or f"ANOVA Analysis {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
         sess = AnalysisExecutionService._create_or_update_session(
-            action, session_id, session_name, 'anova', formula, 'frequentist', {}, dataset, request.user
+            action, session_id, session_name, 'anova', formula, 'frequentist', {}, dataset, None
         )
         
         # Get numeric variables from dataset for plot generation dropdowns
@@ -174,8 +174,8 @@ class AnalysisExecutionService:
             return HttpResponse('Please enter a formula', status=400)
         
         # Get dataset
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         # Import VARX module
         from models.VARX import VARXModule
@@ -224,14 +224,14 @@ class AnalysisExecutionService:
         
         if not result.get('has_results', False):
             return render(request, 'engine/index.html', {
-                **_list_context(user=request.user),
+                **_list_context(),
                 'error_message': result.get('error', 'VARX analysis failed')
             })
         
         # Create or update session
         session_name = request.POST.get('session_name') or f"VARX Analysis {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
         sess = AnalysisExecutionService._create_or_update_session(
-            action, session_id, session_name, 'varx', formula, 'frequentist', options, dataset, request.user
+            action, session_id, session_name, 'varx', formula, 'frequentist', options, dataset, None
         )
         
         # Store VARX model results for IRF generation
@@ -284,8 +284,8 @@ class AnalysisExecutionService:
             return HttpResponse('Please enter equation(s)', status=400)
         
         # Get dataset
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         # Import structural model module
         from models.structural_model import StructuralModelModule
@@ -298,7 +298,7 @@ class AnalysisExecutionService:
         valid_methods = ['SUR', '2SLS', '3SLS']
         if method_upper not in valid_methods:
             return render(request, 'engine/index.html', {
-                **_list_context(user=request.user),
+                **_list_context(),
                 'error_message': f'Invalid method: "{structural_method}" (normalized: "{method_upper}"). Method must be one of {valid_methods}.'
             })
         
@@ -312,14 +312,14 @@ class AnalysisExecutionService:
         
         if not result.get('has_results', False):
             return render(request, 'engine/index.html', {
-                **_list_context(user=request.user),
+                **_list_context(),
                 'error_message': result.get('error', 'Structural model analysis failed')
             })
         
         # Create or update session
         session_name = request.POST.get('session_name') or f"Structural Model ({structural_method}) {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
         sess = AnalysisExecutionService._create_or_update_session(
-            action, session_id, session_name, 'structural', formula, 'frequentist', options, dataset, request.user
+            action, session_id, session_name, 'structural', formula, 'frequentist', options, dataset, None
         )
         
         # Render results
@@ -336,20 +336,18 @@ class AnalysisExecutionService:
                                   analysis_type, options, dataset, user):
         """Create or update analysis session."""
         if action == 'update' and session_id:
-            sess = get_object_or_404(AnalysisSession, pk=session_id, user=user)
+            sess = get_object_or_404(AnalysisSession, pk=session_id)
             sess.name = session_name
             sess.module = module_name
             sess.formula = formula
             sess.options = options
             sess.dataset = dataset
-            if not sess.user and user.is_authenticated:
-                sess.user = user
+            sess.user = None  # No authentication
         else:
-            user_obj = user if user.is_authenticated else None
             sess = AnalysisSession(
                 name=session_name, module=module_name, formula=formula,
                 analysis_type=analysis_type, options=options, dataset=dataset,
-                user=user_obj
+                user=None  # No authentication
             )
         
         sess.save()

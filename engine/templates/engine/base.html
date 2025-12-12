@@ -45,20 +45,6 @@
         <a class="btn btn-neutral" href="{% url 'index' %}">New analysis</a>
         {% block header_actions %}{% endblock %}
         
-        {% if user.is_authenticated %}
-          <div class="user-menu">
-            <span class="user-name">{{ user.username }}</span>
-            <div class="user-dropdown">
-              <a href="{% url 'profile' %}" class="dropdown-item">Profile</a>
-              <a href="{% url 'subscription' %}" class="dropdown-item">Subscription</a>
-              <a href="{% url 'logout' %}" class="dropdown-item">Logout</a>
-            </div>
-          </div>
-        {% else %}
-          <a class="btn btn-ghost" href="{% url 'login' %}">Login</a>
-          <a class="btn btn-primary" href="{% url 'register' %}">Sign Up</a>
-        {% endif %}
-        
         <button id="themeToggle" class="btn btn-ghost" title="Toggle theme" aria-label="Toggle theme">
           <svg class="icon-sun" viewBox="0 0 24 24"><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.8 1.42-1.42zM1 13h3v-2H1v2zm10 10h2v-3h-2v3zM4.95 19.05l1.41 1.41 1.8-1.79-1.42-1.42-1.79 1.8zM20 13h3v-2h-3v2zM19.05 4.95l-1.41-1.41-1.8 1.79 1.42 1.42 1.79-1.8zM12 5a7 7 0 100 14 7 7 0 000-14z"/></svg>
           <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z"/></svg>
@@ -683,7 +669,7 @@
         })
         .then(response => {
           if (response.status === 401) {
-            window.location.href = `/accounts/login/?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+            // Login removed - no authentication required
             return null;
           }
           return response.json();
@@ -708,7 +694,7 @@
                 'Access advanced research automation'
               ],
               buttonLabel: 'Upgrade Subscription',
-              buttonHref: data.upgrade_url || '/accounts/subscription/'
+              buttonHref: data.upgrade_url || '#'
             });
           } else {
             renderGrapopup();

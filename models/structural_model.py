@@ -354,7 +354,24 @@ def estimate_system(formulas, data, method="SUR"):
         
         try:
             model = IV2SLS.from_formula(linearmodels_formula, data=data)
+            # Fit with robust standard errors for parameter estimates
             res = model.fit(cov_type="robust")
+            
+            # Also fit without robust for overidentification test (J-statistic may only be available with non-robust)
+            res_nonrobust = None
+            try:
+                res_nonrobust = model.fit(cov_type="unadjusted")  # Try unadjusted for J-stat
+            except:
+                try:
+                    res_nonrobust = model.fit()  # Try default
+                except:
+                    pass
+            
+            # Validate that res is not None and has required attributes
+            if res is None:
+                raise ValueError("Model fitting returned None result")
+            if not hasattr(res, 'params') or res.params is None:
+                raise ValueError("Model result does not have valid params attribute")
             
             # Debug: Print first_stage info immediately after fitting
             if hasattr(res, 'first_stage'):
@@ -362,11 +379,17 @@ def estimate_system(formulas, data, method="SUR"):
                 if res.first_stage is not None:
                     print(f"DEBUG: first_stage attributes: {[x for x in dir(res.first_stage) if not x.startswith('_')]}")
                     try:
-                        # summary is a property, not a method
-                        summary = res.first_stage.summary
-                        print(f"DEBUG: first_stage summary type: {type(summary)}")
-                        if hasattr(summary, '__str__'):
-                            print(f"DEBUG: first_stage summary:\n{summary}")
+                        # summary might be a property or a method
+                        summary_attr = getattr(res.first_stage, 'summary', None)
+                        if summary_attr is not None:
+                            # Check if it's callable (method) or not (property)
+                            if callable(summary_attr):
+                                summary = summary_attr()  # Call if it's a method
+                            else:
+                                summary = summary_attr  # Use directly if it's a property
+                            print(f"DEBUG: first_stage summary type: {type(summary)}")
+                            if hasattr(summary, '__str__'):
+                                print(f"DEBUG: first_stage summary:\n{summary}")
                     except Exception as e:
                         print(f"DEBUG: Could not get summary: {e}")
                     # Check individual attribute
@@ -412,6 +435,7 @@ def estimate_system(formulas, data, method="SUR"):
                     fs_fstat = None
                     fs_pval = None
                     partial_r2 = None
+                    # Note: Don't create a local variable named 'diagnostics' as it shadows the diagnostics() function
                     
                     try:
                         # Method 1: Access via 'individual' attribute (per-variable results)
@@ -446,21 +470,21 @@ def estimate_system(formulas, data, method="SUR"):
                         # Method 2: Access via 'diagnostics' attribute
                         if fs_fstat is None and hasattr(res.first_stage, 'diagnostics') and res.first_stage.diagnostics is not None:
                             try:
-                                diagnostics = res.first_stage.diagnostics
-                                # diagnostics might be a dict or DataFrame
-                                if isinstance(diagnostics, pd.DataFrame):
-                                    if endog_name in diagnostics.index:
-                                        row = diagnostics.loc[endog_name]
+                                first_stage_diagnostics = res.first_stage.diagnostics  # Renamed to avoid shadowing diagnostics() function
+                                # first_stage_diagnostics might be a dict or DataFrame
+                                if isinstance(first_stage_diagnostics, pd.DataFrame):
+                                    if endog_name in first_stage_diagnostics.index:
+                                        row = first_stage_diagnostics.loc[endog_name]
                                         # Look for F-statistic and partial R²
-                                        for col in diagnostics.columns:
+                                        for col in first_stage_diagnostics.columns:
                                             col_lower = str(col).lower()
                                             if 'f' in col_lower and 'stat' in col_lower:
                                                 fs_fstat = row[col]
                                             if 'partial' in col_lower and 'r' in col_lower:
                                                 partial_r2 = row[col]
-                                elif hasattr(diagnostics, '__getitem__'):
+                                elif hasattr(first_stage_diagnostics, '__getitem__'):
                                     try:
-                                        diag_info = diagnostics[endog_name]
+                                        diag_info = first_stage_diagnostics[endog_name]
                                         if hasattr(diag_info, 'f_statistic'):
                                             fs_obj = diag_info.f_statistic
                                             if hasattr(fs_obj, 'stat'):
@@ -477,7 +501,17 @@ def estimate_system(formulas, data, method="SUR"):
                         # Method 3: Try to get summary as DataFrame or access its properties
                         if fs_fstat is None and hasattr(res.first_stage, 'summary'):
                             try:
-                                summary = res.first_stage.summary  # Property, not method
+                                # summary might be a property or a method
+                                summary_attr = getattr(res.first_stage, 'summary', None)
+                                if summary_attr is None:
+                                    raise AttributeError("summary is None")
+                                
+                                # Check if it's callable (method) or not (property)
+                                if callable(summary_attr):
+                                    summary = summary_attr()  # Call if it's a method
+                                else:
+                                    summary = summary_attr  # Use directly if it's a property
+                                
                                 # If it's a DataFrame, extract values
                                 if isinstance(summary, pd.DataFrame):
                                     if endog_name in summary.index:
@@ -495,8 +529,17 @@ def estimate_system(formulas, data, method="SUR"):
                         # Method 2: Try accessing as DataFrame directly
                         if fs_fstat is None and hasattr(res.first_stage, 'to_frame'):
                             try:
-                                df = res.first_stage.to_frame()
-                                if endog_name in df.index:
+                                to_frame_attr = getattr(res.first_stage, 'to_frame', None)
+                                if to_frame_attr is None:
+                                    raise AttributeError("to_frame is None")
+                                
+                                # Check if it's callable (method) or not (property)
+                                if callable(to_frame_attr):
+                                    df = to_frame_attr()  # Call if it's a method
+                                else:
+                                    df = to_frame_attr  # Use directly if it's a property
+                                
+                                if isinstance(df, pd.DataFrame) and endog_name in df.index:
                                     row = df.loc[endog_name]
                                     # Look for relevant columns
                                     for col in df.columns:
@@ -602,7 +645,16 @@ def estimate_system(formulas, data, method="SUR"):
                 
                 # Also try direct access on res (for some versions)
                 if weak_instrument is None and hasattr(res, 'weak_instrument_test'):
-                    weak_instrument = res.weak_instrument_test
+                    weak_instrument_attr = getattr(res, 'weak_instrument_test', None)
+                    if weak_instrument_attr is not None:
+                        # Check if it's callable (method) or not (property)
+                        if callable(weak_instrument_attr):
+                            try:
+                                weak_instrument = weak_instrument_attr()  # Call if it's a method
+                            except Exception:
+                                weak_instrument = None
+                        else:
+                            weak_instrument = weak_instrument_attr  # Use directly if it's a property
                 
                 if weak_instrument is not None:
                     if hasattr(weak_instrument, 'stat'):
@@ -621,37 +673,163 @@ def estimate_system(formulas, data, method="SUR"):
             # 3. Overidentification test (Hansen J or Sargan)
             # Only available when #instruments > #endogenous variables
             try:
-                overid_test = None
-                # Try different attribute names
-                for attr_name in ['overidentification_test', 'overid_test', 'j_stat', 'sargan_stat']:
-                    if hasattr(res, attr_name):
-                        overid_test = getattr(res, attr_name)
-                        break
+                # First, check if we actually have more instruments than endogenous variables
+                num_instruments = len(instruments)
+                num_endogenous = len(endog_vars)
                 
-                if overid_test is not None:
-                    if hasattr(overid_test, 'stat'):
-                        test_name = 'Hansen J'
-                        if hasattr(overid_test, 'test_name'):
-                            test_name = str(overid_test.test_name)
-                        elif hasattr(overid_test, 'name'):
-                            test_name = str(overid_test.name)
+                print(f"DEBUG: Overidentification check - Instruments: {num_instruments}, Endogenous: {num_endogenous}")
+                
+                if num_instruments <= num_endogenous:
+                    # Model is exactly identified or underidentified - overidentification test not available
+                    instrument_diagnostics['overidentification'] = {
+                        'available': False,
+                        'reason': f'Model is exactly identified (number of instruments ({num_instruments}) equals number of endogenous variables ({num_endogenous}))' if num_instruments == num_endogenous else f'Model is underidentified (number of instruments ({num_instruments}) is less than number of endogenous variables ({num_endogenous}))'
+                    }
+                else:
+                    # Model is overidentified - try to get the test
+                    # In linearmodels, the overidentification test is accessed via res.j_stat
+                    overid_test = None
+                    test_name = 'Hansen J'
+                    
+                    # Debug: Print all attributes of res to see what's available
+                    print(f"DEBUG: Checking for overidentification test. res type: {type(res)}")
+                    all_attrs = [x for x in dir(res) if not x.startswith('_')]
+                    print(f"DEBUG: All res attributes: {all_attrs}")
+                    j_stat_related = [x for x in all_attrs if 'j' in x.lower() or 'overid' in x.lower() or 'sargan' in x.lower() or 'hansen' in x.lower()]
+                    print(f"DEBUG: J-stat related attributes: {j_stat_related}")
+                    
+                    # Try overidentification test attributes
+                    # Based on debug output, linearmodels provides 'sargan' and 'wooldridge_overid'
+                    # First try on robust result, then on non-robust if available
+                    for res_to_check, res_label in [(res, 'robust'), (res_nonrobust, 'non-robust')]:
+                        if res_to_check is None:
+                            continue
+                        
+                        # Try sargan first (most common)
+                        for attr_name in ['sargan', 'wooldridge_overid', 'j_stat', 'overidentification_test', 'overid_test']:
+                            if hasattr(res_to_check, attr_name):
+                                try:
+                                    test_attr = getattr(res_to_check, attr_name, None)
+                                    print(f"DEBUG: {attr_name} attribute exists on {res_label} result, type: {type(test_attr)}")
+                                    if test_attr is not None:
+                                        # Check if it's callable (method) or not (property)
+                                        if callable(test_attr):
+                                            overid_test = test_attr()
+                                            print(f"DEBUG: Called {attr_name}() as method on {res_label}, result type: {type(overid_test)}")
+                                        else:
+                                            overid_test = test_attr
+                                            print(f"DEBUG: Used {attr_name} as property on {res_label}, type: {type(overid_test)}")
+                                        
+                                        if overid_test is not None:
+                                            print(f"DEBUG: {attr_name} result attributes: {[x for x in dir(overid_test) if not x.startswith('_')]}")
+                                            # Try to access common attributes directly
+                                            if hasattr(overid_test, 'stat'):
+                                                print(f"DEBUG: overid_test.stat = {getattr(overid_test, 'stat', None)}")
+                                            if hasattr(overid_test, 'statistic'):
+                                                print(f"DEBUG: overid_test.statistic = {getattr(overid_test, 'statistic', None)}")
+                                            if hasattr(overid_test, 'pval'):
+                                                print(f"DEBUG: overid_test.pval = {getattr(overid_test, 'pval', None)}")
+                                            if hasattr(overid_test, 'pvalue'):
+                                                print(f"DEBUG: overid_test.pvalue = {getattr(overid_test, 'pvalue', None)}")
+                                            break  # Found it, exit inner loop
+                                except Exception as e:
+                                    import traceback
+                                    print(f"DEBUG: Error accessing {attr_name} on {res_label}: {e}")
+                                    print(f"DEBUG: Traceback: {traceback.format_exc()}")
+                                    continue
+                        
+                        if overid_test is not None:
+                            break  # Found it, exit outer loop
+                    
+                    if overid_test is not None:
+                        # Extract statistic and p-value
+                        statistic = None
+                        pvalue = None
+                        
+                        # Try common attribute names for statistic
+                        for stat_attr in ['stat', 'statistic', 'statistic_value', 'value']:
+                            if hasattr(overid_test, stat_attr):
+                                stat_val = getattr(overid_test, stat_attr)
+                                if stat_val is not None:
+                                    statistic = float(stat_val)
+                                    break
+                        
+                        # Try common attribute names for p-value
+                        for pval_attr in ['pval', 'pvalue', 'p_value', 'pv']:
+                            if hasattr(overid_test, pval_attr):
+                                pval_val = getattr(overid_test, pval_attr)
+                                if pval_val is not None:
+                                    pvalue = float(pval_val)
+                                    break
+                        
+                        # Try to get test name
+                        for name_attr in ['test_name', 'name', 'test']:
+                            if hasattr(overid_test, name_attr):
+                                name_val = getattr(overid_test, name_attr)
+                                if name_val is not None:
+                                    test_name = str(name_val)
+                                    break
+                        
+                        if statistic is not None or pvalue is not None:
+                            instrument_diagnostics['overidentification'] = {
+                                'available': True,
+                                'statistic': statistic,
+                                'pvalue': pvalue,
+                                'test_name': test_name,
+                            }
+                        else:
+                            # Test object exists but we can't extract values
+                            print(f"DEBUG: Overidentification test object found but cannot extract statistic/pvalue. Object: {overid_test}, type: {type(overid_test)}")
+                            instrument_diagnostics['overidentification'] = {
+                                'available': False,
+                                'reason': f'Overidentification test object found but cannot extract statistic/pvalue (object type: {type(overid_test).__name__})'
+                            }
+                    else:
+                        # Debug: print available attributes on res
+                        print(f"DEBUG: Overidentification test not found. Available attributes on res: {[x for x in dir(res) if not x.startswith('_')]}")
+                        j_stat_related = [x for x in dir(res) if not x.startswith('_') and ('overid' in x.lower() or 'j' in x.lower() or 'sargan' in x.lower() or 'hansen' in x.lower())]
+                        print(f"DEBUG: J-stat related attributes: {j_stat_related}")
+                        
+                        # Try to get from summary if available
+                        if hasattr(res, 'summary'):
+                            try:
+                                summary = res.summary
+                                print(f"DEBUG: Summary type: {type(summary)}")
+                                if hasattr(summary, 'as_text'):
+                                    summary_text = summary.as_text()
+                                    print(f"DEBUG: Summary text (first 2000 chars):\n{summary_text[:2000]}")
+                                elif hasattr(summary, '__str__'):
+                                    summary_str = str(summary)
+                                    print(f"DEBUG: Summary string (first 2000 chars):\n{summary_str[:2000]}")
+                            except Exception as e:
+                                print(f"DEBUG: Error accessing summary: {e}")
                         
                         instrument_diagnostics['overidentification'] = {
-                            'statistic': float(overid_test.stat) if overid_test.stat is not None else None,
-                            'pvalue': float(overid_test.pval) if hasattr(overid_test, 'pval') and overid_test.pval is not None else None,
-                            'test_name': test_name,
+                            'available': False,
+                            'reason': f'Overidentification test not available from model (model is overidentified with {num_instruments} instruments for {num_endogenous} endogenous variables, but test could not be extracted. Check console for debug output.)'
                         }
-                    else:
-                        instrument_diagnostics['overidentification'] = None
-                else:
-                    instrument_diagnostics['overidentification'] = None
             except Exception as e:
-                instrument_diagnostics['overidentification'] = None
-                print(f"Info: Overidentification test not available (model may be exactly identified): {e}")
+                instrument_diagnostics['overidentification'] = {
+                    'available': False,
+                    'reason': f'Error checking overidentification: {str(e)}'
+                }
+                print(f"Info: Overidentification test not available: {e}")
             
             # 4. Endogeneity test (Durbin-Wu-Hausman)
             try:
-                wu_hausman = res.wu_hausman
+                wu_hausman_attr = getattr(res, 'wu_hausman', None)
+                if wu_hausman_attr is not None:
+                    # Check if it's callable (method) or not (property)
+                    if callable(wu_hausman_attr):
+                        try:
+                            wu_hausman = wu_hausman_attr()  # Call if it's a method
+                        except Exception:
+                            wu_hausman = None
+                    else:
+                        wu_hausman = wu_hausman_attr  # Use directly if it's a property
+                else:
+                    wu_hausman = None
+                    
                 if wu_hausman is not None:
                     if hasattr(wu_hausman, 'stat'):
                         instrument_diagnostics['endogeneity_test'] = {
@@ -671,12 +849,36 @@ def estimate_system(formulas, data, method="SUR"):
             instrument_diagnostics['error'] = str(e)
 
         # Convert all to numpy arrays to ensure proper types
+        # Safely access params and other attributes
+        params_attr = getattr(res, 'params', None)
+        if params_attr is None:
+            raise ValueError("Model result does not have params attribute")
+        
+        # Check if params is callable (method) or a property
+        if callable(params_attr):
+            params_data = params_attr()
+        else:
+            params_data = params_attr
+        
+        # Safely access other attributes
+        std_errors_attr = getattr(res, 'std_errors', None)
+        tstats_attr = getattr(res, 'tstats', None)
+        pvalues_attr = getattr(res, 'pvalues', None)
+        
+        std_errors = std_errors_attr() if callable(std_errors_attr) else (std_errors_attr if std_errors_attr is not None else None)
+        tstats = tstats_attr() if callable(tstats_attr) else (tstats_attr if tstats_attr is not None else None)
+        pvalues = pvalues_attr() if callable(pvalues_attr) else (pvalues_attr if pvalues_attr is not None else None)
+        
+        # Ensure we have valid data
+        if params_data is None:
+            raise ValueError("Model params is None")
+        
         params = pd.DataFrame({
-            "variable": res.params.index,
-            "param": np.asarray(res.params.values),
-            "std_err": np.asarray(res.std_errors.values),
-            "t": np.asarray(res.tstats.values),
-            "p": np.asarray(res.pvalues.values)
+            "variable": params_data.index if hasattr(params_data, 'index') else range(len(params_data)),
+            "param": np.asarray(params_data.values if hasattr(params_data, 'values') else params_data),
+            "std_err": np.asarray(std_errors.values if std_errors is not None and hasattr(std_errors, 'values') else (std_errors if std_errors is not None else np.zeros(len(params_data)))),
+            "t": np.asarray(tstats.values if tstats is not None and hasattr(tstats, 'values') else (tstats if tstats is not None else np.zeros(len(params_data)))),
+            "p": np.asarray(pvalues.values if pvalues is not None and hasattr(pvalues, 'values') else (pvalues if pvalues is not None else np.zeros(len(params_data))))
         })
         
         # Add instrument diagnostics to params or return separately
@@ -685,8 +887,18 @@ def estimate_system(formulas, data, method="SUR"):
         # Get dependent variable data - IVData object structure
         # The simplest approach: reconstruct y from fitted_values + residuals
         # This is always accurate: y = y_hat + residuals
-        y_hat = np.asarray(res.fitted_values)
-        residuals = np.asarray(res.resids)
+        # Safely access fitted_values and resids
+        fitted_values_attr = getattr(res, 'fitted_values', None)
+        resids_attr = getattr(res, 'resids', None)
+        
+        if fitted_values_attr is None:
+            raise ValueError("Model result does not have fitted_values attribute")
+        if resids_attr is None:
+            raise ValueError("Model result does not have resids attribute")
+        
+        # Check if they're callable (methods) or properties
+        y_hat = np.asarray(fitted_values_attr() if callable(fitted_values_attr) else fitted_values_attr)
+        residuals = np.asarray(resids_attr() if callable(resids_attr) else resids_attr)
         y_data = y_hat + residuals
         
         # Get exogenous data for diagnostics
@@ -787,19 +999,303 @@ def estimate_system(formulas, data, method="SUR"):
             raise
 
         # param table - handle MultiIndex properly
-        # Build params DataFrame manually to ensure correct alignment
-        params_data = []
-        for (eq, var), val in res.params.items():
-            params_data.append({
-                "equation": eq,
-                "variable": var,
-                "param": val,
-                "std_err": res.std_errors.loc[(eq, var)],
-                "t": res.tstats.loc[(eq, var)],
-                "p": res.pvalues.loc[(eq, var)]
-            })
+        # For 3SLS, res.params is typically a Series with MultiIndex (equation, variable)
+        print(f"DEBUG: 3SLS res.params type: {type(res.params)}")
+        print(f"DEBUG: 3SLS res.params index type: {type(res.params.index) if hasattr(res.params, 'index') else 'N/A'}")
+        if hasattr(res.params, 'index'):
+            print(f"DEBUG: 3SLS res.params index names: {res.params.index.names}")
+            print(f"DEBUG: 3SLS res.params first few indices: {list(res.params.index[:5])}")
+        
+        try:
+            # Use reset_index() to convert MultiIndex Series to DataFrame - this is the most reliable method
+            params_df = res.params.reset_index()
+            print(f"DEBUG: After reset_index(), params_df shape: {params_df.shape}")
+            print(f"DEBUG: params_df columns: {params_df.columns.tolist()}")
+            print(f"DEBUG: params_df head:\n{params_df.head(10)}")
+            
+            # The reset_index() can give different structures:
+            # 1. [level_0, level_1, 0] - when MultiIndex levels are separate
+            # 2. ['index', 'params'] - when MultiIndex is in a single 'index' column
+            # 3. Other variations
+            
+            print(f"DEBUG: params_df columns: {params_df.columns.tolist()}")
+            print(f"DEBUG: params_df head:\n{params_df.head(10)}")
+            
+            # Handle case where index is in a single column (like ['index', 'params'])
+            if 'index' in params_df.columns and len(params_df.columns) == 2:
+                # The 'index' column contains tuples like (eq, var)
+                param_col = [c for c in params_df.columns if c != 'index'][0]
+                print(f"DEBUG: Found 'index' column structure, param_col: {param_col}")
+                
+                params_data = []
+                for _, row in params_df.iterrows():
+                    index_val = row['index']
+                    param_val = float(row[param_col]) if pd.notna(row[param_col]) else None
+                    
+                    # Extract equation and variable from index
+                    if isinstance(index_val, tuple) and len(index_val) == 2:
+                        eq, var = index_val
+                    elif isinstance(index_val, (list, pd.Index)) and len(index_val) == 2:
+                        eq, var = index_val[0], index_val[1]
+                    else:
+                        # Try to parse as string representation of tuple
+                        try:
+                            if isinstance(index_val, str) and index_val.startswith('(') and index_val.endswith(')'):
+                                # Parse string like "(eq1, const)" 
+                                parts = index_val.strip('()').split(',')
+                                eq = parts[0].strip().strip("'\"")
+                                var = parts[1].strip().strip("'\"") if len(parts) > 1 else str(index_val)
+                            else:
+                                # Fallback: use the index value as variable, equation unknown
+                                eq = "eq1"  # Default equation name
+                                var = str(index_val)
+                        except:
+                            eq = "eq1"
+                            var = str(index_val)
+                    
+                    # Try to get std_err, t, and p from the original Series using the index
+                    std_err = None
+                    t_stat = None
+                    p_val = None
+                    
+                    # Use the original index to look up values
+                    if isinstance(index_val, tuple) and len(index_val) == 2:
+                        idx_key = index_val
+                    elif hasattr(index_val, '__getitem__') and hasattr(index_val, '__len__') and len(index_val) == 2:
+                        idx_key = (index_val[0], index_val[1])
+                    else:
+                        idx_key = None
+                    
+                    print(f"DEBUG: Looking up stats for eq={eq}, var={var}, index_val={index_val}, idx_key={idx_key}")
+                    
+                    # Debug: Check what attributes res has
+                    print(f"DEBUG: res attributes with 'std' or 't' or 'p': {[x for x in dir(res) if 'std' in x.lower() or 'tstat' in x.lower() or 'pval' in x.lower()]}")
+                    
+                    # Try multiple ways to access std_errors, tstats, pvalues
+                    # Method 1: Direct attribute access
+                    if idx_key is not None:
+                        # Try std_errors
+                        if hasattr(res, 'std_errors'):
+                            try:
+                                if idx_key in res.std_errors.index:
+                                    std_err = float(res.std_errors.loc[idx_key])
+                                    print(f"DEBUG: Found std_err via direct loc: {std_err}")
+                            except Exception as e:
+                                print(f"DEBUG: Error accessing std_errors.loc[{idx_key}]: {e}")
+                        
+                        # Try tstats
+                        if hasattr(res, 'tstats'):
+                            try:
+                                if idx_key in res.tstats.index:
+                                    t_stat = float(res.tstats.loc[idx_key])
+                                    print(f"DEBUG: Found t_stat via direct loc: {t_stat}")
+                            except Exception as e:
+                                print(f"DEBUG: Error accessing tstats.loc[{idx_key}]: {e}")
+                        
+                        # Try pvalues
+                        if hasattr(res, 'pvalues'):
+                            try:
+                                if idx_key in res.pvalues.index:
+                                    p_val = float(res.pvalues.loc[idx_key])
+                                    print(f"DEBUG: Found p_val via direct loc: {p_val}")
+                            except Exception as e:
+                                print(f"DEBUG: Error accessing pvalues.loc[{idx_key}]: {e}")
+                    
+                    # Method 2: Use reset_index() and match by index value
+                    if std_err is None or t_stat is None or p_val is None:
+                        print(f"DEBUG: Trying reset_index() approach for missing stats")
+                        try:
+                            if std_err is None and hasattr(res, 'std_errors'):
+                                std_errors_df = res.std_errors.reset_index() if hasattr(res.std_errors, 'reset_index') else None
+                                if std_errors_df is not None:
+                                    print(f"DEBUG: std_errors_df columns: {std_errors_df.columns.tolist()}")
+                                    if 'index' in std_errors_df.columns:
+                                        # Match by index value
+                                        match = std_errors_df[std_errors_df['index'] == index_val]
+                                        if len(match) > 0:
+                                            std_err_col = [c for c in match.columns if c != 'index'][0]
+                                            std_err = float(match.iloc[0][std_err_col]) if pd.notna(match.iloc[0][std_err_col]) else None
+                                            print(f"DEBUG: Found std_err via reset_index: {std_err}")
+                                    elif len(std_errors_df.columns) >= 2:
+                                        # Try matching by first two columns (equation, variable)
+                                        eq_col = std_errors_df.columns[0]
+                                        var_col = std_errors_df.columns[1] if len(std_errors_df.columns) > 1 else None
+                                        if var_col:
+                                            match = std_errors_df[(std_errors_df[eq_col] == eq) & (std_errors_df[var_col] == var)]
+                                            if len(match) > 0:
+                                                std_err_col = [c for c in match.columns if c not in [eq_col, var_col]][0]
+                                                std_err = float(match.iloc[0][std_err_col]) if pd.notna(match.iloc[0][std_err_col]) else None
+                                                print(f"DEBUG: Found std_err via column match: {std_err}")
+                        except Exception as e:
+                            print(f"DEBUG: Error in reset_index approach for std_err: {e}")
+                            import traceback
+                            traceback.print_exc()
+                        
+                        try:
+                            if t_stat is None and hasattr(res, 'tstats'):
+                                tstats_df = res.tstats.reset_index() if hasattr(res.tstats, 'reset_index') else None
+                                if tstats_df is not None:
+                                    print(f"DEBUG: tstats_df columns: {tstats_df.columns.tolist()}")
+                                    if 'index' in tstats_df.columns:
+                                        match = tstats_df[tstats_df['index'] == index_val]
+                                        if len(match) > 0:
+                                            t_col = [c for c in match.columns if c != 'index'][0]
+                                            t_stat = float(match.iloc[0][t_col]) if pd.notna(match.iloc[0][t_col]) else None
+                                            print(f"DEBUG: Found t_stat via reset_index: {t_stat}")
+                                    elif len(tstats_df.columns) >= 2:
+                                        eq_col = tstats_df.columns[0]
+                                        var_col = tstats_df.columns[1] if len(tstats_df.columns) > 1 else None
+                                        if var_col:
+                                            match = tstats_df[(tstats_df[eq_col] == eq) & (tstats_df[var_col] == var)]
+                                            if len(match) > 0:
+                                                t_col = [c for c in match.columns if c not in [eq_col, var_col]][0]
+                                                t_stat = float(match.iloc[0][t_col]) if pd.notna(match.iloc[0][t_col]) else None
+                                                print(f"DEBUG: Found t_stat via column match: {t_stat}")
+                        except Exception as e:
+                            print(f"DEBUG: Error in reset_index approach for t_stat: {e}")
+                        
+                        try:
+                            if p_val is None and hasattr(res, 'pvalues'):
+                                pvalues_df = res.pvalues.reset_index() if hasattr(res.pvalues, 'reset_index') else None
+                                if pvalues_df is not None:
+                                    print(f"DEBUG: pvalues_df columns: {pvalues_df.columns.tolist()}")
+                                    if 'index' in pvalues_df.columns:
+                                        match = pvalues_df[pvalues_df['index'] == index_val]
+                                        if len(match) > 0:
+                                            p_col = [c for c in match.columns if c != 'index'][0]
+                                            p_val = float(match.iloc[0][p_col]) if pd.notna(match.iloc[0][p_col]) else None
+                                            print(f"DEBUG: Found p_val via reset_index: {p_val}")
+                                    elif len(pvalues_df.columns) >= 2:
+                                        eq_col = pvalues_df.columns[0]
+                                        var_col = pvalues_df.columns[1] if len(pvalues_df.columns) > 1 else None
+                                        if var_col:
+                                            match = pvalues_df[(pvalues_df[eq_col] == eq) & (pvalues_df[var_col] == var)]
+                                            if len(match) > 0:
+                                                p_col = [c for c in match.columns if c not in [eq_col, var_col]][0]
+                                                p_val = float(match.iloc[0][p_col]) if pd.notna(match.iloc[0][p_col]) else None
+                                                print(f"DEBUG: Found p_val via column match: {p_val}")
+                        except Exception as e:
+                            print(f"DEBUG: Error in reset_index approach for p_val: {e}")
+                    
+                    params_data.append({
+                        "equation": str(eq),
+                        "variable": str(var),
+                        "param": param_val,
+                        "std_err": std_err,
+                        "t": t_stat,
+                        "p": p_val
+                    })
+                
+                print(f"DEBUG: Built {len(params_data)} parameter rows from 'index' column structure")
+            elif len(params_df.columns) >= 3:
+                # Standard case: level_0 (equation), level_1 (variable), 0 (param value)
+                if 'level_0' in params_df.columns and 'level_1' in params_df.columns:
+                    eq_col = 'level_0'
+                    var_col = 'level_1'
+                    param_col = [c for c in params_df.columns if c not in ['level_0', 'level_1']][0]
+                else:
+                    # Use first three columns
+                    eq_col = params_df.columns[0]
+                    var_col = params_df.columns[1]
+                    param_col = params_df.columns[2]
+                
+                print(f"DEBUG: Using columns - eq: {eq_col}, var: {var_col}, param: {param_col}")
+                
+                # Also reset index for std_errors, tstats, and pvalues to match
+                std_errors_df = res.std_errors.reset_index() if hasattr(res.std_errors, 'reset_index') else None
+                tstats_df = res.tstats.reset_index() if hasattr(res.tstats, 'reset_index') else None
+                pvalues_df = res.pvalues.reset_index() if hasattr(res.pvalues, 'reset_index') else None
+                
+                if std_errors_df is not None:
+                    print(f"DEBUG: std_errors_df columns: {std_errors_df.columns.tolist()}")
+                if tstats_df is not None:
+                    print(f"DEBUG: tstats_df columns: {tstats_df.columns.tolist()}")
+                if pvalues_df is not None:
+                    print(f"DEBUG: pvalues_df columns: {pvalues_df.columns.tolist()}")
+                
+                # Build params_data by merging information
+                params_data = []
+                for idx, row in params_df.iterrows():
+                    eq = str(row[eq_col])
+                    var = str(row[var_col])
+                    param_val = float(row[param_col]) if pd.notna(row[param_col]) else None
+                    
+                    # Try to find matching std_err, t, and p using the same column structure
+                    std_err = None
+                    t_stat = None
+                    p_val = None
+                    
+                    if std_errors_df is not None and len(std_errors_df) > 0:
+                        try:
+                            # Match by equation and variable
+                            match = std_errors_df[(std_errors_df[eq_col] == eq) & (std_errors_df[var_col] == var)]
+                            if len(match) > 0:
+                                std_err_col = [c for c in match.columns if c not in [eq_col, var_col]][0]
+                                std_err_val = match.iloc[0][std_err_col]
+                                std_err = float(std_err_val) if pd.notna(std_err_val) else None
+                        except Exception as e:
+                            print(f"DEBUG: Error extracting std_err for {eq}, {var}: {e}")
+                    
+                    if tstats_df is not None and len(tstats_df) > 0:
+                        try:
+                            match = tstats_df[(tstats_df[eq_col] == eq) & (tstats_df[var_col] == var)]
+                            if len(match) > 0:
+                                t_col = [c for c in match.columns if c not in [eq_col, var_col]][0]
+                                t_val = match.iloc[0][t_col]
+                                t_stat = float(t_val) if pd.notna(t_val) else None
+                        except Exception as e:
+                            print(f"DEBUG: Error extracting t_stat for {eq}, {var}: {e}")
+                    
+                    if pvalues_df is not None and len(pvalues_df) > 0:
+                        try:
+                            match = pvalues_df[(pvalues_df[eq_col] == eq) & (pvalues_df[var_col] == var)]
+                            if len(match) > 0:
+                                p_col = [c for c in match.columns if c not in [eq_col, var_col]][0]
+                                p_val_val = match.iloc[0][p_col]
+                                p_val = float(p_val_val) if pd.notna(p_val_val) else None
+                        except Exception as e:
+                            print(f"DEBUG: Error extracting p_val for {eq}, {var}: {e}")
+                    
+                    params_data.append({
+                        "equation": eq,
+                        "variable": var,
+                        "param": param_val,
+                        "std_err": std_err,
+                        "t": t_stat,
+                        "p": p_val
+                    })
+                
+                print(f"DEBUG: Built {len(params_data)} parameter rows")
+            else:
+                raise ValueError(f"Unexpected params_df structure after reset_index. Columns: {params_df.columns.tolist()}, shape: {params_df.shape}")
+        except Exception as e:
+            import traceback
+            print(f"DEBUG: Error parsing 3SLS params: {e}")
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            raise ValueError(f"Error parsing 3SLS parameters: {str(e)}")
+        
         params = pd.DataFrame(params_data)
-
+        
+        # Debug: Print params DataFrame structure
+        print(f"DEBUG: Final 3SLS params DataFrame shape: {params.shape}")
+        print(f"DEBUG: Final 3SLS params DataFrame columns: {params.columns.tolist()}")
+        if len(params) > 0:
+            print(f"DEBUG: Final params DataFrame head:\n{params.head(10).to_string()}")
+            print(f"DEBUG: Sample variable names: {params['variable'].head(10).tolist()}")
+            print(f"DEBUG: Sample equation names: {params['equation'].head(10).tolist()}")
+            print(f"DEBUG: Non-null std_err count: {params['std_err'].notna().sum()}")
+            print(f"DEBUG: Non-null t count: {params['t'].notna().sum()}")
+            print(f"DEBUG: Non-null p count: {params['p'].notna().sum()}")
+        else:
+            print(f"DEBUG: WARNING: params DataFrame is empty!")
+        
+        # Ensure all required columns exist with correct names
+        required_cols = ['equation', 'variable', 'param', 'std_err', 't', 'p']
+        for col in required_cols:
+            if col not in params.columns:
+                print(f"WARNING: Missing column '{col}' in params DataFrame. Adding with None values.")
+                params[col] = None
+        
         # diagnostics - 3SLS results may not have equation_results, compute manually
         diag_list = []
         for i, (eq_name, formula) in enumerate(eq_dict.items()):
@@ -1032,9 +1528,15 @@ class StructuralModelModule:
             }
         except Exception as e:
             import traceback
-            traceback.print_exc()
+            error_trace = traceback.format_exc()
+            print(f"FULL TRACEBACK:\n{error_trace}")
+            error_msg = str(e)
+            # Provide more context about the error
+            if "'NoneType' object is not callable" in error_msg:
+                error_msg += "\n\nThis error typically occurs when trying to call a method on a None value. Check if model.fit() returned None or if result attributes are None."
             return {
-                'error': f'Error estimating structural model: {str(e)}',
-                'has_results': False
+                'error': f'Error estimating structural model: {error_msg}',
+                'has_results': False,
+                'traceback': error_trace
             }
 

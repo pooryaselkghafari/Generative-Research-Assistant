@@ -31,9 +31,6 @@ from engine.views.sessions import _list_context
 
 def run_analysis(request):
     """Main analysis execution view - refactored to use helper functions."""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
 
@@ -45,11 +42,10 @@ def run_analysis(request):
     dataset_id = request.POST.get('dataset_id')
     if not dataset_id:
         return HttpResponse('Please select a dataset from the dropdown', status=400)
-    # Security: Only allow access to user's own datasets
-    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
 
     try:
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         # Check if dataset is very large and warn user
         if len(df) > 100000:  # More than 100k rows
@@ -92,11 +88,6 @@ def run_analysis(request):
 
     session_name = request.POST.get('session_name') or f"Session {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
-    # Check session limits for new sessions (not updates)
-    if action == 'new':
-        limit_error = DatasetValidationService.check_session_limits(request.user, request)
-        if limit_error:
-            return limit_error
 
     # Special handling for BMA analysis
     if module_name == 'bma':
@@ -139,15 +130,11 @@ def run_analysis(request):
 
 def calculate_summary_stats(request, session_id):
     """Calculate summary statistics for selected variables."""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     try:
-        # Security: Only allow access to user's own sessions
-        session = get_object_or_404(AnalysisSession, id=session_id, user=request.user)
+        session = get_object_or_404(AnalysisSession, id=session_id)
         dataset = session.dataset
         
         # Get selected variables from request
@@ -156,7 +143,7 @@ def calculate_summary_stats(request, session_id):
             return JsonResponse({'error': 'No variables selected'}, status=400)
         
         # Load dataset
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         # Calculate summary statistics for selected variables
         summary_stats = {}
@@ -190,8 +177,7 @@ def cancel_bayesian_analysis(request):
         
         if session_id:
             # Cancel specific session
-            # Security: Only allow access to user's own sessions
-            session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+            session = get_object_or_404(AnalysisSession, pk=session_id)
             
             # Instead of marking as cancelled, we'll just return success
             # The frontend will reload to show the previous state
@@ -210,9 +196,6 @@ def cancel_bayesian_analysis(request):
 
 def run_bma_analysis(request):
     """Handle BMA analysis requests"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -231,16 +214,13 @@ def run_bma_analysis(request):
         
     except Exception as e:
         return render(request, 'engine/index.html', {
-            **_list_context(user=request.user),
+            **_list_context(),
             'error_message': f'Error running BMA analysis: {str(e)}'
         })
 
 
 def run_anova_analysis(request):
     """Handle ANOVA analysis requests"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -262,16 +242,13 @@ def run_anova_analysis(request):
         print(f"ANOVA ERROR: {error_msg}")
         print(traceback.format_exc())
         return render(request, 'engine/index.html', {
-            **_list_context(user=request.user),
+            **_list_context(),
             'error_message': error_msg
         })
 
 
 def run_varx_analysis(request):
     """Handle VARX analysis requests"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -309,16 +286,13 @@ def run_varx_analysis(request):
         print(f"VARX ERROR: {error_msg}")
         print(traceback.format_exc())
         return render(request, 'engine/index.html', {
-            **_list_context(user=request.user),
+            **_list_context(),
             'error_message': error_msg
         })
 
 
 def run_structural_analysis(request):
     """Handle structural model (SUR/2SLS/3SLS) analysis requests"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
@@ -341,7 +315,7 @@ def run_structural_analysis(request):
         print(f"STRUCTURAL ERROR: {error_msg}")
         print(traceback.format_exc())
         return render(request, 'engine/index.html', {
-            **_list_context(user=request.user),
+            **_list_context(),
             'error_message': error_msg
         })
 
@@ -350,13 +324,8 @@ def run_structural_analysis(request):
 @require_http_methods(["POST"])
 def generate_varx_irf_view(request, session_id):
     """Generate Impulse Response Function plot for VARX analysis"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
-    
     try:
-        # Security: Only allow access to user's own sessions
-        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+        session = get_object_or_404(AnalysisSession, pk=session_id)
         
         # Validate session using service
         is_valid, error = IRFService.validate_session_for_irf(session)
@@ -393,13 +362,8 @@ def generate_varx_irf_view(request, session_id):
 @require_http_methods(["POST"])
 def generate_varx_irf_data_view(request, session_id):
     """Generate IRF data (not plot) for VARX analysis"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
-    
     try:
-        # Security: Only allow access to user's own sessions
-        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+        session = get_object_or_404(AnalysisSession, pk=session_id)
         
         # Validate session using service
         is_valid, error = IRFService.validate_session_for_irf(session)
@@ -428,40 +392,6 @@ def generate_varx_irf_data_view(request, session_id):
         return JsonResponse({'error': f'Error generating IRF data: {str(e)}'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def ai_chat(request):
-    """
-    Handle AI chat requests. Sends user messages to an AI API and returns responses.
-    Expects JSON with:
-    - message: user's message
-    - context (optional): additional context about the current analysis/session
-    """
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
-    
-    try:
-        data = json.loads(request.body)
-        message = data.get('message', '')
-        context = data.get('context', '')
-        
-        if not message:
-            return JsonResponse({'error': 'Message is required'}, status=400)
-        
-        # Here you would integrate with your AI service
-        # For now, return a placeholder response
-        response = {
-            'success': True,
-            'response': f'AI chat functionality is not yet implemented. Your message was: {message}'
-        }
-        
-        return JsonResponse(response)
-        
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': f'Unexpected error: {str(e)}'}, status=500)
 
 
 def add_model_errors_to_dataset(request, session_id):
@@ -472,9 +402,6 @@ def add_model_errors_to_dataset(request, session_id):
     It only adds new columns to the dataset file. The session's formula, 
     dependent variables, and all other analysis parameters remain unchanged.
     """
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
@@ -487,22 +414,20 @@ def add_model_errors_to_dataset(request, session_id):
         from engine.services.dataset_service import DatasetService
         
         # Get session and dataset (read-only - we will NOT modify the session)
-        # Security: Only allow access to user's own sessions
-        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+        session = get_object_or_404(AnalysisSession, pk=session_id)
         data = json.loads(request.body)
         dataset_id = data.get('dataset_id')
         
         if not dataset_id:
             return JsonResponse({'error': 'dataset_id is required'}, status=400)
         
-        # Security: Only allow access to user's own datasets
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
         
         # Store original session formula to ensure it's never modified
         original_formula = session.formula
         
         # Load the dataset
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         # Get fitted models for all equations
         try:
@@ -545,19 +470,10 @@ def add_model_errors_to_dataset(request, session_id):
         # Clean up any duplicate columns that might have been created
         df = df.loc[:, ~df.columns.duplicated()].copy()
         
-        # Save the updated dataset (handling encryption if needed)
+        # Save the updated dataset
         # NOTE: We only save the dataset file, NOT the session
-        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
-        from engine.dataprep.views import _infer_dataset_format
-        
         try:
-            if is_encrypted_file(dataset.file_path):
-                # File is encrypted - use encrypted save function
-                file_format = _infer_dataset_format(dataset.file_path)
-                save_encrypted_dataframe(df, dataset.file_path, user_id=request.user.id, file_format=file_format)
-            else:
-                # File is not encrypted - use regular save
-                DatasetService.save_dataframe(df, dataset.file_path)
+            DatasetService.save_dataframe(df, dataset.file_path)
         except Exception as save_error:
             import traceback
             error_details = traceback.format_exc()

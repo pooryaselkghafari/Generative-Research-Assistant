@@ -83,8 +83,6 @@ ssl/
 *.key
 *.crt
 
-# Docker volumes data
-postgres_data/
 
 # Node modules (if any)
 node_modules/

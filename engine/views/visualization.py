@@ -26,7 +26,7 @@ def visualize_data(request):
         
         try:
             # Security: Only allow access to user's own datasets
-            dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+            dataset = get_object_or_404(Dataset, pk=dataset_id)
             
             # Get column information using service
             column_info = VisualizationService.get_dataset_columns(dataset)
@@ -60,8 +60,8 @@ def generate_plot(request):
             return JsonResponse({'error': 'Missing required parameters'}, status=400)
         
         # Security: Only allow access to user's own datasets
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         # Import visualization functions
         from models.visualization import (
@@ -300,14 +300,10 @@ def _build_spotlight_figure(x_values, low_probs, high_probs, x, m, category, opt
 
 def generate_spotlight_plot(request, session_id):
     """Generate spotlight plot for a specific interaction."""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
-    # Security: Only allow access to user's own sessions
-    session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+    session = get_object_or_404(AnalysisSession, pk=session_id)
     interaction = request.POST.get('interaction')
     
     if not interaction:
@@ -315,8 +311,7 @@ def generate_spotlight_plot(request, session_id):
     
     try:
         # Load dataset
-        user_id = session.dataset.user.id if session.dataset.user else None
-        df, schema_types, schema_orders = _read_dataset_file(session.dataset.file_path, user_id=user_id)
+        df, schema_types, schema_orders = _read_dataset_file(session.dataset.file_path)
         print(f"Dataset columns: {list(df.columns)}")
         print(f"Requested interaction: {interaction}")
         print(f"Custom moderator: {request.POST.get('moderator_var', 'None')}")
@@ -469,19 +464,12 @@ def _format_spotlight_response(spotlight_json, interaction, df):
 
 def generate_correlation_heatmap(request, session_id):
     """Generate correlation heatmap for continuous variables."""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     
-    # Security: Only allow access to user's own sessions
-    session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+    session = get_object_or_404(AnalysisSession, pk=session_id)
     
     try:
-        # Security: Verify dataset belongs to user
-        if session.dataset and session.dataset.user != request.user:
-            return JsonResponse({'error': 'Dataset access denied'}, status=403)
         
         # Prepare variables using service
         request_vars = {
@@ -514,15 +502,11 @@ def generate_correlation_heatmap(request, session_id):
 
 def generate_anova_plot_view(request, session_id):
     """Generate ANOVA plot with t-tests"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
     try:
-        # Security: Only allow access to user's own sessions
-        session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+        session = get_object_or_404(AnalysisSession, pk=session_id)
         
         # Parse JSON body
         data = json.loads(request.body)

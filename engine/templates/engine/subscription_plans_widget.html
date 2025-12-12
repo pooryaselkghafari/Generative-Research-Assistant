@@ -166,11 +166,8 @@
                     {% endif %}
                 </ul>
                 {% if plan.price_monthly == 0 %}
-                <a href="{% url 'register' %}" class="subscription-plan-button">Get Started</a>
                 {% elif plan.name|lower == 'enterprise' or plan.name|lower == 'high tier' %}
-                <a href="{% url 'register' %}" class="subscription-plan-button">Contact Sales</a>
                 {% else %}
-                <a href="{% url 'register' %}" class="subscription-plan-button">Start Free Trial</a>
                 {% endif %}
             </div>
             {% endwith %}
@@ -185,7 +182,6 @@
                     <li>Basic regression</li>
                     <li>Community support</li>
                 </ul>
-                <a href="{% url 'register' %}" class="subscription-plan-button">Get Started</a>
             </div>
             {% endfor %}
         </div>

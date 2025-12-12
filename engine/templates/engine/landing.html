@@ -402,8 +402,6 @@
                     Generative Research Assistant
                 </a>
                 <div class="landing-nav-actions">
-                    <a href="{% url 'login' %}" class="landing-btn landing-btn-ghost">Login</a>
-                    <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
                 </div>
             </nav>
         </header>
@@ -414,7 +412,6 @@
                 <h1>Advanced Statistical Analysis Made Simple</h1>
                 <p>Powerful regression analysis, Bayesian modeling, and data visualization tools for researchers, analysts, and data scientists.</p>
                 <div class="landing-cta">
-                    <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Free Trial</a>
                     <a href="#features" class="landing-btn landing-btn-ghost">Learn More</a>
                 </div>
             </div>
@@ -492,11 +489,8 @@
                             {% endif %}
                         </ul>
                         {% if plan.price_monthly == 0 %}
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
                         {% elif plan.name|lower == 'enterprise' or plan.name|lower == 'high tier' %}
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Contact Sales</a>
                         {% else %}
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Free Trial</a>
                         {% endif %}
                     </div>
                     {% endwith %}
@@ -512,7 +506,6 @@
                             <li>Basic regression</li>
                             <li>Community support</li>
                         </ul>
-                        <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Get Started</a>
                     </div>
                     {% endfor %}
                 </div>
@@ -525,8 +518,6 @@
                 <h3>Ready to Transform Your Data Analysis?</h3>
                 <p>Join thousands of researchers and analysts who trust Generative Research Assistant for their statistical analysis needs.</p>
                 <div class="landing-footer-cta">
-                    <a href="{% url 'register' %}" class="landing-btn landing-btn-primary">Start Your Free Trial</a>
-                    <a href="{% url 'login' %}" class="landing-btn landing-btn-ghost">Sign In</a>
                 </div>
             </div>
         </footer>

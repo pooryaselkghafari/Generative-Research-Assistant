@@ -16,6 +16,8 @@
         <div class="legal-body">
             {% if terms %}
                 {{ terms.content|safe }}
+            {% elif default_content %}
+                {{ default_content|safe }}
             {% else %}
                 <p>Terms of service content is not available. Please contact the administrator.</p>
             {% endif %}

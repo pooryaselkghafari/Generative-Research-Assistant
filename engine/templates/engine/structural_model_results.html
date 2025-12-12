@@ -210,14 +210,6 @@
     Download History
   </a>
   {% endif %}
-  <button class="btn" type="button" onclick="showGRAComingSoonPopup()" 
-          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
-          title="Talk to your GRA">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-    </svg>
-    Talk to your GRA
-  </button>
 {% endblock %}
 
 {% block sidebar %}
@@ -550,41 +542,47 @@
         {% endif %}
 
         {% if results.instrument_diagnostics.overidentification %}
-        <div style="margin-bottom: 24px;">
-          <h4 style="margin: 0 0 12px 0; font-size: 1rem; font-weight: 600; color: #1f2937;">Overidentification Test ({{ results.instrument_diagnostics.overidentification.test_name|default:"Sargan" }})</h4>
-          <div style="padding: 12px; background: #f9fafb; border-radius: 6px;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-              <div>
-                <div class="muted small" style="margin-bottom: 4px;">Test Statistic</div>
-                <div style="font-weight: 600; color: #1f2937;">
-                  {% if results.instrument_diagnostics.overidentification.statistic %}
-                    {{ results.instrument_diagnostics.overidentification.statistic|floatformat:4 }}
-                  {% else %}
-                    N/A
-                  {% endif %}
-                </div>
-              </div>
-              <div>
-                <div class="muted small" style="margin-bottom: 4px;">p-value</div>
-                <div style="font-weight: 600; color: #1f2937;">
-                  {% if results.instrument_diagnostics.overidentification.pvalue %}
-                    {{ results.instrument_diagnostics.overidentification.pvalue|floatformat:4 }}
-                    {% if results.instrument_diagnostics.overidentification.pvalue < 0.05 %}
-                      <span style="color: #dc2626; font-size: 0.75rem;" title="Rejects null: instruments may be invalid">⚠️</span>
+          {% if results.instrument_diagnostics.overidentification.available %}
+          <div style="margin-bottom: 24px;">
+            <h4 style="margin: 0 0 12px 0; font-size: 1rem; font-weight: 600; color: #1f2937;">Overidentification Test ({{ results.instrument_diagnostics.overidentification.test_name|default:"Sargan" }})</h4>
+            <div style="padding: 12px; background: #f9fafb; border-radius: 6px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <div class="muted small" style="margin-bottom: 4px;">Test Statistic</div>
+                  <div style="font-weight: 600; color: #1f2937;">
+                    {% if results.instrument_diagnostics.overidentification.statistic %}
+                      {{ results.instrument_diagnostics.overidentification.statistic|floatformat:4 }}
                     {% else %}
-                      <span style="color: #10b981; font-size: 0.75rem;" title="Cannot reject null: instruments appear valid">✓</span>
+                      N/A
                     {% endif %}
-                  {% else %}
-                    N/A
-                  {% endif %}
+                  </div>
+                </div>
+                <div>
+                  <div class="muted small" style="margin-bottom: 4px;">p-value</div>
+                  <div style="font-weight: 600; color: #1f2937;">
+                    {% if results.instrument_diagnostics.overidentification.pvalue %}
+                      {{ results.instrument_diagnostics.overidentification.pvalue|floatformat:4 }}
+                      {% if results.instrument_diagnostics.overidentification.pvalue < 0.05 %}
+                        <span style="color: #dc2626; font-size: 0.75rem;" title="Rejects null: instruments may be invalid">⚠️</span>
+                      {% else %}
+                        <span style="color: #10b981; font-size: 0.75rem;" title="Cannot reject null: instruments appear valid">✓</span>
+                      {% endif %}
+                    {% else %}
+                      N/A
+                    {% endif %}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div style="margin-top: 12px; padding: 12px; background: #f0f9ff; border-radius: 6px; font-size: 0.875rem; color: #1e40af;">
-              <strong>Interpretation:</strong> Tests whether instruments are valid (uncorrelated with error term). p-value > 0.05 suggests instruments are valid.
+              <div style="margin-top: 12px; padding: 12px; background: #f0f9ff; border-radius: 6px; font-size: 0.875rem; color: #1e40af;">
+                <strong>Interpretation:</strong> Tests whether instruments are valid (uncorrelated with error term). p-value > 0.05 suggests instruments are valid.
+              </div>
             </div>
           </div>
-        </div>
+          {% else %}
+          <div style="margin-bottom: 24px; padding: 12px; background: #fef3c7; border-radius: 6px; font-size: 0.875rem; color: #92400e;">
+            <strong>Overidentification Test:</strong> Not available ({{ results.instrument_diagnostics.overidentification.reason|default:"model is exactly identified - number of instruments equals number of endogenous variables" }})
+          </div>
+          {% endif %}
         {% elif results.instrument_diagnostics.overidentification is None %}
         <div style="margin-bottom: 24px; padding: 12px; background: #fef3c7; border-radius: 6px; font-size: 0.875rem; color: #92400e;">
           <strong>Overidentification Test:</strong> Not available (model is exactly identified - number of instruments equals number of endogenous variables)

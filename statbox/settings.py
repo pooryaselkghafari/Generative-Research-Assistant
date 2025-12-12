@@ -36,22 +36,11 @@ if USE_SSL:
 else:
     CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
 
-# Data Encryption Settings
-# Use a separate encryption key for data encryption (different from SECRET_KEY)
-# Generate ONCE with: python manage.py generate_encryption_key
-# Store in .env file and reuse the same key (don't regenerate each time!)
-ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', SECRET_KEY)
-# Enable encryption for datasets
-# In production, set ENCRYPT_DATASETS=True in environment variables
-# For development, defaults to False for easier testing
-ENCRYPT_DATASETS = os.environ.get('ENCRYPT_DATASETS', 'False').lower() == 'true'  # Default False for development
-
-# Enable encryption for sensitive database fields (always enabled if encryption key is set)
-ENCRYPT_DB_FIELDS = bool(os.environ.get('ENCRYPTION_KEY', None)) or bool(ENCRYPTION_KEY != SECRET_KEY)
+# Encryption has been removed for local development
 
 # Admin URL - Use a non-obvious path for security
-# Set ADMIN_URL in .env to customize (e.g., ADMIN_URL=whereadmingoeshere)
-ADMIN_URL = os.environ.get('ADMIN_URL', 'whereadmingoeshere').strip('/')
+# Set ADMIN_URL in .env to customize (e.g., ADMIN_URL=admin)
+ADMIN_URL = os.environ.get('ADMIN_URL', 'admin').strip('/')
 
 # Admin Security Settings
 # IP Restriction: Only allow these IPs to access admin (comma-separated)
@@ -93,53 +82,39 @@ STRIPE_PUBLIC_KEY = os.environ.get('STRIPE_PUBLIC_KEY', '')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
 
-# n8n integration settings
-N8N_API_BASE_URL = os.environ.get('N8N_API_BASE_URL', 'http://127.0.0.1:5678')
-N8N_API_KEY = os.environ.get('N8N_API_KEY')
-N8N_WEBHOOK_URL = os.environ.get('N8N_WEBHOOK_URL', os.environ.get('WEBHOOK_URL', 'http://127.0.0.1:5678/'))
 
 # Supabase integration settings
 # Internal URL for proxy (used by supabase_proxy view)
 SUPABASE_STUDIO_URL = os.environ.get('SUPABASE_STUDIO_URL', 'http://127.0.0.1:54323')
 # Public URL for redirects (used by admin view)
-SUPABASE_STUDIO_PUBLIC_URL = os.environ.get('SUPABASE_STUDIO_PUBLIC_URL', 'https://studio.generativera.com')
+SUPABASE_STUDIO_PUBLIC_URL = os.environ.get('SUPABASE_STUDIO_PUBLIC_URL', 'https://studio.example.com')
 
 # Email settings
 # Supports Resend API (recommended) or SMTP
 # Option 1: Resend API (more reliable, no SMTP ports needed)
-# Option 2: SMTP (traditional, requires open ports)
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY', os.environ.get('EMAIL_HOST_PASSWORD', ''))
-EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'accounts.resend_backend.ResendBackend')
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.resend.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
-# Port 465 uses SSL (SMTPS), port 587 uses TLS (STARTTLS)
-# Default to SSL for port 465
-if EMAIL_PORT == 465:
-    EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'True').lower() == 'true'
-    EMAIL_USE_TLS = False
-else:
-    EMAIL_USE_SSL = False
-    EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'resend')
+# Email configuration (using Django's default backend)
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'False').lower() == 'true'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() == 'true'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@statbox.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@example.com')
 
 # Email timeout settings to prevent hanging on connection failures
 EMAIL_TIMEOUT = 10  # 10 seconds timeout for SMTP connections
 
-# Password Validation - Strong Password Requirements
+# Password Validation - Basic Requirements
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
         'OPTIONS': {
-            'min_length': 12,  # Strong passwords should be at least 12 characters
+            'min_length': 8,
         }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-    {
-        'NAME': 'accounts.validators.ComplexityPasswordValidator',
     },
 ]
 
@@ -153,9 +128,7 @@ SITE_ID = 1  # Required for allauth
 
 # Allauth Configuration
 AUTHENTICATION_BACKENDS = [
-    # Custom backend that enforces email verification (active users only)
-    'accounts.backends.ActiveUserBackend',
-    # Django's default authentication backend (fallback)
+    # Django's default authentication backend
     'django.contrib.auth.backends.ModelBackend',
     # Allauth authentication backend (for social auth)
     'allauth.account.auth_backends.AuthenticationBackend',
@@ -196,9 +169,9 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 
-# Customize allauth adapter to create UserProfile
-ACCOUNT_ADAPTER = 'accounts.adapters.CustomAccountAdapter'
-SOCIALACCOUNT_ADAPTER = 'accounts.adapters.CustomSocialAccountAdapter'
+# Allauth adapters (using default adapters)
+# ACCOUNT_ADAPTER = 'accounts.adapters.CustomAccountAdapter'  # Removed - accounts folder not used
+# SOCIALACCOUNT_ADAPTER = 'accounts.adapters.CustomSocialAccountAdapter'  # Removed - accounts folder not used
 
 # Auto-create user profile when social account is created
 SOCIALACCOUNT_AUTO_SIGNUP = True

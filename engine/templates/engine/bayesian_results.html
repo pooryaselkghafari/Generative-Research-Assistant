@@ -4,17 +4,6 @@
 {% block extra_head %}
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script>
-  // Set AI chat context when page loads
-  document.addEventListener('DOMContentLoaded', function() {
-    if (typeof aiChatContext !== 'undefined') {
-      aiChatContext = {
-        session_name: '{% if session %}{{ session.name|escapejs }}{% endif %}',
-        formula: '{% if session %}{{ session.formula|escapejs }}{% endif %}',
-        module: 'bayesian regression',
-        dataset_name: '{% if dataset %}{{ dataset.name|escapejs }}{% endif %}'
-      };
-    }
-  });
 </script>
 <style>
   /* Loading spinner animation */
@@ -72,14 +61,6 @@
     </svg>
     Download History
   </a>
-  <button class="btn" type="button" onclick="showGRAComingSoonPopup()" 
-          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; margin-left: 8px;"
-          title="Talk to your GRA">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-    </svg>
-    Talk to your GRA
-  </button>
 {% endblock %}
 
 {% block sidebar %}
@@ -1590,6 +1571,19 @@
       }
     }
     
+    // Hide modal immediately on page load (before DOMContentLoaded)
+    (function() {
+      const modal = document.getElementById('bayesianLoadingModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+      // Also clear any intervals
+      if (window.progressInterval) {
+        clearInterval(window.progressInterval);
+        window.progressInterval = null;
+      }
+    })();
+    
     function hideBayesianLoadingModal() {
       if (loadingModal) {
         loadingModal.style.display = 'none';
@@ -1598,7 +1592,20 @@
           progressInterval = null;
         }
       }
+      // Also try to hide by ID in case modal reference is lost
+      const modalById = document.getElementById('bayesianLoadingModal');
+      if (modalById) {
+        modalById.style.display = 'none';
+      }
+      // Clear global interval if it exists
+      if (window.progressInterval) {
+        clearInterval(window.progressInterval);
+        window.progressInterval = null;
+      }
     }
+    
+    // Make function globally available
+    window.hideBayesianLoadingModal = hideBayesianLoadingModal;
     
     function updateProgress(progress, step) {
       const progressBar = document.getElementById('progressBar');
@@ -1777,27 +1784,31 @@
       const hasResults = document.querySelector('#bayesianTable') !== null;
       const hasError = document.querySelector('.error') !== null;
       
-      if (!hasResults && !hasError) {
-        // No results yet, show loading modal
-        showBayesianLoadingModal();
-        
-        // Check periodically for results
-        const checkInterval = setInterval(() => {
-          const nowHasResults = document.querySelector('#bayesianTable') !== null;
-          const nowHasError = document.querySelector('.error') !== null;
-          
-          if (nowHasResults || nowHasError) {
-            hideBayesianLoadingModal();
-            clearInterval(checkInterval);
-          }
-        }, 2000); // Check every 2 seconds
-        
-        // Stop checking after 5 minutes
-        setTimeout(() => {
-          clearInterval(checkInterval);
-          hideBayesianLoadingModal();
-        }, 300000); // 5 minutes
+      // If results already exist, hide modal immediately
+      if (hasResults || hasError) {
+        hideBayesianLoadingModal();
+        return;
       }
+      
+      // No results yet, show loading modal
+      showBayesianLoadingModal();
+      
+      // Check periodically for results
+      const checkInterval = setInterval(() => {
+        const nowHasResults = document.querySelector('#bayesianTable') !== null;
+        const nowHasError = document.querySelector('.error') !== null;
+        
+        if (nowHasResults || nowHasError) {
+          hideBayesianLoadingModal();
+          clearInterval(checkInterval);
+        }
+      }, 2000); // Check every 2 seconds
+      
+      // Stop checking after 5 minutes
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        hideBayesianLoadingModal();
+      }, 300000); // 5 minutes
     }
     
     // Function to cancel Bayesian analysis
@@ -1945,17 +1956,33 @@
       return cookieValue;
     }
     
+    // Hide modal immediately on page load (before DOMContentLoaded)
+    (function() {
+      const modal = document.getElementById('bayesianLoadingModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+      // Also try to hide via function if available
+      if (typeof hideBayesianLoadingModal === 'function') {
+        hideBayesianLoadingModal();
+      }
+    })();
+    
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
       console.log('Bayesian results page loaded');
-      console.log('Loading modal element:', document.getElementById('bayesianLoadingModal'));
-      console.log('Test button element:', document.querySelector('button[onclick="showBayesianLoadingModal()"]'));
+      
+      // Hide modal immediately if results are present (page just loaded with results)
+      const hasResults = document.querySelector('#bayesianTable') !== null;
+      hideBayesianLoadingModal(); // Always hide on page load
       
       // Initialize display options based on current checkbox states
       initializeDisplayOptions();
       
-      // Check if analysis is still running
-      checkAnalysisStatus();
+      // Check if analysis is still running (only if no results yet)
+      if (!hasResults) {
+        checkAnalysisStatus();
+      }
     });
     
     // Function to initialize display options on page load

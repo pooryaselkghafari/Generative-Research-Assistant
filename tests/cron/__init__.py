@@ -1,4 +1,0 @@
-# Cron/scheduled task tests
-
-
-

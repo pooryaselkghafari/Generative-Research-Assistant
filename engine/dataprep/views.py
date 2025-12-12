@@ -3,6 +3,7 @@ import os
 import uuid
 import json
 import numpy as np
+from typing import Optional, Tuple
 from django.conf import settings
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, FileResponse, JsonResponse
@@ -38,38 +39,27 @@ def _dataset_path(ds: Dataset) -> str:
     return getattr(ds, "file_path", None) or getattr(getattr(ds, "file", None), "path", None)
 
 def _infer_dataset_format(path: str) -> str:
-    """Return dataset format (csv, xlsx, etc.), handling .encrypted suffix."""
+    """Return dataset format (csv, xlsx, etc.)."""
     if not path:
         return 'csv'
     base, ext = os.path.splitext(path)
-    if ext.lower() == '.encrypted':
-        base, ext = os.path.splitext(base)
     ext = (ext or '').lower().lstrip('.')
     return ext or 'csv'
 
 def open_cleaner(request, dataset_id):
-    # Require authentication
-    if not request.user.is_authenticated:
-        response = HttpResponse("Authentication required", status=401)
-        # Allow this response to be loaded in iframe (for modal display)
-        response['X-Frame-Options'] = 'SAMEORIGIN'
-        return response
-    # Security: Only allow access to user's own datasets
-    dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
     path = _dataset_path(dataset)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
     
     try:
-        # Loader functions now handle encryption automatically
         from engine.dataprep.loader import get_dataset_columns_only, load_dataframe_any
         
         # Get column names and types efficiently
-        # Pass original path - loader will handle encryption automatically
-        columns, column_types = get_dataset_columns_only(path, user_id=request.user.id)
+        columns, column_types = get_dataset_columns_only(path)
         
         # Load the full dataset so the editor can display every row
-        df_full, _ = load_dataframe_any(path, preview_rows=None, user_id=request.user.id)
+        df_full, _ = load_dataframe_any(path, preview_rows=None)
         total_rows = len(df_full)
         
         # Use a capped sample for type detection/uniques to avoid heavy operations
@@ -265,19 +255,20 @@ def _apply_types(df: pd.DataFrame, new_types: dict, orders: dict) -> pd.DataFram
     return df
 
 def apply_cleaning(request, dataset_id: int):
-    # Require authentication
-    if not request.user.is_authenticated:
-        return HttpResponse("Authentication required", status=401)
     if request.method != "POST":
         return HttpResponse("POST only", status=405)
 
-    # Security: Only allow access to user's own datasets
-    ds = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+    # Get dataset - no authentication required for local app
+    ds = get_object_or_404(Dataset, pk=dataset_id)
+    
+    # Use user_id from dataset if available, otherwise None (local app)
+    user_id = ds.user.id if ds.user else None
+    
     path = _dataset_path(ds)
     if not path:
         return HttpResponse("Dataset has no file path.", status=400)
     try:
-        df, column_types = load_dataframe_any(path, user_id=request.user.id)
+        df, column_types = load_dataframe_any(path, user_id=user_id)
     except Exception as e:
         return HttpResponse(f"Failed to read dataset: {e}", status=400, content_type="text/plain")
 
@@ -309,7 +300,7 @@ def apply_cleaning(request, dataset_id: int):
     save_name = (request.POST.get("save_name") or "").strip()
     ajax = request.POST.get("ajax") == "1"
 
-    def _write_dataframe(out_path: str, fmt: str | None):
+    def _write_dataframe(out_path: str, fmt: Optional[str]):
         ext = (fmt or os.path.splitext(out_path)[1].lstrip(".")).lower()
         if ext in ("csv", ""):  # default
             df.to_csv(out_path, index=False)
@@ -325,7 +316,7 @@ def apply_cleaning(request, dataset_id: int):
         else:
             df.to_csv(out_path, index=False)
 
-    def _buffer_dataframe(fmt: str) -> tuple[bytes, str]:
+    def _buffer_dataframe(fmt: str) -> Tuple[bytes, str]:
         import io
         ext = (fmt or 'csv').lower()
         buf = io.BytesIO()
@@ -358,7 +349,7 @@ def apply_cleaning(request, dataset_id: int):
             file_format = _infer_dataset_format(path)
             
             if is_encrypted_file(path):
-                save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
+                save_encrypted_dataframe(df, path, user_id=user_id, file_format=file_format)
             else:
                 _write_dataframe(path, file_format)
             # save schema sidecar next to original file
@@ -495,7 +486,7 @@ def normalize_columns(request, dataset_id):
             normalized_columns.append(new_col_name)
         
         # Save the updated dataset
-        def _write_dataframe(out_path: str, fmt: str | None):
+        def _write_dataframe(out_path: str, fmt: Optional[str]):
             ext = (fmt or os.path.splitext(out_path)[1].lstrip(".")).lower()
             if ext in ("csv", ""):  # default
                 df.to_csv(out_path, index=False)
@@ -511,13 +502,7 @@ def normalize_columns(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         file_format = _infer_dataset_format(path)
-        # Check if file is encrypted and handle accordingly
-        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
-        
-        if is_encrypted_file(path):
-            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
-        else:
-            _write_dataframe(path, file_format)
+        _write_dataframe(path, file_format)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -674,7 +659,7 @@ def apply_column_coding(request, dataset_id):
         df[column_name] = df[column_name].map(value_mapping).fillna(df[column_name])
         
         # Save the updated dataset
-        def _write_dataframe(out_path: str, fmt: str | None):
+        def _write_dataframe(out_path: str, fmt: Optional[str]):
             ext = (fmt or os.path.splitext(out_path)[1].lstrip(".")).lower()
             if ext in ("csv", ""):
                 df.to_csv(out_path, index=False)
@@ -688,13 +673,7 @@ def apply_column_coding(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         file_format = _infer_dataset_format(path)
-        # Check if file is encrypted and handle accordingly
-        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
-        
-        if is_encrypted_file(path):
-            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
-        else:
-            _write_dataframe(path, file_format)
+        _write_dataframe(path, file_format)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -755,7 +734,7 @@ def merge_columns(request, dataset_id):
         df[column_name] = new_column
         
         # Save the updated dataset
-        def _write_dataframe(out_path: str, fmt: str | None):
+        def _write_dataframe(out_path: str, fmt: Optional[str]):
             ext = (fmt or os.path.splitext(out_path)[1].lstrip(".")).lower()
             if ext in ("csv", ""):
                 df.to_csv(out_path, index=False)
@@ -769,13 +748,7 @@ def merge_columns(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         file_format = _infer_dataset_format(path)
-        # Check if file is encrypted and handle accordingly
-        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
-        
-        if is_encrypted_file(path):
-            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
-        else:
-            _write_dataframe(path, file_format)
+        _write_dataframe(path, file_format)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -884,7 +857,7 @@ def apply_column_coding(request, dataset_id):
             target_column = column_name
         
         # Save the updated dataset
-        def _write_dataframe(out_path: str, fmt: str | None):
+        def _write_dataframe(out_path: str, fmt: Optional[str]):
             ext = (fmt or os.path.splitext(out_path)[1].lstrip(".")).lower()
             if ext in ("csv", ""):
                 df.to_csv(out_path, index=False)
@@ -898,13 +871,7 @@ def apply_column_coding(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         file_format = _infer_dataset_format(path)
-        # Check if file is encrypted and handle accordingly
-        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
-        
-        if is_encrypted_file(path):
-            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
-        else:
-            _write_dataframe(path, file_format)
+        _write_dataframe(path, file_format)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -953,7 +920,7 @@ def drop_columns(request, dataset_id):
             return HttpResponse(json.dumps({"error": "Cannot drop all columns. At least one column must remain."}), status=400, content_type="application/json")
         
         # Save the updated dataset
-        def _write_dataframe(out_path: str, fmt: str | None):
+        def _write_dataframe(out_path: str, fmt: Optional[str]):
             ext = (fmt or os.path.splitext(out_path)[1].lstrip(".")).lower()
             if ext in ("csv", ""):
                 df.to_csv(out_path, index=False)
@@ -967,13 +934,7 @@ def drop_columns(request, dataset_id):
                 df.to_csv(out_path, index=False)
         
         file_format = _infer_dataset_format(path)
-        # Check if file is encrypted and handle accordingly
-        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
-        
-        if is_encrypted_file(path):
-            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
-        else:
-            _write_dataframe(path, file_format)
+        _write_dataframe(path, file_format)
         
         return HttpResponse(json.dumps({
             "success": True,
@@ -1089,26 +1050,18 @@ def convert_date_format_api(request, dataset_id):
         converted_sample = df[column_name].head(10).tolist()
         
         # Save the updated dataset
-        # Check if file is encrypted and handle accordingly
-        from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
-        
         file_format = _infer_dataset_format(path)
         
-        if is_encrypted_file(path):
-            # File is encrypted - use encrypted save function
-            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
+        if file_format in ("csv", ""):
+            df.to_csv(path, index=False)
+        elif file_format in ("xlsx", "xls"):
+            df.to_excel(path, index=False, engine='openpyxl')
+        elif file_format == "tsv":
+            df.to_csv(path, index=False, sep="\t")
+        elif file_format == "json":
+            df.to_json(path, orient="records")
         else:
-            # File is not encrypted - save directly
-            if file_format in ("csv", ""):
-                df.to_csv(path, index=False)
-            elif file_format in ("xlsx", "xls"):
-                df.to_excel(path, index=False, engine='openpyxl')
-            elif file_format == "tsv":
-                df.to_csv(path, index=False, sep="\t")
-            elif file_format == "json":
-                df.to_json(path, orient="records")
-            else:
-                df.to_csv(path, index=False)
+            df.to_csv(path, index=False)
         
         # Update schema to mark this column as date (standardized)
         # This prevents the modal from showing again
@@ -1163,9 +1116,6 @@ def convert_date_format_api(request, dataset_id):
 
 def fix_stationary(request, dataset_id):
     """API endpoint to fix stationarity by applying transformation (diff or log) to a variable."""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
@@ -1181,15 +1131,18 @@ def fix_stationary(request, dataset_id):
         if transform_type not in ['diff', 'log']:
             return JsonResponse({'error': 'Transform type must be "diff" or "log"'}, status=400)
         
-        # Get dataset
-        # Security: Only allow access to user's own datasets
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
+        # Get dataset - no authentication required for local app
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        
+        # Use user_id from dataset if available, otherwise None (local app)
+        user_id = dataset.user.id if dataset.user else None
+        
         path = _dataset_path(dataset)
         if not path:
             return JsonResponse({'error': 'Dataset has no file path'}, status=400)
         
         # Load dataset
-        df, _ = load_dataframe_any(path, user_id=request.user.id)
+        df, _ = load_dataframe_any(path, user_id=user_id)
         
         if variable_name not in df.columns:
             return JsonResponse({'error': f'Variable "{variable_name}" not found in dataset'}, status=400)
@@ -1236,7 +1189,7 @@ def fix_stationary(request, dataset_id):
         
         if is_encrypted_file(path):
             # File is encrypted - use encrypted save function
-            save_encrypted_dataframe(df, path, user_id=request.user.id, file_format=file_format)
+            save_encrypted_dataframe(df, path, user_id=user_id, file_format=file_format)
         else:
             # File is not encrypted - save directly
             if file_format in ("csv", ""):

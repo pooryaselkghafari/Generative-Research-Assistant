@@ -1,104 +1,9 @@
 """
-Views for static pages, landing page, robots.txt, and sitemap.
+Views for static pages, robots.txt, and sitemap.
 """
 from django.shortcuts import render
 from django.http import HttpResponse, Http404
 from engine.models import Page, SubscriptionPlan, PrivacyPolicy, TermsOfService
-
-
-def landing_view(request):
-    """Landing page for Generative Research Assistant - shown to non-authenticated users
-    Checks for dynamic landing page content from Page model first"""
-    
-    # Check if there's a custom landing page
-    landing_page = Page.objects.filter(
-        page_type='landing',
-        is_default_landing=True,
-        is_published=True
-    ).first()
-    
-    if landing_page:
-        # Process page content through template engine to render dynamic tags
-        from django.template import engines
-        
-        # Load subscription plans for context
-        plans = list(SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly'))
-        
-        # Debug: Log plans count
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"Landing page: Found {len(plans)} active subscription plans")
-        for plan in plans:
-            logger.info(f"  - {plan.name}: ${plan.price_monthly}/month")
-        
-        # ALWAYS process content through template engine to ensure dynamic updates
-        # This ensures subscription plans update when changed in admin
-        processed_content = landing_page.content
-        try:
-            # Use Django's template engine to properly render template tags
-            django_engine = engines['django']
-            
-            # Ensure static and url template tags are loaded
-            template_content = landing_page.content
-            if '{% load static %}' not in template_content:
-                template_content = '{% load static %}\n' + template_content
-            
-            # Wrap content in a template that loads subscription_tags if not already loaded
-            # This ensures the template tag library is available
-            if '{% load subscription_tags %}' not in template_content and 'subscription_plans' in template_content:
-                # Add the load tag if subscription_plans is used but load tag is missing
-                template_content = '{% load subscription_tags %}\n' + template_content
-            
-            template = django_engine.from_string(template_content)
-            context = {
-                'request': request,
-                'plans': plans,  # Pass plans to template context for dynamic rendering
-            }
-            processed_content = template.render(context, request)
-            logger.info(f"Successfully processed landing page template with {len(plans)} plans")
-        except Exception as e:
-            # If template rendering fails, use original content
-            import traceback
-            error_details = traceback.format_exc()
-            logger.error(f"Failed to process template tags in landing page content: {e}\n{error_details}")
-            print(f"Warning: Failed to process template tags in page content: {e}")
-            print(error_details)
-            processed_content = landing_page.content
-        
-        # Create a modified page object with processed content
-        class ProcessedPage:
-            def __init__(self, page, processed_content):
-                # Copy all model fields
-                for field in page._meta.get_fields():
-                    if hasattr(page, field.name):
-                        setattr(self, field.name, getattr(page, field.name))
-                # Override content with processed version
-                self.content = processed_content
-                # Copy the model instance reference
-                self._meta = page._meta
-                self.pk = page.pk
-        
-        processed_page = ProcessedPage(landing_page, processed_content)
-        
-        # Render dynamic landing page
-        return render(request, 'engine/page.html', {
-            'page': processed_page,
-            'is_landing': True,
-            'plans': plans,  # Pass plans to template context
-        })
-    
-    # Get active subscription plans for pricing section
-    plans = list(SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly'))
-    
-    # Debug: Print plans count
-    print(f"DEBUG: Landing page - Found {len(plans)} active plans")
-    for plan in plans:
-        print(f"  - {plan.name}: features={plan.features}, ai_features={plan.ai_features}")
-    
-    # Fallback to default static landing page with dynamic plans
-    return render(request, 'engine/landing.html', {
-        'plans': plans
-    })
 
 
 def page_view(request, slug):
@@ -118,17 +23,54 @@ def privacy_policy_view(request):
     policy = PrivacyPolicy.objects.filter(is_active=True).order_by('-effective_date').first()
     
     if not policy:
-        # Fallback to default content
+        # Default content for open-source locally-run application
         default_content = """
-        <h1>Privacy Policy</h1>
-        <p>Privacy policy content will be available here. Please contact the administrator.</p>
+        <h2>Privacy Policy</h2>
+        <p><strong>Last Updated:</strong> December 2025</p>
+        
+        <h3>Overview</h3>
+        <p>This application is an open-source tool designed to run locally on your machine. This privacy policy explains how your data is handled when you use this software.</p>
+        
+        <h3>Data Storage and Processing</h3>
+        <p>All data processing and storage occurs locally on your machine:</p>
+        <ul>
+            <li><strong>Local Storage:</strong> All datasets, analysis results, and user data are stored locally on your computer. No data is transmitted to external servers unless you explicitly choose to do so.</li>
+            <li><strong>No Cloud Services:</strong> This application does not use cloud storage or external data processing services by default.</li>
+            <li><strong>No Tracking:</strong> The application does not include analytics, tracking scripts, or telemetry that would send data to third parties.</li>
+        </ul>
+        
+        <h3>Data You Provide</h3>
+        <p>When you use this application, you may upload datasets, create analysis sessions, and generate results. All of this data remains on your local machine:</p>
+        <ul>
+            <li>Uploaded datasets are stored in the local file system</li>
+            <li>Analysis configurations and results are stored in a local database</li>
+            <li>No personal information is collected or required for basic usage</li>
+        </ul>
+        
+        <h3>Third-Party Services</h3>
+        <p>This application is designed to operate independently without requiring third-party services. If you choose to integrate with external services (such as cloud storage or APIs), you are responsible for reviewing those services' privacy policies.</p>
+        
+        <h3>Open Source</h3>
+        <p>As an open-source application, the source code is publicly available for review. You can inspect the code to verify how your data is handled.</p>
+        
+        <h3>Your Rights</h3>
+        <p>Since all data is stored locally:</p>
+        <ul>
+            <li>You have full control over your data</li>
+            <li>You can delete data at any time by removing files or using the application's delete functions</li>
+            <li>You can export your data in standard formats</li>
+            <li>No account or registration is required</li>
+        </ul>
+        
+        <h3>Changes to This Policy</h3>
+        <p>If this privacy policy is updated, the changes will be reflected in the source code repository. As the software runs locally, you control when and if you update to newer versions.</p>
+        
+        <h3>Contact</h3>
+        <p>For questions about this privacy policy or the application, please refer to the project's source code repository or documentation.</p>
         """
-        return render(request, 'engine/page.html', {
-            'page': type('Page', (), {
-                'title': 'Privacy Policy',
-                'content': default_content,
-                'meta_description': 'Privacy Policy for StatBox',
-            })()
+        return render(request, 'engine/privacy_policy.html', {
+            'policy': None,
+            'default_content': default_content
         })
     
     return render(request, 'engine/privacy_policy.html', {
@@ -141,17 +83,74 @@ def terms_of_service_view(request):
     terms = TermsOfService.objects.filter(is_active=True).order_by('-effective_date').first()
     
     if not terms:
-        # Fallback to default content
+        # Default content for open-source locally-run application
         default_content = """
-        <h1>Terms of Service</h1>
-        <p>Terms of service content will be available here. Please contact the administrator.</p>
+        <h2>Terms of Use</h2>
+        <p><strong>Last Updated:</strong> December 2025</p>
+        
+        <h3>Acceptance of Terms</h3>
+        <p>By using this open-source application, you agree to be bound by these Terms of Use. If you do not agree to these terms, please do not use the application.</p>
+        
+        <h3>Open Source License</h3>
+        <p>This software is provided as open-source software. Your use of this software is governed by the license terms specified in the source code repository. By using this software, you agree to comply with those license terms.</p>
+        
+        <h3>Local Installation and Use</h3>
+        <p>This application is designed to run locally on your machine:</p>
+        <ul>
+            <li>You are responsible for installing and maintaining the software on your system</li>
+            <li>You are responsible for ensuring your system meets the technical requirements</li>
+            <li>You are responsible for backing up your data</li>
+            <li>The software operates independently and does not require external services</li>
+        </ul>
+        
+        <h3>No Warranty</h3>
+        <p>This software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.</p>
+        
+        <h3>Data Responsibility</h3>
+        <p>Since this application runs locally:</p>
+        <ul>
+            <li>You are solely responsible for the data you input and process</li>
+            <li>You are responsible for ensuring compliance with applicable data protection laws</li>
+            <li>You are responsible for maintaining appropriate security measures for your local installation</li>
+            <li>The application does not transmit data externally unless you explicitly configure it to do so</li>
+        </ul>
+        
+        <h3>Prohibited Uses</h3>
+        <p>You agree not to use this application:</p>
+        <ul>
+            <li>For any unlawful purpose or to solicit others to perform unlawful acts</li>
+            <li>To violate any international, federal, provincial, or state regulations, rules, laws, or local ordinances</li>
+            <li>To infringe upon or violate our intellectual property rights or the intellectual property rights of others</li>
+            <li>To harass, abuse, insult, harm, defame, slander, disparage, intimidate, or discriminate</li>
+            <li>To submit false or misleading information</li>
+        </ul>
+        
+        <h3>Modifications and Updates</h3>
+        <p>As open-source software, this application may be modified by you or others. You are responsible for:</p>
+        <ul>
+            <li>Reviewing any modifications you make to the code</li>
+            <li>Understanding the implications of any updates you install</li>
+            <li>Maintaining compatibility with your data and workflows</li>
+        </ul>
+        
+        <h3>Intellectual Property</h3>
+        <p>The original code, documentation, and associated materials are subject to the license terms specified in the source code repository. You retain all rights to data you create using this application.</p>
+        
+        <h3>Termination</h3>
+        <p>You may stop using this application at any time. Since the application runs locally, you can simply uninstall it or stop running it. Your data will remain on your local system unless you explicitly delete it.</p>
+        
+        <h3>Changes to Terms</h3>
+        <p>These terms may be updated from time to time. Updated terms will be reflected in the source code repository. Your continued use of the application after such changes constitutes acceptance of the new terms.</p>
+        
+        <h3>Governing Law</h3>
+        <p>These terms shall be governed by and construed in accordance with the laws applicable to the software license, without regard to its conflict of law provisions.</p>
+        
+        <h3>Contact</h3>
+        <p>For questions about these terms, please refer to the project's source code repository or documentation.</p>
         """
-        return render(request, 'engine/page.html', {
-            'page': type('Page', (), {
-                'title': 'Terms of Service',
-                'content': default_content,
-                'meta_description': 'Terms of Service for StatBox',
-            })()
+        return render(request, 'engine/terms_of_service.html', {
+            'terms': None,
+            'default_content': default_content
         })
     
     return render(request, 'engine/terms_of_service.html', {

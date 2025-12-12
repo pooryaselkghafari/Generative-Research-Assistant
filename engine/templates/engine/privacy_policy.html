@@ -16,6 +16,8 @@
         <div class="legal-body">
             {% if policy %}
                 {{ policy.content|safe }}
+            {% elif default_content %}
+                {{ default_content|safe }}
             {% else %}
                 <p>Privacy policy content is not available. Please contact the administrator.</p>
             {% endif %}

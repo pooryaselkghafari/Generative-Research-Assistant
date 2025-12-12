@@ -4,39 +4,6 @@
 
 {% block extra_head %}
 <script>
-  // Set AI chat context when page loads
-  document.addEventListener('DOMContentLoaded', function() {
-    if (typeof aiChatContext !== 'undefined') {
-      aiChatContext = {
-        module: document.getElementById('moduleSelect')?.value || '',
-        dataset_name: document.querySelector('select[name="dataset_id"] option:checked')?.textContent || '',
-        formula: document.getElementById('equationBox')?.value || ''
-      };
-      
-      // Update context when form fields change
-      const moduleSelect = document.getElementById('moduleSelect');
-      const datasetSelect = document.querySelector('select[name="dataset_id"]');
-      const formulaInput = document.getElementById('equationBox');
-      
-      if (moduleSelect) {
-        moduleSelect.addEventListener('change', function() {
-          aiChatContext.module = this.value;
-        });
-      }
-      
-      if (datasetSelect) {
-        datasetSelect.addEventListener('change', function() {
-          aiChatContext.dataset_name = this.options[this.selectedIndex]?.textContent || '';
-        });
-      }
-      
-      if (formulaInput) {
-        formulaInput.addEventListener('input', function() {
-          aiChatContext.formula = this.value;
-        });
-      }
-    }
-  });
 </script>
 <style>
   /* Loading spinner animation */
@@ -275,21 +242,15 @@
               <span class="badge" style="background: #667eea; color: white;">{{item.sessions|length}}</span>
             </div>
             <div class="row-right" style="display: flex; align-items: center; gap: 4px;">
-              <button class="icon-btn" title="Edit keywords and journals" aria-label="Edit keywords and journals" onclick="event.stopPropagation(); showKeywordsJournalsModal({{item.paper.id}}, '{{item.paper.name|escapejs}}')" style="padding: 4px 8px; color: #667eea;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
               <button class="icon-btn danger" title="Delete paper" aria-label="Delete paper" onclick="event.stopPropagation(); deletePaper({{item.paper.id}}, '{{item.paper.name|escapejs}}')" style="padding: 4px 8px;">✕</button>
             </div>
           </div>
-          <ul class="paper-sessions" id="paper-sessions-{{item.paper.id}}" style="display: none; margin-left: 24px; margin-bottom: 8px;">
+          <ul class="paper-sessions" id="paper-sessions-{{item.paper.id}}" onclick="event.stopPropagation();" style="display: none; margin-left: 24px; margin-bottom: 8px;">
             {% for s in item.sessions %}
-            <li class="list-row session-item draggable-session" data-session-id="{{s.id}}" data-paper-id="{{s.paper_id|default:''}}" draggable="true" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <li class="list-row session-item draggable-session" data-session-id="{{s.id}}" data-paper-id="{{s.paper_id|default:''}}" draggable="true" onclick="event.stopPropagation();" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
               <div class="row-left" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden;">
-                <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" style="width: 20px; height: 20px; cursor: pointer; flex-shrink: 0;">
-                <a class="link" href="/session/{{s.id}}/" style="flex-shrink: 0;">{{s.name}}</a>
+                <input type="checkbox" class="session-checkbox" value="{{s.id}}" onchange="updateSelectionUI()" onclick="event.stopPropagation();" style="width: 20px; height: 20px; cursor: pointer; flex-shrink: 0;">
+                <a class="link" href="/session/{{s.id}}/" onclick="event.stopPropagation(); event.stopImmediatePropagation(); return true;" style="flex-shrink: 0;">{{s.name}}</a>
                 <span class="muted small" style="font-size: 0.75rem; color: #9ca3af; white-space: nowrap; flex-shrink: 0;">{{s.updated_at|date:"M d, H:i"}}</span>
                 {% if not s.dataset_id %}<span class="badge warn" title="Dataset deleted" style="flex-shrink: 0;">no dataset</span>{% endif %}
               </div>
@@ -638,14 +599,6 @@ SUR: Multiple equations, one per line
             title="Select model & dataset, then type an equation">
       {% if current %}Update{% else %}Run{% endif %}
     </button>
-    <button id="askAiBtn" class="btn" type="button" onclick="showGRAComingSoonPopup()" 
-            style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none;"
-            title="Talk to your GRA">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-      Talk to your GRA
-    </button>
   </div>
 
 </form>
@@ -890,6 +843,19 @@ SUR: Multiple equations, one per line
   </div>
 
 <script>
+// Hide modal immediately on page load (before any other code runs)
+(function() {
+  const modal = document.getElementById('bayesianLoadingModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+  // Also clear any intervals that might be running
+  if (window.progressInterval) {
+    clearInterval(window.progressInterval);
+    window.progressInterval = null;
+  }
+})();
+
 // Bayesian Loading Management
 let loadingModal = null;
 let progressInterval = null;
@@ -939,7 +905,15 @@ function hideBayesianLoadingModal() {
       progressInterval = null;
     }
   }
+  // Also try to hide by ID in case modal reference is lost
+  const modalById = document.getElementById('bayesianLoadingModal');
+  if (modalById) {
+    modalById.style.display = 'none';
+  }
 }
+
+// Make function globally available
+window.hideBayesianLoadingModal = hideBayesianLoadingModal;
 
 function updateProgress(progress, step) {
   const progressBar = document.getElementById('progressBar');
@@ -1800,9 +1774,13 @@ function clearSearch() {
   const clearBtn = document.getElementById('searchClear');
   
   searchInput.value = '';
-  clearBtn.style.display = 'none';
+  if (clearBtn) {
+    clearBtn.style.display = 'none';
+  }
   filterSessions(searchInput);
-  searchInput.focus();
+  if (searchInput) {
+    searchInput.focus();
+  }
 }
 
 function goToVisualize() {
@@ -2742,19 +2720,17 @@ function togglePaperCollapse(paperId) {
     const isExpanded = sessionsList.style.display !== 'none';
     
     if (isExpanded) {
-      // Already expanded - navigate to first session if available
-      const firstSessionLink = sessionsList.querySelector('.session-item a.link');
-      if (firstSessionLink) {
-        window.location.href = firstSessionLink.getAttribute('href');
-        return;
-      }
-      // No sessions, just collapse
+      // Already expanded - collapse it
       sessionsList.style.display = 'none';
       chevron.style.transform = 'rotate(0deg)';
+      // Save collapsed state
+      sessionStorage.setItem(`paper-${paperId}-expanded`, 'false');
     } else {
       // Collapsed - expand it
       sessionsList.style.display = 'block';
       chevron.style.transform = 'rotate(90deg)';
+      // Save expanded state
+      sessionStorage.setItem(`paper-${paperId}-expanded`, 'true');
     }
   }
 }
@@ -2875,21 +2851,42 @@ function initializeDragAndDrop() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Hide Bayesian loading modal if it's visible (in case page was reloaded or navigated back)
+  hideBayesianLoadingModal();
+  
   initializeDragAndDrop();
   
   // Initialize selection UI on page load
   updateSelectionUI();
   
-  // Expand papers with sessions by default
+  // Restore paper expanded/collapsed state from sessionStorage
   document.querySelectorAll('.paper-sessions').forEach(sessionsList => {
     const paperId = sessionsList.id.replace('paper-sessions-', '');
     const sessions = sessionsList.querySelectorAll('.session-item');
     if (sessions.length > 0) {
-      // Expand if it has sessions
-      sessionsList.style.display = 'block';
+      // Check if this paper was previously expanded
+      const wasExpanded = sessionStorage.getItem(`paper-${paperId}-expanded`);
       const chevron = document.querySelector(`.paper-chevron[data-paper-id="${paperId}"]`);
-      if (chevron) {
-        chevron.style.transform = 'rotate(90deg)';
+      
+      if (wasExpanded === 'true') {
+        // Restore expanded state
+        sessionsList.style.display = 'block';
+        if (chevron) {
+          chevron.style.transform = 'rotate(90deg)';
+        }
+      } else if (wasExpanded === null) {
+        // First time - expand by default
+        sessionsList.style.display = 'block';
+        if (chevron) {
+          chevron.style.transform = 'rotate(90deg)';
+        }
+        sessionStorage.setItem(`paper-${paperId}-expanded`, 'true');
+      } else {
+        // Keep collapsed
+        sessionsList.style.display = 'none';
+        if (chevron) {
+          chevron.style.transform = 'rotate(0deg)';
+        }
       }
     }
   });

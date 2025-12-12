@@ -60,7 +60,7 @@ def _validate_equation(request, formula, module_name, df, _list_context_func):
         # Regression and structural models support multi-equation format
         if module_name != 'regression' and module_name != 'structural':
             return render(request, 'engine/index.html', {
-                **_list_context_func(user=request.user),
+                **_list_context_func(),
                 'error_message': f'You have {equation_count} equation(s) (one per line), but {module_name.upper()} models only support a single equation. Please use only one equation, or select Regression/Structural model for multiple equations.'
             })
         # Parse lines once for all multi-equation validations
@@ -74,7 +74,7 @@ def _validate_equation(request, formula, module_name, df, _list_context_func):
                 print(f"✗ VALIDATION FAILED: 2SLS with {equation_count} equations")
                 print(f"=== END BACKEND VALIDATION DIAGNOSTICS ===")
                 return render(request, 'engine/index.html', {
-                    **_list_context_func(user=request.user),
+                    **_list_context_func(),
                     'error_message': f'You have {equation_count} equation(s), but 2SLS only supports a single equation. Please use only one equation for 2SLS, or select SUR/3SLS method for multiple equations.'
                 })
             
@@ -87,7 +87,7 @@ def _validate_equation(request, formula, module_name, df, _list_context_func):
                     print(f"✗ VALIDATION FAILED: Line {i + 1} has {len(vars_list)} dependent variables")
                     print(f"=== END BACKEND VALIDATION DIAGNOSTICS ===")
                     return render(request, 'engine/index.html', {
-                        **_list_context_func(user=request.user),
+                        **_list_context_func(),
                         'error_message': f'Line {i + 1} has {len(vars_list)} dependent variable(s). In structural models, each equation must have exactly one dependent variable. Please use one dependent variable per line, for example: y1 ~ x1 + x2\\ny2 ~ x1 + [x3 ~ z1 + z2]'
                     })
             print(f"✓ All structural equations validated: each has exactly 1 DV")
@@ -104,7 +104,7 @@ def _validate_equation(request, formula, module_name, df, _list_context_func):
                 print(f"✗ VALIDATION FAILED: Line {i + 1} has {len(vars_list)} dependent variables")
                 print(f"=== END BACKEND VALIDATION DIAGNOSTICS ===")
                 return render(request, 'engine/index.html', {
-                    **_list_context_func(user=request.user),
+                    **_list_context_func(),
                     'error_message': f'Line {i + 1} has {len(vars_list)} dependent variable(s). In multi-equation regression, each equation must have exactly one dependent variable. Please use one dependent variable per line, for example: y1 ~ x1 + x2\\ny2 ~ x1 + x3'
                 })
         print(f"✓ All equations validated: each has exactly 1 DV")
@@ -113,24 +113,24 @@ def _validate_equation(request, formula, module_name, df, _list_context_func):
     if module_name in ['varx', 'varmax']:
         if equation_count > 1:
             return render(request, 'engine/index.html', {
-                **_list_context_func(user=request.user),
+                **_list_context_func(),
                 'error_message': 'VARX/VARMAX models require a single equation with 2+ dependent variables, not multiple equations. Please combine into one equation, for example: y1 + y2 ~ x1 + x2'
             })
         if dv_count < 2:
             return render(request, 'engine/index.html', {
-                **_list_context_func(user=request.user),
+                **_list_context_func(),
                 'error_message': f'VARX/VARMAX models require at least 2 dependent variables. Your equation has {dv_count} dependent variable(s). Please add more dependent variables before the ~ symbol, for example: y1 + y2 ~ x1 + x2'
             })
     elif module_name != 'regression' or equation_count == 1:
         # For non-regression models, or single-equation regression, require exactly 1 dependent variable
         if dv_count > 1:
             return render(request, 'engine/index.html', {
-                **_list_context_func(user=request.user),
+                **_list_context_func(),
                 'error_message': f'Your equation has {dv_count} dependent variable(s), but {module_name.upper()} models only support a single dependent variable. Please use only one dependent variable before the ~ symbol, or select VARX model for multiple dependent variables.'
             })
         elif dv_count == 0:
             return render(request, 'engine/index.html', {
-                **_list_context_func(user=request.user),
+                **_list_context_func(),
                 'error_message': 'Your equation must have at least one dependent variable before the ~ symbol.'
             })
     
@@ -285,8 +285,7 @@ def _save_results(request, action, session_id, session_name, module_name, formul
     """
     if action == 'update' and session_id:
         print(f"DEBUG: Updating existing session {session_id}")
-        # Security: Only allow access to user's own sessions
-        sess = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+        sess = get_object_or_404(AnalysisSession, pk=session_id)
         
         sess.name = session_name
         sess.module = module_name
@@ -294,17 +293,15 @@ def _save_results(request, action, session_id, session_name, module_name, formul
         sess.analysis_type = analysis_type
         sess.options = options
         sess.dataset = dataset
-        # Ensure user is set
-        if not sess.user and request.user.is_authenticated:
-            sess.user = request.user
+        # Ensure user is set to None (no authentication)
+        sess.user = None
     else:
         print(f"DEBUG: Creating new session (action: {action}, session_id: {session_id})")
-        # Associate session with user if authenticated
-        user = request.user if request.user.is_authenticated else None
+        # Create session without user (no authentication)
         sess = AnalysisSession(
             name=session_name, module=module_name, formula=formula,
             analysis_type=analysis_type, options=options, dataset=dataset,
-            user=user
+            user=None
         )
     
     sess.spotlight_rel = results.get('spotlight_rel')

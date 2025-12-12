@@ -4,7 +4,6 @@ Views for paper management (create, edit, delete, add sessions).
 import os
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, FileResponse
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q
@@ -13,11 +12,10 @@ from engine.models import Paper, AnalysisSession, PaperDocument
 import json
 
 
-@login_required
 @require_http_methods(["GET"])
 def paper_list(request):
-    """List all papers for the current user."""
-    papers = Paper.objects.filter(user=request.user).order_by('-updated_at')
+    """List all papers."""
+    papers = Paper.objects.all().order_by('-updated_at')
     
     # Get session counts for each paper
     papers_with_counts = []
@@ -33,7 +31,6 @@ def paper_list(request):
     return render(request, 'engine/papers/list.html', context)
 
 
-@login_required
 @require_http_methods(["GET", "POST"])
 def paper_create(request):
     """Create a new paper."""
@@ -44,12 +41,12 @@ def paper_create(request):
         if not name:
             return JsonResponse({'error': 'Paper name is required'}, status=400)
         
-        # Check if paper with same name already exists for this user
-        if Paper.objects.filter(user=request.user, name=name).exists():
+        # Check if paper with same name already exists
+        if Paper.objects.filter(name=name).exists():
             return JsonResponse({'error': 'A paper with this name already exists'}, status=400)
         
         paper = Paper.objects.create(
-            user=request.user,
+            user=None,
             name=name,
             description=description
         )
@@ -65,11 +62,10 @@ def paper_create(request):
     return render(request, 'engine/papers/create.html')
 
 
-@login_required
 @require_http_methods(["GET", "POST"])
 def paper_edit(request, paper_id):
     """Edit an existing paper."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    paper = get_object_or_404(Paper, pk=paper_id)
     
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -79,7 +75,7 @@ def paper_edit(request, paper_id):
             return JsonResponse({'error': 'Paper name is required'}, status=400)
         
         # Check if another paper with same name exists
-        existing = Paper.objects.filter(user=request.user, name=name).exclude(pk=paper_id)
+        existing = Paper.objects.filter(name=name).exclude(pk=paper_id)
         if existing.exists():
             return JsonResponse({'error': 'A paper with this name already exists'}, status=400)
         
@@ -103,15 +99,14 @@ def paper_edit(request, paper_id):
     return render(request, 'engine/papers/detail.html', context)
 
 
-@login_required
 @require_http_methods(["POST"])
 @csrf_exempt
 def paper_delete(request, paper_id):
     """Delete a paper. Sessions are not deleted, just ungrouped."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    paper = get_object_or_404(Paper, pk=paper_id)
     
     # Unlink all sessions from this paper (don't delete sessions)
-    AnalysisSession.objects.filter(paper=paper, user=request.user).update(paper=None)
+    AnalysisSession.objects.filter(paper=paper).update(paper=None)
     
     paper_name = paper.name
     paper.delete()
@@ -122,12 +117,11 @@ def paper_delete(request, paper_id):
     })
 
 
-@login_required
 @require_http_methods(["POST"])
 @csrf_exempt
 def paper_add_sessions(request, paper_id):
     """Add one or more sessions to a paper."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    paper = get_object_or_404(Paper, pk=paper_id)
     
     try:
         data = json.loads(request.body)
@@ -136,14 +130,11 @@ def paper_add_sessions(request, paper_id):
         if not session_ids:
             return JsonResponse({'error': 'No session IDs provided'}, status=400)
         
-        # Verify all sessions belong to the user
-        sessions = AnalysisSession.objects.filter(
-            pk__in=session_ids,
-            user=request.user
-        )
+        # Get sessions
+        sessions = AnalysisSession.objects.filter(pk__in=session_ids)
         
         if sessions.count() != len(session_ids):
-            return JsonResponse({'error': 'Some sessions not found or not accessible'}, status=403)
+            return JsonResponse({'error': 'Some sessions not found'}, status=404)
         
         # Add sessions to paper
         updated_count = sessions.update(paper=paper)
@@ -160,13 +151,12 @@ def paper_add_sessions(request, paper_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
 @require_http_methods(["POST"])
 @csrf_exempt
 def paper_remove_session(request, paper_id, session_id):
     """Remove a session from a paper."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
-    session = get_object_or_404(AnalysisSession, pk=session_id, user=request.user)
+    paper = get_object_or_404(Paper, pk=paper_id)
+    session = get_object_or_404(AnalysisSession, pk=session_id)
     
     if session.paper != paper:
         return JsonResponse({'error': 'Session is not in this paper'}, status=400)
@@ -180,11 +170,10 @@ def paper_remove_session(request, paper_id, session_id):
     })
 
 
-@login_required
 @require_http_methods(["GET"])
 def paper_detail_api(request, paper_id):
     """API endpoint to get paper details with sessions."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    paper = get_object_or_404(Paper, pk=paper_id)
     
     sessions = paper.get_sessions()
     sessions_data = [{
@@ -206,11 +195,10 @@ def paper_detail_api(request, paper_id):
     })
 
 
-@login_required
 @require_http_methods(["GET"])
 def paper_list_api(request):
-    """API endpoint to list all papers for the current user."""
-    papers = Paper.objects.filter(user=request.user).order_by('-updated_at')
+    """API endpoint to list all papers."""
+    papers = Paper.objects.all().order_by('-updated_at')
     papers_data = [{
         'id': p.id,
         'name': p.name,
@@ -223,12 +211,11 @@ def paper_list_api(request):
     return JsonResponse(papers_data, safe=False)
 
 
-@login_required
 @require_http_methods(["GET", "POST"])
 @csrf_exempt
 def paper_update_keywords_journals(request, paper_id):
     """Update keywords and target journals for a paper."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    paper = get_object_or_404(Paper, pk=paper_id)
     
     if request.method == 'GET':
         # Return current keywords and journals
@@ -274,12 +261,11 @@ def paper_update_keywords_journals(request, paper_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
 @require_http_methods(["GET", "POST"])
 @csrf_exempt
 def paper_documents(request, paper_id):
     """List or upload documents for a paper."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    paper = get_object_or_404(Paper, pk=paper_id)
     
     if request.method == 'GET':
         # Return list of documents
@@ -346,12 +332,11 @@ def paper_documents(request, paper_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
 @require_http_methods(["DELETE"])
 @csrf_exempt
 def paper_document_delete(request, paper_id, document_id):
     """Delete a document from a paper."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    paper = get_object_or_404(Paper, pk=paper_id)
     document = get_object_or_404(PaperDocument, pk=document_id, paper=paper)
     
     try:
@@ -373,11 +358,10 @@ def paper_document_delete(request, paper_id, document_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
 @require_http_methods(["GET"])
 def paper_document_download(request, paper_id, document_id):
-    """Download a document (with security check)."""
-    paper = get_object_or_404(Paper, pk=paper_id, user=request.user)
+    """Download a document."""
+    paper = get_object_or_404(Paper, pk=paper_id)
     document = get_object_or_404(PaperDocument, pk=document_id, paper=paper)
     
     if not document.file:

@@ -1,4 +1,0 @@
-# Dependency vulnerability scan tests
-
-
-

@@ -12,7 +12,6 @@ from engine.services.dataset_validation_service import DatasetValidationService
 from engine.services.row_filtering_service import RowFilteringService
 from engine.services.dataset_merge_service import DatasetMergeService
 from data_prep.file_handling import _read_dataset_file
-from engine.encrypted_storage import is_encrypted_file, save_encrypted_dataframe
 
 # Create media directories lazily (not at import time)
 # This prevents permission errors during management commands
@@ -26,23 +25,15 @@ except (PermissionError, OSError):
 
 def get_dataset_variables(request, dataset_id):
     """API endpoint to get variables from a dataset"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
-    
-    # Security: Only allow access to user's own datasets
-    # First check if dataset exists and belongs to user
     try:
-        dataset = Dataset.objects.get(pk=dataset_id, user=request.user)
+        dataset = Dataset.objects.get(pk=dataset_id)
     except Dataset.DoesNotExist:
-        # Return 403 (Forbidden) instead of 404 to indicate access denied
-        return JsonResponse({'success': False, 'error': 'Access denied'}, status=403)
+        return JsonResponse({'success': False, 'error': 'Dataset not found'}, status=404)
     except (ValueError, TypeError):
         # Handle invalid dataset_id format
         return JsonResponse({'success': False, 'error': 'Invalid dataset ID'}, status=400)
     
     # Use efficient column-only loading for large datasets
-    # The loader functions now handle encryption automatically, so we can pass the original path
     from engine.dataprep.loader import get_dataset_columns_only
     import os
     
@@ -61,9 +52,8 @@ def get_dataset_variables(request, dataset_id):
                 'error': f'Dataset file not found: {dataset.name}'
             }, status=404)
         
-        # Pass original path - loader will handle encryption automatically
-        # The loader function handles decryption and cleanup internally
-        variables, column_types = get_dataset_columns_only(path, user_id=request.user.id)
+        # Load dataset columns
+        variables, column_types = get_dataset_columns_only(path)
         return JsonResponse({
             'success': True,
             'variables': variables,
@@ -76,28 +66,14 @@ def get_dataset_variables(request, dataset_id):
             'error': f'Dataset file not found: {dataset.name}'
         }, status=404)
     except ValueError as e:
-        # Handle encryption-related errors (e.g., wrong key, wrong user_id)
-        error_msg = str(e)
-        if 'decrypt' in error_msg.lower() or 'encryption' in error_msg.lower():
-            return JsonResponse({
-                'success': False,
-                'error': f'Failed to decrypt dataset: {error_msg}. Please check encryption settings or re-upload the file.'
-            }, status=500)
         return JsonResponse({
             'success': False,
-            'error': error_msg
+            'error': str(e)
         }, status=400)
     except RuntimeError as e:
-        # Handle runtime errors (often encryption-related)
-        error_msg = str(e)
-        if 'decrypt' in error_msg.lower() or 'encryption' in error_msg.lower():
-            return JsonResponse({
-                'success': False,
-                'error': f'Failed to decrypt dataset: {error_msg}. Please check encryption settings or re-upload the file.'
-            }, status=500)
         return JsonResponse({
             'success': False,
-            'error': error_msg
+            'error': str(e)
         }, status=500)
     except Exception as e:
         # Log the full error for debugging
@@ -113,9 +89,6 @@ def get_dataset_variables(request, dataset_id):
 
 def update_sessions_for_variable_rename(request, dataset_id):
     """API endpoint to update all sessions when variables are renamed"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST only'})
     
@@ -128,8 +101,7 @@ def update_sessions_for_variable_rename(request, dataset_id):
             return JsonResponse({'success': False, 'error': 'No rename mapping provided'})
         
         # Find all sessions using this dataset
-        # Security: Only update user's own sessions
-        sessions = AnalysisSession.objects.filter(dataset_id=dataset_id, user=request.user)
+        sessions = AnalysisSession.objects.filter(dataset_id=dataset_id)
         updated_count = 0
         
         for session in sessions:
@@ -167,9 +139,6 @@ def update_sessions_for_variable_rename(request, dataset_id):
 
 def upload_dataset(request):
     """Upload a dataset file."""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('login')
     if request.method != 'POST':
         return HttpResponse('POST only', status=405)
     if 'dataset' not in request.FILES:
@@ -182,7 +151,6 @@ def upload_dataset(request):
     except (PermissionError, OSError) as e:
         return JsonResponse({'success': False, 'error': f'Cannot create media directory: {str(e)}'}, status=500)
     
-    user = request.user
     f = request.FILES['dataset']
     
     # Hard limit: 10 MB maximum file size
@@ -198,32 +166,22 @@ def upload_dataset(request):
         messages.error(request, error_msg)
         return redirect('index')
     
-    # Check user limits using service
-    file_size_mb, _ = DatasetValidationService.validate_file_size(f.size)
-    limit_error = DatasetValidationService.check_user_limits(user, file_size_mb, request)
-    if limit_error:
-        return limit_error
+    # Validate file size
+    file_size_mb = f.size / (1024 * 1024)
     
-    # Save file (with encryption if enabled)
+    # Save file
     name = request.POST.get('dataset_name') or f.name
     safe = f.name.replace(' ', '_')
     slug = str(uuid.uuid4())[:8]
     path = os.path.join(DATASET_DIR, f"{slug}_{safe}")
     
-    # Check if encryption is enabled
-    if getattr(settings, 'ENCRYPT_DATASETS', False):
-        # Use encrypted storage
-        # Pass destination_path to preserve original file extension in encrypted filename
-        from engine.encrypted_storage import store_encrypted_file
-        path = store_encrypted_file(f, user_id=user.id, destination_path=path)
-    else:
-        # Save unencrypted
-        with open(path, 'wb') as dest:
-            for chunk in f.chunks():
-                dest.write(chunk)
+    # Save file
+    with open(path, 'wb') as dest:
+        for chunk in f.chunks():
+            dest.write(chunk)
     
     # Create or update dataset record
-    dataset, created = _create_or_update_dataset(name, path, file_size_mb, user)
+    dataset, created = _create_or_update_dataset(name, path, file_size_mb, None)
     
     # Return response
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -241,40 +199,22 @@ def upload_dataset(request):
 
 def _create_or_update_dataset(name, path, file_size_mb, user):
     """Create or update a dataset record."""
-    if user:
-        dataset, created = Dataset.objects.get_or_create(
-            name=name,
-            user=user,
-            defaults={
-                'file_path': path,
-                'file_size_mb': file_size_mb
-            }
-        )
-        if not created:
-            dataset.file_path = path
-            dataset.file_size_mb = file_size_mb
-            dataset.save()
-    else:
-        dataset, created = Dataset.objects.update_or_create(
-            name=name,
-            user=None,
-            defaults={
-                'file_path': path,
-                'file_size_mb': file_size_mb
-            }
-        )
+    dataset, created = Dataset.objects.update_or_create(
+        name=name,
+        user=None,
+        defaults={
+            'file_path': path,
+            'file_size_mb': file_size_mb
+        }
+    )
     return dataset, created
 
 
 
 def delete_dataset(request, pk: int):
-    # Require authentication
-    if not request.user.is_authenticated:
-        return redirect('login')
-    # Security: Only allow deletion of user's own datasets
-    ds = get_object_or_404(Dataset, pk=pk, user=request.user)
-    # Detach sessions from this dataset (only user's own sessions)
-    AnalysisSession.objects.filter(dataset=ds, user=request.user).update(dataset=None)
+    ds = get_object_or_404(Dataset, pk=pk)
+    # Detach sessions from this dataset
+    AnalysisSession.objects.filter(dataset=ds).update(dataset=None)
     try:
         if os.path.exists(ds.file_path):
             os.remove(ds.file_path)
@@ -287,16 +227,12 @@ def delete_dataset(request, pk: int):
 
 def preview_drop_rows(request, dataset_id):
     """API endpoint to preview which rows would be dropped"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
     try:
-        # Security: Only allow access to user's own datasets
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         data = json.loads(request.body)
         conditions = data.get('conditions', [])
@@ -320,16 +256,12 @@ def preview_drop_rows(request, dataset_id):
 
 def apply_drop_rows(request, dataset_id):
     """API endpoint to apply row dropping"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
     try:
-        # Security: Only allow access to user's own datasets
-        dataset = get_object_or_404(Dataset, pk=dataset_id, user=request.user)
-        df, column_types, schema_orders = _read_dataset_file(dataset.file_path, user_id=request.user.id)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        df, column_types, schema_orders = _read_dataset_file(dataset.file_path)
         
         data = json.loads(request.body)
         conditions = data.get('conditions', [])
@@ -344,7 +276,7 @@ def apply_drop_rows(request, dataset_id):
             return JsonResponse({'error': error}, status=400)
         
         # Save the filtered dataset back to the file
-        _save_filtered_dataset(df_filtered, dataset.file_path, user_id=request.user.id)
+        _save_filtered_dataset(df_filtered, dataset.file_path)
         
         return JsonResponse({
             'success': True,
@@ -356,9 +288,9 @@ def apply_drop_rows(request, dataset_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-def _save_filtered_dataset(df_filtered, file_path, user_id=None):
+def _save_filtered_dataset(df_filtered, file_path):
     """
-    Save filtered dataframe to file, preserving encryption.
+    Save filtered dataframe to file.
     """
     import pandas as pd
     import os
@@ -366,12 +298,6 @@ def _save_filtered_dataset(df_filtered, file_path, user_id=None):
     from engine.dataprep.views import _infer_dataset_format
     
     file_format = _infer_dataset_format(file_path)
-    
-    if is_encrypted_file(file_path):
-        if user_id is None:
-            raise ValueError("user_id is required to save encrypted datasets")
-        save_encrypted_dataframe(df_filtered, file_path, user_id=user_id, file_format=file_format)
-        return
     
     if file_format in ['xlsx', 'xls']:
         df_filtered.to_excel(file_path, index=False)
@@ -387,9 +313,6 @@ def _save_filtered_dataset(df_filtered, file_path, user_id=None):
 
 def merge_datasets(request):
     """API endpoint to merge multiple datasets based on common column values"""
-    # Require authentication
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     
@@ -406,7 +329,7 @@ def merge_datasets(request):
             return JsonResponse({'error': 'Must specify merge column for each dataset'}, status=400)
         
         # Load datasets using service
-        datasets, dataframes, error = DatasetMergeService.load_datasets(dataset_ids, request.user)
+        datasets, dataframes, error = DatasetMergeService.load_datasets(dataset_ids, None)
         if error:
             return JsonResponse({'error': error}, status=400)
         
@@ -417,7 +340,7 @@ def merge_datasets(request):
         
         # Save merged dataset using service
         try:
-            merged_dataset = DatasetMergeService.save_merged_dataset(merged_df, datasets, request.user)
+            merged_dataset = DatasetMergeService.save_merged_dataset(merged_df, datasets, None)
             
             return JsonResponse({
                 'success': True,
